@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { adminAuth, adminDb } from "../../lib/firebase-admin"; // Path to your Firebase Admin SDK init
-import LogoutButton from "./LogoutButton"; // We break out the logout click handler into a client component
+import { adminAuth, adminDb } from "../../lib/firebase-admin";
+import LogoutButton from "./LogoutButton";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // 1. Get the session cookie on the server
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session")?.value;
 
@@ -18,24 +17,34 @@ export default async function DashboardLayout({
   }
 
   let userDocData = null;
+  let tenantData = null;
 
   try {
-    // 2. Verify the session cookie via Admin SDK
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    
-    // 3. Fetch the live user profile from your Firestore 'users' collection
+
     const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
+
     if (userDoc.exists) {
       userDocData = userDoc.data();
+
+      const tenantId = userDocData?.tenantId;
+      if (tenantId) {
+        const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
+        if (tenantDoc.exists) {
+          tenantData = tenantDoc.data();
+        }
+      }
     }
   } catch (error) {
     console.error("Session verification failed:", error);
     redirect("/login");
   }
 
-  // Fallback if data doesn't exist yet in Firestore
   const userRole = userDocData?.role || "user";
   const userName = userDocData?.name || "Member";
+
+  const churchName = tenantData?.name || "KerekeHub";
+  const primaryColor = tenantData?.primaryColor || "#059669";
 
   const navigation = [
     { name: "Overview Analytics", href: "/dashboard/analytics", icon: "📊" },
@@ -43,14 +52,19 @@ export default async function DashboardLayout({
     { name: "Management Roster", href: "/dashboard/roster", icon: "👥" },
     { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝" },
     { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋" },
+    { name: "Financials", href: "/dashboard/finance", icon: "💰" },
+    { name: "Communications", href: "/dashboard/communications", icon: "💬" },
   ];
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-900 antialiased">
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col z-20 hidden md:flex shrink-0">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <h1 className="text-xl font-black text-gray-800 tracking-tight">
-            Kereke<span className="text-emerald-600">Hub</span>
+          <h1
+            className="text-xl font-black tracking-tight truncate"
+            style={{ color: primaryColor }}
+          >
+            {churchName}
           </h1>
         </div>
 
@@ -71,8 +85,7 @@ export default async function DashboardLayout({
                 </Link>
               </li>
             ))}
-            
-            {/* Conditional Super Admin Link rendered only if role fits */}
+
             {userRole === "super_admin" && (
               <li>
                 <Link
@@ -95,16 +108,21 @@ export default async function DashboardLayout({
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-gray-50">
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-10 shrink-0">
           <div className="text-lg font-semibold text-gray-800">Dashboard</div>
-          
-          {/* Dynamic Header displaying live DB information */}
+
           <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-bold text-gray-800">{userName}</p>
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wider text-emerald-600">
+              <p
+                className="text-xs font-medium uppercase tracking-wider"
+                style={{ color: primaryColor }}
+              >
                 {userRole.replace("_", " ")}
               </p>
             </div>
-            <div className="w-9 h-9 rounded bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-800 font-bold text-sm uppercase">
+            <div
+              className="w-9 h-9 rounded flex items-center justify-center text-white font-bold text-sm uppercase"
+              style={{ backgroundColor: primaryColor }}
+            >
               {userName.substring(0, 2)}
             </div>
           </div>

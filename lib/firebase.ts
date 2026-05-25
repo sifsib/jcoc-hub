@@ -1,12 +1,8 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from 'firebase/storage';
 
-// Add this log to see exactly what is being loaded
-console.log("DEBUG_CONFIG:", {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-});
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -20,3 +16,4 @@ const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);

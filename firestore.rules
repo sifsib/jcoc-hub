@@ -1,18 +1,368 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 6, 19);
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
+    function isSignedIn() {
+      return request.auth != null;
     }
+
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userTenantId() {
+      return userData().tenantId;
+    }
+
+    // Handles both a single 'role' string field and a 'roles' array field.
+    function hasRole(role) {
+      return (userData().roles != null && role in userData().roles)
+          || (userData().role == role);
+    }
+
+    // Reads the user's role from their users document.
+    // userData() results are cached by Firestore within a single rule evaluation,
+    // so this costs just 1 get() call — shared with userTenantId() and hasRole().
+    // Keeping this as a userData() check (not exists()) means the entire rule
+    // evaluation for any collection query costs exactly 1 get() per document,
+    // allowing Firestore's 20-call budget to cover up to 20 documents per query.
+    function isSuperAdmin() {
+      return userData().role == 'super_admin';
+    }
+
+    function isOwner() {
+      return isSuperAdmin() || hasRole('owner');
+    }
+
+    function canManageUsers() {
+      return isOwner();
+    }
+
+    function canEditChurchProfile() {
+      return isOwner();
+    }
+
+    // isSuperAdmin() is always FIRST so it short-circuits without evaluating any hasRole() calls.
+    function canManageMembers() {
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager');
+    }
+
+    function canReadMembers() {
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer');
+    }
+
+    function canManageAttendance() {
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager');
+    }
+
+    function canReadAttendance() {
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer');
+    }
+
+    function canManageFinance() {
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance');
+    }
+
+    function canReadFinance() {
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance') || hasRole('finance_viewer');
+    }
+
+    function canManageCommunications() {
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin');
+    }
+
+    // Does the document belong to the same tenant as the signed-in user?
+    function sameTenant(resource) {
+      return resource.data.tenantId == userTenantId();
+    }
+
+    // Prevents a user from writing a tenantId they do not own.
+    function settingOwnTenant(newData) {
+      return newData.tenantId == userTenantId();
+    }
+
+    // super_admin can read/write any tenant. All other roles are scoped to their tenant.
+    function tenantAllowed(resource) {
+      return isSuperAdmin() || sameTenant(resource);
+    }
+
+    function tenantAllowedWrite(newData) {
+      return isSuperAdmin() || settingOwnTenant(newData);
+    }
+
+
+    // ============================================
+    // TENANTS COLLECTION
+    // ============================================
+    match /tenants/{tenantId} {
+
+      // Signup flow creates a new tenant.
+      allow create: if isSignedIn();
+
+      // super_admin can read all tenants. Others can only read their own.
+      allow read: if isSignedIn()
+                  && (isSuperAdmin() || tenantId == userTenantId());
+
+      allow update: if isSignedIn()
+                    && (isSuperAdmin() || (tenantId == userTenantId() && canEditChurchProfile()));
+
+      allow delete: if false;
+    }
+
+
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
+    match /users/{userId} {
+
+      allow create: if isSignedIn()
+                    && userId == request.auth.uid;
+
+      allow read: if isSignedIn()
+                  && (userId == request.auth.uid
+                      || isSuperAdmin()
+                      || (sameTenant(resource) && canManageUsers()));
+
+      allow update: if isSignedIn()
+                    && (
+                      isSuperAdmin()
+                      || (userId == request.auth.uid
+                          && request.resource.data.role == resource.data.role
+                          && request.resource.data.roles == resource.data.roles
+                          && request.resource.data.tenantId == resource.data.tenantId)
+                      || (sameTenant(resource) && canManageUsers())
+                    );
+
+      allow delete: if isSignedIn()
+                    && (isSuperAdmin() || (sameTenant(resource) && canManageUsers()));
+    }
+
+
+    // ============================================
+    // MEMBERS COLLECTION
+    // ============================================
+    match /members/{memberId} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadMembers();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageMembers();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageMembers();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageMembers();
+    }
+
+
+    // ============================================
+    // ATTENDANCE COLLECTION
+    // ============================================
+    match /attendance/{recordId} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadAttendance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageAttendance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageAttendance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageAttendance();
+    }
+
+
+    // ============================================
+    // FINANCE: contributions, expenses, accounts
+    // ============================================
+    match /contributions/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageFinance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageFinance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageFinance();
+    }
+
+    match /expenses/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageFinance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageFinance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageFinance();
+    }
+
+    match /accounts/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageFinance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageFinance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageFinance();
+    }
+
+
+    // ============================================
+    // COMMUNICATIONS COLLECTION
+    // ============================================
+    match /communications/{docId} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canManageCommunications();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageCommunications();
+
+      // Cloud Function updates status via Admin SDK — no client update needed.
+      allow update: if false;
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageCommunications();
+    }
+
+
+    // ============================================
+    // HOUSEHOLDS COLLECTION
+    // ============================================
+    match /households/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadMembers();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageMembers();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageMembers();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageMembers();
+    }
+
+
+    // ============================================
+    // VISITORS COLLECTION
+    // ============================================
+    match /visitors/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadMembers();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageMembers();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageMembers();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageMembers();
+    }
+
+
+    // ============================================
+    // TRANSACTIONS COLLECTION
+    // ============================================
+    match /transactions/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageFinance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageFinance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageFinance();
+    }
+
+
+    // ============================================
+    // SYSTEM ADMINS COLLECTION
+    // isSuperAdmin() now uses userData().role, not exists() on this collection,
+    // so there is no circular dependency. This collection can be fully locked.
+    // ============================================
+    match /system_admins/{id} {
+
+      allow read: if isSignedIn() && isSuperAdmin();
+      allow write: if isSignedIn() && isSuperAdmin();
+    }
+
+
+    // ============================================
+    // EVERYTHING ELSE: deny by default
+    // ============================================
   }
 }
