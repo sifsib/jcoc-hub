@@ -112,7 +112,7 @@ export default function TeamPage() {
       try {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         const data = userDoc.data();
-        if (!data || data.role !== "owner") {
+        if (!data || (data.role !== "owner" && data.role !== "super_admin")) {
           setIsOwner(false); setLoading(false); return;
         }
         setIsOwner(true);
