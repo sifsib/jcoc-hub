@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db } from "../../../lib/firebase";
+import { db } from "../../../lib/firebase";
+import { useAppUser } from "../../../lib/useAppUser";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -33,6 +34,9 @@ interface MetricSummary {
 }
 
 export default function AnalyticsPage() {
+  // FIX 1: Use useAppUser() to get the real tenantId — NOT user.uid
+  const { appUser, loading: userLoading } = useAppUser();
+
   const [metrics, setMetrics] = useState<MetricSummary>({
     totalMembers: 0,
     leadershipCount: 0,
@@ -48,10 +52,14 @@ export default function AnalyticsPage() {
   });
 
   useEffect(() => {
-    const fetchAnalytics = async (user: any) => {
+    // Wait for the user profile to load before querying
+    if (userLoading) return;
+    if (!appUser) { setLoading(false); return; }
+
+    const fetchAnalytics = async () => {
       try {
-        // Member metrics
-        const q = query(collection(db, "members"), where("tenantId", "==", user.uid));
+        // FIX 1: Query with appUser.tenantId — this matches what Firestore rules check
+        const q = query(collection(db, "members"), where("tenantId", "==", appUser.tenantId));
         const querySnapshot = await getDocs(q);
         const rawMembers: MemberData[] = [];
         querySnapshot.forEach((doc) => rawMembers.push(doc.data() as MemberData));
@@ -72,8 +80,8 @@ export default function AnalyticsPage() {
         setMetrics({ totalMembers: total, leadershipCount: leadership, standardMembersCount: standard });
         setRoleChartData(Object.keys(roleCounts).map((role) => ({ name: role, Count: roleCounts[role] })));
 
-        // Care tier calculation
-        const qAttendance = query(collection(db, "attendance"), where("tenantId", "==", user.uid));
+        // Care tier calculation — also uses appUser.tenantId
+        const qAttendance = query(collection(db, "attendance"), where("tenantId", "==", appUser.tenantId));
         const attendanceSnap = await getDocs(qAttendance);
         const lastAttendanceMap: Record<string, Date> = {};
 
@@ -91,11 +99,9 @@ export default function AnalyticsPage() {
         today.setHours(0, 0, 0, 0);
         const tiers: CareTiers = { tier1: [], tier2: [], tier3: [], neverAttended: [] };
 
-        const qAllMembers = query(collection(db, "members"), where("tenantId", "==", user.uid));
-        const allMembersSnap = await getDocs(qAllMembers);
+        // Re-use the members snapshot we already fetched above — avoids a second read
         const membersForTiers: CareTierMember[] = [];
-
-        allMembersSnap.forEach((docSnap) => {
+        querySnapshot.forEach((docSnap) => {
           const data = docSnap.data();
           membersForTiers.push({
             id: docSnap.id,
@@ -123,13 +129,10 @@ export default function AnalyticsPage() {
       }
     };
 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) { fetchAnalytics(user); } else { setLoading(false); }
-    });
-    return () => unsubscribe();
-  }, []);
+    fetchAnalytics();
+  }, [appUser, userLoading]);
 
-  if (loading) {
+  if (userLoading || loading) {
     return (
       <div className="flex items-center justify-center h-64 gap-3">
         <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
@@ -170,7 +173,7 @@ export default function AnalyticsPage() {
               )}
             </div>
             {member.phone && (
-             <a 
+              <a
                 href={`https://wa.me/${member.phone}`}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -232,7 +235,8 @@ export default function AnalyticsPage() {
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col">
           <h3 className="text-base font-bold text-gray-900 mb-2">Structural Ratio</h3>
-          <div className="flex-1 min-h-[200px] relative flex items-center justify-center">
+          {/* FIX 2: explicit h-52 so ResponsiveContainer can calculate height — flex-1 alone gives -1 */}
+          <div className="h-52 relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={65} outerRadius={85} paddingAngle={5} dataKey="value" stroke="none">
