@@ -62,7 +62,7 @@ service cloud.firestore {
     }
 
     function canReadFinance() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance') || hasRole('finance_viewer');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance') || hasRole('finance_viewer') || hasRole('viewer');
     }
 
     function canManageCommunications() {

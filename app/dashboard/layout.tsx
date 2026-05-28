@@ -54,6 +54,7 @@ export default async function DashboardLayout({
     { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋" },
     { name: "Financials", href: "/dashboard/finance", icon: "💰" },
     { name: "Communications", href: "/dashboard/communications", icon: "💬" },
+    { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑" },
   ];
 
   return (
