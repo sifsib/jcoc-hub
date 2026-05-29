@@ -3,17 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../lib/firebase"; // Double-check this matches your client-side firebase config path
+import { auth } from "../../lib/firebase";
+import ForgotPasswordModal from "../components/ForgotPasswordModal";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault(); // This stops the annoying page reload you see in the network tab
+    e.preventDefault();
     setError("");
     setLoading(false);
 
@@ -25,11 +27,9 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Step 1: Authenticate with Firebase Client SDK
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await userCredential.user.getIdToken();
 
-      // Step 2: Send the token to your POST API route to set the session cookie
       const response = await fetch("/api/login", {
         method: "POST",
         headers: {
@@ -42,7 +42,6 @@ export default function LoginPage() {
         throw new Error("Failed to establish session on the server.");
       }
 
-      // Step 3: Redirect to the dashboard now that the cookie is securely set
       router.push("/dashboard");
       router.refresh();
     } catch (err: any) {
@@ -57,7 +56,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md rounded-lg border p-8 shadow-sm bg-white">
         <h1 className="text-2xl font-bold text-center">Login to Kereke Hub</h1>
-        
+
         {error && (
           <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded border border-red-200">
             {error}
@@ -87,6 +86,14 @@ export default function LoginPage() {
               className="w-full border p-2 rounded focus:outline-blue-500"
               disabled={loading}
             />
+            {/* Forgot password link — sits just below the password input */}
+            <button
+              type="button"
+              onClick={() => setShowForgot(true)}
+              className="mt-1.5 text-xs text-blue-500 hover:underline float-right"
+            >
+              Forgot password?
+            </button>
           </div>
 
           <button
@@ -98,6 +105,9 @@ export default function LoginPage() {
           </button>
         </form>
       </div>
+
+      {/* Forgot password modal — renders as an overlay when triggered */}
+      {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
     </div>
   );
 }

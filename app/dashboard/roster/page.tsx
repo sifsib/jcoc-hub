@@ -7,6 +7,7 @@ import {
   collection, query, where, getDocs, addDoc,
   updateDoc, deleteDoc, doc, getDoc, serverTimestamp,
 } from "firebase/firestore";
+import ExportCSVButton from "../../components/ExportCSVButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -555,7 +556,6 @@ export default function ManageMembershipPage() {
                 </select>
               </F>
 
-              {/* Non-member spouse: basic info saved to household only */}
               {isSpouseMember === "no" && (
                 <div className="border-t pt-4 flex flex-col gap-4">
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
@@ -575,7 +575,6 @@ export default function ManageMembershipPage() {
                 </div>
               )}
 
-              {/* Member spouse: full details, creates second member document */}
               {isSpouseMember === "yes" && (
                 <div className="border-t pt-4 flex flex-col gap-4">
                   <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg">
@@ -817,11 +816,29 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
           <h1 className="text-3xl font-bold text-gray-800">Manage Membership</h1>
           <p className="text-gray-500 text-sm mt-1">Register, import, and manage your congregation.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => setView("import")}
             className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Import XLSX
           </button>
+
+          {/* ── CSV Export button ── */}
+          <ExportCSVButton
+            data={members}
+            filename="members"
+            columns={[
+              { key: "fullName", label: "Full Name" },
+              { key: "email", label: "Email" },
+              { key: "phone", label: "Phone" },
+              { key: "role", label: "Role" },
+              { key: "membershipType", label: "Membership Type" },
+              { key: "gender", label: "Gender" },
+              { key: "dob", label: "Date of Birth" },
+              { key: "region", label: "Region" },
+              { key: "maritalStatus", label: "Marital Status" },
+            ]}
+          />
+
           <button onClick={() => { reset(); setView("form"); }}
             className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
             + Add Member
