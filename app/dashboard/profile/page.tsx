@@ -1,202 +1,301 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { adminAuth, adminDb } from "../../../lib/firebase-admin";
-import ProfileForm from "./ProfileForm";
+"use client";
 
-interface TenantData {
-  ownerEmail: string;
-  status: string;
-  createdAt: any;
-  churchName?: string;
-  contactNumber?: string;
-  address?: string;
-  ministries?: string[];
-  membershipTypes?: string[];
-  churchRoles?: string[];
+import { useEffect, useState } from "react";
+import { auth, db } from "../../../lib/firebase";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+
+interface ProfileData {
+  name: string;
+  email: string;
+  role: string;
+  tenantId: string;
+  churchName: string;
 }
 
-// ─── Super Admin Platform View ───────────────────────────────────────────────
+export default function ProfilePage() {
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-async function PlatformAdminView({ uid, email }: { uid: string; email: string }) {
-  const tenantsSnap = await adminDb.collection("tenants").get();
-  const tenants = tenantsSnap.docs.map((d) => ({
-    id: d.id,
-    churchName: d.data().churchName || "Unnamed Church",
-    ownerEmail: d.data().ownerEmail || "—",
-    status: d.data().status || "unknown",
-    plan: d.data().plan || "free",
-    createdAt: d.data().createdAt?.toDate
-      ? d.data().createdAt.toDate().toLocaleDateString("en-ZA", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })
-      : "—",
-  }));
+  // Name edit
+  const [editName, setEditName] = useState("");
 
-  const activeCount = tenants.filter((t) => t.status === "active").length;
+  // Password change
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [pwSaved, setPwSaved] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
 
-  return (
-    <div className="max-w-5xl mx-auto p-6 flex flex-col gap-8">
-      <div>
-        <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-full mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-          Platform Administrator
-        </div>
-        <h1 className="text-3xl font-bold text-gray-900">KerekeHub Platform</h1>
-        <p className="text-gray-500 text-sm mt-1">Signed in as {email}</p>
-      </div>
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(async (user) => {
+      if (!user) { setLoading(false); return; }
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <div className="bg-white border rounded-xl p-5 shadow-sm">
-          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Tenants</p>
-          <p className="text-4xl font-bold text-gray-900 mt-1">{tenants.length}</p>
-        </div>
-        <div className="bg-white border rounded-xl p-5 shadow-sm">
-          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Active</p>
-          <p className="text-4xl font-bold text-emerald-600 mt-1">{activeCount}</p>
-        </div>
-        <div className="bg-white border rounded-xl p-5 shadow-sm">
-          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Inactive</p>
-          <p className="text-4xl font-bold text-gray-400 mt-1">{tenants.length - activeCount}</p>
-        </div>
-      </div>
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const data = userDoc.data() || {};
+        const tenantId = data.tenantId || "";
 
-      <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-bold text-gray-800">Registered Churches</h2>
-        </div>
-        {tenants.length === 0 ? (
-          <p className="p-8 text-center text-gray-400 text-sm">No tenants registered yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-6 py-3 font-semibold">Church Name</th>
-                  <th className="text-left px-6 py-3 font-semibold">Owner Email</th>
-                  <th className="text-left px-6 py-3 font-semibold">Status</th>
-                  <th className="text-left px-6 py-3 font-semibold">Plan</th>
-                  <th className="text-left px-6 py-3 font-semibold">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {tenants.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-gray-900">{t.churchName}</td>
-                    <td className="px-6 py-4 text-gray-600">{t.ownerEmail}</td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          t.status === "active"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            t.status === "active" ? "bg-emerald-500" : "bg-gray-400"
-                          }`}
-                        ></span>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 capitalize">{t.plan}</td>
-                    <td className="px-6 py-4 text-gray-500">{t.createdAt}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        let churchName = "";
+        if (tenantId) {
+          const tenantDoc = await getDoc(doc(db, "tenants", tenantId));
+          churchName = tenantDoc.data()?.name || "";
+        }
 
-      <p className="text-xs text-gray-400">
-        This view is only visible to platform administrators. Tenant admins see the Church Profile form.
-      </p>
-    </div>
-  );
-}
+        const p: ProfileData = {
+          name: data.name || user.displayName || "",
+          email: user.email || "",
+          role: data.role || "member",
+          tenantId,
+          churchName,
+        };
+        setProfile(p);
+        setEditName(p.name);
+      } catch (err) {
+        console.error("Failed to load profile:", err);
+        setError("Could not load profile.");
+      } finally {
+        setLoading(false);
+      }
+    });
+    return () => unsub();
+  }, []);
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+  const handleSaveName = async () => {
+    if (!auth.currentUser || !profile) return;
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    try {
+      await updateDoc(doc(db, "users", auth.currentUser.uid), { name: editName });
+      setProfile((prev) => prev ? { ...prev, name: editName } : prev);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      console.error("Save failed:", err);
+      setError("Failed to save name. Check permissions.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-export default async function ProfilePage() {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("session")?.value;
+  const handleChangePassword = async () => {
+    if (!auth.currentUser) return;
+    setPwError("");
+    setPwSaved(false);
 
-  if (!sessionCookie) {
-    redirect("/login");
-  }
-
-  let uid = "";
-  let email = "";
-  let userRole = "";
-  let tenantId = "";
-  let tenantData: TenantData | null = null;
-
-  try {
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    uid = decodedToken.uid;
-    email = decodedToken.email || "";
-
-    const userDoc = await adminDb.collection("users").doc(uid).get();
-    if (userDoc.exists) {
-      const data = userDoc.data()!;
-      tenantId = data.tenantId || uid;
-      userRole = data.role || "user";
-    } else {
-      tenantId = uid;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPwError("All password fields are required.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError("New passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPwError("New password must be at least 8 characters.");
+      return;
     }
 
-    if (userRole === "super_admin") {
-      return <PlatformAdminView uid={uid} email={email} />;
+    setPwSaving(true);
+    try {
+      const credential = EmailAuthProvider.credential(
+        auth.currentUser.email!,
+        currentPassword
+      );
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, newPassword);
+      setPwSaved(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPwSaved(false), 3000);
+    } catch (err: any) {
+      console.error("Password change failed:", err);
+      if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setPwError("Current password is incorrect.");
+      } else {
+        setPwError("Password change failed. Try again.");
+      }
+    } finally {
+      setPwSaving(false);
     }
+  };
 
-    const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
-    if (tenantDoc.exists) {
-      const data = tenantDoc.data() as TenantData;
-      const formattedDate = data.createdAt?.toDate
-        ? data.createdAt.toDate().toLocaleDateString("en-ZA", {
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-          })
-        : "Just now";
-      tenantData = { ...data, createdAt: formattedDate };
-    }
-  } catch (error: any) {
-    if (error?.digest?.startsWith("NEXT_REDIRECT")) throw error;
-    console.error("Server profile query breakdown:", error);
-    redirect("/login");
-  }
+  const ROLE_LABELS: Record<string, string> = {
+    owner: "Owner",
+    admin: "Admin",
+    pastor: "Pastor",
+    staff: "Staff",
+    member: "Member",
+    super_admin: "Super Admin",
+  };
 
-  if (!tenantData) {
+  const ROLE_COLORS: Record<string, string> = {
+    owner: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    admin: "bg-blue-50 text-blue-700 border-blue-200",
+    pastor: "bg-violet-50 text-violet-700 border-violet-200",
+    staff: "bg-amber-50 text-amber-700 border-amber-200",
+    member: "bg-gray-100 text-gray-600 border-gray-200",
+    super_admin: "bg-red-50 text-red-700 border-red-200",
+  };
+
+  if (loading) {
     return (
-      <div className="p-10 max-w-2xl mx-auto bg-white border border-red-200 rounded-lg shadow-sm">
-        <h1 className="text-2xl font-bold text-red-600">Church Profile Not Found</h1>
-        <p className="text-gray-600 mt-2">
-          Your login is valid but no church profile is linked to your account yet.
-        </p>
-        <p className="text-sm text-gray-500 mt-4 font-mono bg-gray-50 p-3 rounded border">
-          Your UID: {uid}
-        </p>
-        <p className="text-sm text-gray-600 mt-4">
-          A tenant document needs to be created in Firestore and linked via the{" "}
-          <strong>tenantId</strong> field on your user document.
-        </p>
+      <div className="flex items-center justify-center h-64 gap-3">
+        <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-500 font-medium">Loading profile...</p>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-400 text-sm">Unable to load profile. Please refresh.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl p-6 mx-auto">
-      <div className="bg-white border rounded-lg p-6 shadow-sm">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Church Profile</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage your registered church hub details</p>
+    <div className="flex flex-col gap-8 max-w-2xl">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-8 h-8 rounded-lg bg-blue-100 border border-blue-200 flex items-center justify-center text-sm">
+            👤
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">My Profile</h1>
         </div>
-        <hr className="border-gray-200 mb-6" />
-        <ProfileForm initialData={tenantData} tenantId={tenantId} />
+        <p className="text-gray-500 text-sm ml-11">
+          Manage your personal details and account security.
+        </p>
+      </div>
+
+      {/* Account info */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+        <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Account Info</h2>
+
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-2xl font-bold text-emerald-700 shrink-0">
+            {profile.name?.charAt(0)?.toUpperCase() || profile.email?.charAt(0)?.toUpperCase() || "?"}
+          </div>
+          <div>
+            <p className="text-base font-bold text-gray-900">{profile.name || "No name set"}</p>
+            <p className="text-sm text-gray-500">{profile.email}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide border ${ROLE_COLORS[profile.role] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                {ROLE_LABELS[profile.role] ?? profile.role}
+              </span>
+              {profile.churchName && (
+                <span className="text-xs text-gray-400">{profile.churchName}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Display Name</label>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Your name"
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+              />
+              <button
+                onClick={handleSaveName}
+                disabled={saving || editName === profile.name}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Email Address</label>
+            <input
+              type="email"
+              value={profile.email}
+              disabled
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-400 bg-gray-50 cursor-not-allowed"
+            />
+            <p className="text-xs text-gray-400 mt-1">Email cannot be changed here. Contact support if needed.</p>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>
+        )}
+        {saved && (
+          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+            Name updated successfully.
+          </p>
+        )}
+      </div>
+
+      {/* Change password */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+        <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Change Password</h2>
+
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Current Password</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">New Password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Confirm New Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Repeat new password"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+            />
+          </div>
+        </div>
+
+        {pwError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{pwError}</p>
+        )}
+        {pwSaved && (
+          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+            Password changed successfully.
+          </p>
+        )}
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleChangePassword}
+            disabled={pwSaving}
+            className="px-8 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition disabled:opacity-50"
+          >
+            {pwSaving ? "Updating..." : "Update Password"}
+          </button>
+        </div>
       </div>
     </div>
   );
