@@ -338,6 +338,144 @@ export const onSignupCreated = onDocumentCreated(
     } catch (err) {
       console.error("[onSignupCreated] Failed to send welcome email:", err);
     }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED: BILLING REMINDER EMAILS
+//
+// Runs daily at 08:00 SAST. Finds tenants whose free period ends
+// in exactly 7 days or 1 day, and emails them a payment reminder
+// with a direct link to hub.kerekehub.co.za/dashboard/billing.
+//
+// Skips: internal accounts, already-paying tenants, and anyone
+// whose paymentStatus is already "active".
+// ─────────────────────────────────────────────────────────────
+import { onSchedule } from "firebase-functions/v2/scheduler";
+
+export const billingReminder = onSchedule(
+  {
+    schedule: "0 6 * * *",   // 06:00 UTC = 08:00 SAST
+    timeZone: "Africa/Johannesburg",
+    secrets: [SYSTEM_GMAIL_USER, SYSTEM_GMAIL_APP_PASSWORD],
+  },
+  async () => {
+    const gmailUser = SYSTEM_GMAIL_USER.value();
+    const gmailPass = SYSTEM_GMAIL_APP_PASSWORD.value();
+    if (!gmailUser || !gmailPass) {
+      console.error("[billingReminder] System Gmail secrets not configured.");
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+
+    const now = new Date();
+    const billingUrl = "https://hub.kerekehub.co.za/dashboard/billing";
+
+    // Helper: check if a date is N days away (within a 12-hour window to avoid duplicates)
+    function isDaysAway(iso: string | null, n: number): boolean {
+      if (!iso) return false;
+      const target = new Date(iso).getTime();
+      const diff = (target - now.getTime()) / (1000 * 60 * 60 * 24);
+      return diff >= n - 0.5 && diff < n + 0.5;
+    }
+
+    // Fetch all non-internal, non-paying tenants
+    const snap = await db
+      .collection("tenants")
+      .where("accountType", "in", ["standard", "beta"])
+      .get();
+
+    let sent = 0;
+
+    for (const tenantDoc of snap.docs) {
+      const t = tenantDoc.data();
+
+      // Skip already paying
+      if (t.paymentStatus === "active") continue;
+
+      // Determine which date to check and what the upcoming rate is
+      let checkDate: string | null = null;
+      let daysLabel = "";
+      let upcomingRate = 0;
+      let upcomingLabel = "";
+
+      if (t.accountType === "beta") {
+        checkDate = t.trialEndsAt;
+        upcomingRate = 139;
+        upcomingLabel = "R139/mo";
+      } else if (t.billingPhase === "trial") {
+        checkDate = t.trialEndsAt;
+        upcomingRate = 99;
+        upcomingLabel = "R99/mo";
+      } else if (t.billingPhase === "evaluation") {
+        checkDate = t.evaluationEndsAt;
+        upcomingRate = 139;
+        upcomingLabel = "R139/mo";
+      }
+
+      const is7Days = isDaysAway(checkDate, 7);
+      const is1Day = isDaysAway(checkDate, 1);
+
+      if (!is7Days && !is1Day) continue;
+
+      daysLabel = is1Day ? "tomorrow" : "in 7 days";
+      const urgency = is1Day ? "high" : "medium";
+
+      const { ownerEmail, ownerName, name: churchName } = t;
+      if (!ownerEmail) continue;
+
+      const subject = is1Day
+        ? `Action required: Set up payment for ${churchName} by tomorrow`
+        : `Reminder: Your Kereke Hub free period ends in 7 days`;
+
+      try {
+        await transporter.sendMail({
+          from: `"Kereke Hub" <${gmailUser}>`,
+          to: ownerEmail,
+          subject,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 40px; border-radius: 10px;">
+              <h2 style="color: ${urgency === "high" ? "#F59E0B" : "#3B9A5F"}; margin-top: 0;">
+                ${urgency === "high" ? "Payment needed by tomorrow" : "Your free period ends soon"}
+              </h2>
+              <p style="color: #F8FAFC;">Hi ${ownerName},</p>
+              <p style="color: #CBD5E1;">
+                Your Kereke Hub free period for <strong>${churchName}</strong> ends
+                <strong>${daysLabel}</strong>. After that, your plan moves to
+                <strong>${upcomingLabel}</strong>.
+              </p>
+              <p style="color: #CBD5E1;">
+                To keep your account running without interruption, set up your payment method now.
+                It only takes a minute.
+              </p>
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${billingUrl}" style="background: #3B9A5F; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
+                  Set Up Payment
+                </a>
+              </div>
+              <p style="color: #94A3B8; font-size: 14px;">
+                Questions? Reply to this email or visit
+                <a href="https://kerekehub.co.za/contact" style="color: #3B9A5F;">kerekehub.co.za/contact</a>.
+              </p>
+              <hr style="border-color: #334155; margin: 24px 0;" />
+              <p style="color: #475569; font-size: 12px; margin: 0;">
+                Kereke Hub &mdash; Ministry Management, Simplified
+              </p>
+            </div>
+          `,
+        });
+        sent++;
+        console.log(`[billingReminder] Reminder sent to ${ownerEmail} (${daysLabel})`);
+      } catch (err) {
+        console.error(`[billingReminder] Failed to email ${ownerEmail}:`, err);
+      }
+    }
+
+    console.log(`[billingReminder] Done. ${sent} reminder(s) sent.`);
 
     // ── 2. Notify Sifiso of the new signup ───────────────────
     const accountTypeLabel: Record<string, string> = {
