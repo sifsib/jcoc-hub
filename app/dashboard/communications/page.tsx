@@ -45,7 +45,8 @@ function buildWaLink(message: string) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CommunicationsPage() {
-  const { user, tenantId, loading: userLoading } = useAppUser();
+  const { appUser, loading: userLoading } = useAppUser();
+  const tenantId = appUser?.tenantId ?? null;
 
   const [activeTab, setActiveTab] = useState<"compose" | "history">("compose");
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
@@ -87,7 +88,7 @@ export default function CommunicationsPage() {
       setError("Please type a message before sending.");
       return;
     }
-    if (!tenantId || !user) {
+    if (!tenantId || !appUser) {
       setError("Session error. Please refresh and try again.");
       return;
     }
@@ -100,8 +101,8 @@ export default function CommunicationsPage() {
       const docRef = await addDoc(collection(db, "communications"), {
         type: "whatsapp_broadcast",
         message: message.trim(),
-        sentBy: user.uid,
-        sentByName: user.displayName || user.email || "Unknown",
+        sentBy: appUser.uid,
+        sentByName: appUser.displayName || appUser.email || "Unknown",
         tenantId,
         createdAt: serverTimestamp(),
       });
