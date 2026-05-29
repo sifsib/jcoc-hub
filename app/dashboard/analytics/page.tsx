@@ -34,7 +34,6 @@ interface MetricSummary {
 }
 
 export default function AnalyticsPage() {
-  // FIX 1: Use useAppUser() to get the real tenantId — NOT user.uid
   const { appUser, loading: userLoading } = useAppUser();
 
   const [metrics, setMetrics] = useState<MetricSummary>({
@@ -51,14 +50,16 @@ export default function AnalyticsPage() {
     neverAttended: [],
   });
 
+  // Prevents Recharts from measuring before the DOM has real pixel dimensions
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
   useEffect(() => {
-    // Wait for the user profile to load before querying
     if (userLoading) return;
     if (!appUser) { setLoading(false); return; }
 
     const fetchAnalytics = async () => {
       try {
-        // FIX 1: Query with appUser.tenantId — this matches what Firestore rules check
         const q = query(collection(db, "members"), where("tenantId", "==", appUser.tenantId));
         const querySnapshot = await getDocs(q);
         const rawMembers: MemberData[] = [];
@@ -80,7 +81,6 @@ export default function AnalyticsPage() {
         setMetrics({ totalMembers: total, leadershipCount: leadership, standardMembersCount: standard });
         setRoleChartData(Object.keys(roleCounts).map((role) => ({ name: role, Count: roleCounts[role] })));
 
-        // Care tier calculation — also uses appUser.tenantId
         const qAttendance = query(collection(db, "attendance"), where("tenantId", "==", appUser.tenantId));
         const attendanceSnap = await getDocs(qAttendance);
         const lastAttendanceMap: Record<string, Date> = {};
@@ -99,7 +99,6 @@ export default function AnalyticsPage() {
         today.setHours(0, 0, 0, 0);
         const tiers: CareTiers = { tier1: [], tier2: [], tier3: [], neverAttended: [] };
 
-        // Re-use the members snapshot we already fetched above — avoids a second read
         const membersForTiers: CareTierMember[] = [];
         querySnapshot.forEach((docSnap) => {
           const data = docSnap.data();
@@ -221,32 +220,35 @@ export default function AnalyticsPage() {
         <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
           <h3 className="text-base font-bold text-gray-900 mb-6">Role Distribution</h3>
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={roleChartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis dataKey="name" stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F3F4F6" }} />
-                <Bar dataKey="Count" fill="#047857" radius={[6, 6, 0, 0]} maxBarSize={50} />
-              </BarChart>
-            </ResponsiveContainer>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={roleChartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis dataKey="name" stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F3F4F6" }} />
+                  <Bar dataKey="Count" fill="#047857" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col">
           <h3 className="text-base font-bold text-gray-900 mb-2">Structural Ratio</h3>
-          {/* FIX 2: explicit h-52 so ResponsiveContainer can calculate height — flex-1 alone gives -1 */}
           <div className="h-52 relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={65} outerRadius={85} paddingAngle={5} dataKey="value" stroke="none">
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={65} outerRadius={85} paddingAngle={5} dataKey="value" stroke="none">
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-2xl font-black text-gray-900">{metrics.totalMembers}</span>
               <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total</span>
