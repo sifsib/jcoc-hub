@@ -102,7 +102,7 @@ export default function CommunicationsPage() {
         type: "whatsapp_broadcast",
         message: message.trim(),
         sentBy: appUser.uid,
-        sentByName: appUser.displayName || appUser.email || "Unknown",
+        sentByName: appUser.email || "Unknown",
         tenantId,
         createdAt: serverTimestamp(),
       });
