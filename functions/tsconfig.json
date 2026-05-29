@@ -4,11 +4,12 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "outDir": "lib",
-    "rootDir": "src",
     "sourceMap": true,
     "strict": true,
-    "target": "es2017",
-    "esModuleInterop": true
+    "target": "es2017"
   },
-  "include": ["src"]
+  "compileOnSave": true,
+  "include": [
+    "src"
+  ]
 }
