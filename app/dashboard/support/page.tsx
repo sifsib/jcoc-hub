@@ -64,7 +64,7 @@ const emptyForm = () => ({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SupportPage() {
-  const { user, tenantId, churchName, loading: userLoading } = useAppUser();
+  const { appUser, tenantId, churchName, loading: userLoading } = useAppUser();
 
   const [activeTab, setActiveTab] = useState<"submit" | "history">("submit");
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
