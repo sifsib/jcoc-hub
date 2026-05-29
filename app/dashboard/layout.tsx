@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { isRedirectError } from "next/dist/client/components/redirect";
+import { redirect } from "next/navigation";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import LogoutButton from "./LogoutButton";
 import MobileSidebar from "./MobileSidebar";
@@ -36,8 +36,8 @@ export default async function DashboardLayout({
         }
       }
     }
-  } catch (error) {
-    if (isRedirectError(error)) throw error;
+  } catch (error: any) {
+    if (error?.digest?.startsWith("NEXT_REDIRECT")) throw error;
     console.error("Session verification failed:", error);
     redirect("/login");
   }
@@ -48,18 +48,18 @@ export default async function DashboardLayout({
   const churchName = tenantData?.name || "KerekeHub";
   const primaryColor = tenantData?.primaryColor || "#059669";
 
- const navigation = [
-  { name: "Overview Analytics", href: "/dashboard/analytics", icon: "📊" },
-  { name: "Church Profile", href: "/dashboard/profile", icon: "⛪" },
-  { name: "Management Roster", href: "/dashboard/roster", icon: "👥" },
-  { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝" },
-  { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋" },
-  { name: "Financials", href: "/dashboard/finance", icon: "💰" },
-  { name: "Communications", href: "/dashboard/communications", icon: "💬" },
-  { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑" },
-  { name: "Branding", href: "/dashboard/branding", icon: "🎨" },
-  { name: "Support", href: "/dashboard/support", icon: "🎧" },
-];
+  const navigation = [
+    { name: "Overview Analytics", href: "/dashboard/analytics", icon: "📊" },
+    { name: "Church Profile", href: "/dashboard/profile", icon: "⛪" },
+    { name: "Management Roster", href: "/dashboard/roster", icon: "👥" },
+    { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝" },
+    { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋" },
+    { name: "Financials", href: "/dashboard/finance", icon: "💰" },
+    { name: "Communications", href: "/dashboard/communications", icon: "💬" },
+    { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑" },
+    { name: "Branding", href: "/dashboard/branding", icon: "🎨" },
+    { name: "Support", href: "/dashboard/support", icon: "🎧" },
+  ];
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-900 antialiased">

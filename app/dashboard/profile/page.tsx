@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { isRedirectError } from "next/dist/client/components/redirect";
+import { redirect } from "next/navigation";
 import { adminAuth, adminDb } from "../../../lib/firebase-admin";
 import ProfileForm from "./ProfileForm";
 
@@ -18,8 +18,6 @@ interface TenantData {
 // ─── Super Admin Platform View ───────────────────────────────────────────────
 
 async function PlatformAdminView({ uid, email }: { uid: string; email: string }) {
-  // Fetch all tenants so we can show platform-level stats.
-  // Admin SDK bypasses Firestore rules — no permissions issue here.
   const tenantsSnap = await adminDb.collection("tenants").get();
   const tenants = tenantsSnap.docs.map((d) => ({
     id: d.id,
@@ -40,7 +38,6 @@ async function PlatformAdminView({ uid, email }: { uid: string; email: string })
 
   return (
     <div className="max-w-5xl mx-auto p-6 flex flex-col gap-8">
-      {/* Header */}
       <div>
         <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
@@ -50,7 +47,6 @@ async function PlatformAdminView({ uid, email }: { uid: string; email: string })
         <p className="text-gray-500 text-sm mt-1">Signed in as {email}</p>
       </div>
 
-      {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="bg-white border rounded-xl p-5 shadow-sm">
           <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Tenants</p>
@@ -66,7 +62,6 @@ async function PlatformAdminView({ uid, email }: { uid: string; email: string })
         </div>
       </div>
 
-      {/* Tenant table */}
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-bold text-gray-800">Registered Churches</h2>
@@ -116,7 +111,6 @@ async function PlatformAdminView({ uid, email }: { uid: string; email: string })
         )}
       </div>
 
-      {/* Footer note */}
       <p className="text-xs text-gray-400">
         This view is only visible to platform administrators. Tenant admins see the Church Profile form.
       </p>
@@ -145,7 +139,6 @@ export default async function ProfilePage() {
     uid = decodedToken.uid;
     email = decodedToken.email || "";
 
-    // Step 1: Get the user document to resolve tenantId and role.
     const userDoc = await adminDb.collection("users").doc(uid).get();
     if (userDoc.exists) {
       const data = userDoc.data()!;
@@ -155,12 +148,10 @@ export default async function ProfilePage() {
       tenantId = uid;
     }
 
-    // Step 2: Super admins get the platform view — skip the tenant lookup entirely.
     if (userRole === "super_admin") {
       return <PlatformAdminView uid={uid} email={email} />;
     }
 
-    // Step 3: Fetch the tenant document for church admins.
     const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
     if (tenantDoc.exists) {
       const data = tenantDoc.data() as TenantData;
@@ -173,8 +164,8 @@ export default async function ProfilePage() {
         : "Just now";
       tenantData = { ...data, createdAt: formattedDate };
     }
-  } catch (error) {
-    if (isRedirectError(error)) throw error;
+  } catch (error: any) {
+    if (error?.digest?.startsWith("NEXT_REDIRECT")) throw error;
     console.error("Server profile query breakdown:", error);
     redirect("/login");
   }
