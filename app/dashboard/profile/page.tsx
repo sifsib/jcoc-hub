@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect";
 import { adminAuth, adminDb } from "../../../lib/firebase-admin";
 import ProfileForm from "./ProfileForm";
 
@@ -174,6 +174,7 @@ export default async function ProfilePage() {
       tenantData = { ...data, createdAt: formattedDate };
     }
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     console.error("Server profile query breakdown:", error);
     redirect("/login");
   }

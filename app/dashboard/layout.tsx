@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import LogoutButton from "./LogoutButton";
 import MobileSidebar from "./MobileSidebar";
@@ -37,6 +37,7 @@ export default async function DashboardLayout({
       }
     }
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     console.error("Session verification failed:", error);
     redirect("/login");
   }
