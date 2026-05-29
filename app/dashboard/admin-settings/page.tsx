@@ -33,9 +33,18 @@ interface DemoRequest {
 
 interface SupportTicket {
   id: string;
+  ticketRef: string;
   subject: string;
+  message: string;
   email: string;
-  status: "open" | "resolved" | string;
+  name: string;
+  phone?: string;
+  category: string;
+  priority: "normal" | "urgent" | string;
+  status: "open" | "in_progress" | "resolved" | "closed" | string;
+  source: "dashboard" | "public_form" | string;
+  churchName?: string;
+  tenantId?: string;
   createdAt: string;
 }
 
@@ -51,6 +60,8 @@ export default function AdminSettingsPage() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("tenants");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<string>("all");
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -116,13 +127,25 @@ export default function AdminSettingsPage() {
           query(collection(db, "support_tickets"), orderBy("createdAt", "desc"))
         );
         setSupportTickets(
-          snap.docs.map((d) => ({
-            id: d.id,
-            subject: d.data().subject || d.data().message?.slice(0, 60) || "No subject",
-            email: d.data().email || "-",
-            status: d.data().status || "open",
-            createdAt: d.data().createdAt || "",
-          }))
+          snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ticketRef: data.ticketRef || "TK-" + d.id.slice(0, 6).toUpperCase(),
+              subject: data.subject || data.message?.slice(0, 60) || "No subject",
+              message: data.message || "",
+              email: data.email || "-",
+              name: data.name || "-",
+              phone: data.phone || "",
+              category: data.category || "general",
+              priority: data.priority || "normal",
+              status: data.status || "open",
+              source: data.source || "public_form",
+              churchName: data.churchName || "",
+              tenantId: data.tenantId || "",
+              createdAt: data.createdAt || "",
+            };
+          })
         );
       } catch (err) {
         console.error("Support tickets fetch error (add firestore rules for support_tickets):", err);
@@ -149,15 +172,33 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const resolveTicket = async (ticketId: string) => {
+  const TICKET_STATUS_CYCLE: Record<string, string> = {
+    open: "in_progress",
+    in_progress: "resolved",
+    resolved: "closed",
+    closed: "open",
+  };
+
+  const TICKET_STATUS_ACTION: Record<string, string> = {
+    open: "Start Working",
+    in_progress: "Mark Resolved",
+    resolved: "Close Ticket",
+    closed: "Reopen",
+  };
+
+  const updateTicketStatus = async (ticketId: string, currentStatus: string) => {
+    const nextStatus = TICKET_STATUS_CYCLE[currentStatus] ?? "resolved";
     setActionLoading(ticketId);
     try {
-      await updateDoc(doc(db, "support_tickets", ticketId), { status: "resolved" });
+      await updateDoc(doc(db, "support_tickets", ticketId), {
+        status: nextStatus,
+        updatedAt: new Date().toISOString(),
+      });
       setSupportTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: "resolved" } : t))
+        prev.map((t) => (t.id === ticketId ? { ...t, status: nextStatus } : t))
       );
     } catch (err) {
-      console.error("Failed to resolve ticket:", err);
+      console.error("Failed to update ticket status:", err);
     } finally {
       setActionLoading(null);
     }
@@ -384,57 +425,152 @@ export default function AdminSettingsPage() {
         )}
 
         {/* Support tickets tab */}
-        {activeTab === "tickets" && (
-          <div className="overflow-x-auto">
-            {supportTickets.length === 0 ? (
-              <p className="p-8 text-center text-sm text-gray-400">No support tickets yet.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Subject</th>
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Submitted</th>
-                    <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {supportTickets.map((ticket) => (
-                    <tr key={ticket.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-gray-900 max-w-xs truncate" title={ticket.subject}>
-                        {ticket.subject}
-                      </td>
-                      <td className="px-6 py-4">
-                        <a
-                          href={`mailto:${ticket.email}`}
-                          className="text-emerald-600 hover:text-emerald-700 hover:underline"
-                        >
-                          {ticket.email}
-                        </a>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={statusBadge(ticket.status)}>{ticket.status}</span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500">{formatDate(ticket.createdAt)}</td>
-                      <td className="px-6 py-4 text-right">
-                        {ticket.status === "open" && (
-                          <button
-                            onClick={() => resolveTicket(ticket.id)}
-                            disabled={actionLoading === ticket.id}
-                            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
-                          >
-                            {actionLoading === ticket.id ? "..." : "Mark Resolved"}
-                          </button>
-                        )}
-                      </td>
+        {activeTab === "tickets" && (() => {
+          const CATEGORY_LABELS: Record<string, string> = {
+            billing: "Billing",
+            technical: "Technical",
+            general: "General",
+            feature_request: "Feature",
+            other: "Other",
+          };
+
+          const ticketStatusBadge = (status: string) => {
+            const map: Record<string, string> = {
+              open: "bg-blue-50 text-blue-700 border border-blue-200",
+              in_progress: "bg-amber-50 text-amber-700 border border-amber-200",
+              resolved: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+              closed: "bg-gray-100 text-gray-500 border border-gray-200",
+            };
+            return `inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${map[status] ?? "bg-gray-100 text-gray-600"}`;
+          };
+
+          const statusLabel: Record<string, string> = {
+            open: "Open",
+            in_progress: "In Progress",
+            resolved: "Resolved",
+            closed: "Closed",
+          };
+
+          const filtered = ticketStatusFilter === "all"
+            ? supportTickets
+            : supportTickets.filter((t) => t.status === ticketStatusFilter);
+
+          return (
+            <div>
+              {/* Filter bar */}
+              <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/60">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">Filter:</span>
+                {["all", "open", "in_progress", "resolved", "closed"].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setTicketStatusFilter(s)}
+                    className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors border ${
+                      ticketStatusFilter === s
+                        ? "bg-amber-100 text-amber-700 border-amber-300"
+                        : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"
+                    }`}
+                  >
+                    {s === "all" ? `All (${supportTickets.length})` : (statusLabel[s] ?? s)}
+                    {s !== "all" && (
+                      <span className="ml-1 text-gray-400">
+                        ({supportTickets.filter((t) => t.status === s).length})
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {filtered.length === 0 ? (
+                <p className="p-8 text-center text-sm text-gray-400">No tickets match this filter.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Ref</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Subject</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">From</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Category</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Submitted</th>
+                      <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filtered.map((ticket) => (
+                      <>
+                        <tr
+                          key={ticket.id}
+                          className="hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => setExpandedTicket(expandedTicket === ticket.id ? null : ticket.id)}
+                        >
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-xs text-emerald-600 font-semibold">{ticket.ticketRef}</span>
+                            {ticket.priority === "urgent" && (
+                              <span className="ml-2 text-xs bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full font-bold">Urgent</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 font-medium text-gray-900 max-w-[220px] truncate" title={ticket.subject}>
+                            {ticket.subject}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-gray-800 font-medium text-xs">{ticket.name}</div>
+                            <a
+                              href={`mailto:${ticket.email}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-emerald-600 hover:underline text-xs"
+                            >
+                              {ticket.email}
+                            </a>
+                            {ticket.churchName && (
+                              <div className="text-gray-400 text-xs">{ticket.churchName}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 text-xs capitalize">
+                            {CATEGORY_LABELS[ticket.category] ?? ticket.category}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={ticketStatusBadge(ticket.status)}>
+                              {statusLabel[ticket.status] ?? ticket.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 text-xs">{formatDate(ticket.createdAt)}</td>
+                          <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => updateTicketStatus(ticket.id, ticket.status)}
+                              disabled={actionLoading === ticket.id}
+                              className="text-xs font-bold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50 whitespace-nowrap"
+                            >
+                              {actionLoading === ticket.id
+                                ? "..."
+                                : (TICKET_STATUS_ACTION[ticket.status] ?? "Update")}
+                            </button>
+                          </td>
+                        </tr>
+
+                        {/* Expanded message row */}
+                        {expandedTicket === ticket.id && (
+                          <tr key={`${ticket.id}-expanded`} className="bg-amber-50/40">
+                            <td colSpan={7} className="px-6 py-4 border-b border-amber-100">
+                              <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Message</div>
+                              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{ticket.message || "No message content."}</p>
+                              {ticket.phone && (
+                                <p className="text-xs text-gray-500 mt-2">Phone: {ticket.phone}</p>
+                              )}
+                              <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+                                <span>Source: {ticket.source === "dashboard" ? "Hub Dashboard" : "Public Form"}</span>
+                                {ticket.tenantId && <span>Tenant ID: {ticket.tenantId}</span>}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
