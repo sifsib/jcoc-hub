@@ -824,7 +824,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
           {/* ── CSV Export button ── */}
           <ExportCSVButton
-            data={members}
+            data={members as Record<string, unknown>[]}
             filename="members"
             columns={[
               { key: "fullName", label: "Full Name" },
