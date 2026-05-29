@@ -12,6 +12,7 @@ export interface AppUser {
   displayName: string | null;
   tenantId: string;
   churchName: string;
+  name: string;
   role: string;
 }
 
@@ -48,17 +49,18 @@ export function useAppUser(): UseAppUserReturn {
           displayName: firebaseUser.displayName,
           tenantId: data.tenantId ?? "",
           churchName: data.churchName ?? "",
+          name: data.churchName ?? data.name ?? "",
           role: data.role ?? "",
         });
       } catch (err) {
         console.error("useAppUser: failed to load user doc", err);
-        // Still set a minimal appUser so pages don't hang on loading
         setAppUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
           tenantId: "",
           churchName: "",
+          name: "",
           role: "",
         });
       } finally {
