@@ -1,7 +1,18 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import * as nodemailer from "nodemailer";
+
+// ─────────────────────────────────────────────────────────────
+// SYSTEM-LEVEL GMAIL SECRETS
+// Set via: firebase functions:secrets:set SYSTEM_GMAIL_USER
+//          firebase functions:secrets:set SYSTEM_GMAIL_APP_PASSWORD
+// These are Kereke Hub's own support email credentials, separate
+// from any individual church's SMTP config.
+// ─────────────────────────────────────────────────────────────
+const SYSTEM_GMAIL_USER = defineSecret("SYSTEM_GMAIL_USER");
+const SYSTEM_GMAIL_APP_PASSWORD = defineSecret("SYSTEM_GMAIL_APP_PASSWORD");
 
 initializeApp();
 const db = getFirestore();
@@ -190,6 +201,151 @@ export const onCommunicationCreated = onDocumentCreated(
     } catch (err: any) {
       console.error(`[onCommunicationCreated] Broadcast failed:`, err);
       await docRef.update({ status: "failed", error: err.message });
+    }
+  }
+);
+
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 3: SUPPORT TICKET NOTIFICATIONS
+//
+// Fires when a new document is created in /support_tickets/{ticketId}.
+// Comes from two sources:
+//   - Public marketing contact form (no tenantId)
+//   - Hub dashboard "Submit Ticket" form (has tenantId + churchName)
+//
+// Actions:
+//   1. Email Sifiso at sifisosibuyane@gmail.com with full ticket details
+//   2. Auto-reply to the submitter with their ticket reference
+//   3. Write a ticketRef (e.g. TK-8F3A) back onto the document
+//
+// Secrets required (set once via Firebase CLI):
+//   firebase functions:secrets:set SYSTEM_GMAIL_USER
+//   firebase functions:secrets:set SYSTEM_GMAIL_APP_PASSWORD
+// ─────────────────────────────────────────────────────────────
+export const onSupportTicketCreated = onDocumentCreated(
+  {
+    document: "support_tickets/{ticketId}",
+    secrets: [SYSTEM_GMAIL_USER, SYSTEM_GMAIL_APP_PASSWORD],
+  },
+  async (event) => {
+    const ticket = event.data?.data();
+    if (!ticket) return;
+
+    const ticketId = event.params.ticketId;
+    const gmailUser = SYSTEM_GMAIL_USER.value();
+    const gmailPass = SYSTEM_GMAIL_APP_PASSWORD.value();
+
+    if (!gmailUser || !gmailPass) {
+      console.error("[onSupportTicketCreated] System Gmail secrets not configured.");
+      return;
+    }
+
+    // Generate a short human-readable ticket reference
+    const ticketRef = "TK-" + ticketId.slice(0, 6).toUpperCase();
+
+    // Write the ticketRef back to the document immediately
+    try {
+      await db.doc(`support_tickets/${ticketId}`).update({ ticketRef, status: "open" });
+    } catch (err) {
+      console.error("[onSupportTicketCreated] Failed to update ticketRef:", err);
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+
+    const {
+      name = "Unknown",
+      email = "",
+      phone = "",
+      subject = "(no subject)",
+      message = "",
+      category = "general",
+      priority = "normal",
+      churchName = "",
+      tenantId = "",
+      source = "public_form",
+    } = ticket;
+
+    const sourceLabel = source === "dashboard" ? `Hub Dashboard (${churchName || tenantId})` : "Public Contact Form";
+    const priorityLabel = priority === "urgent" ? "URGENT" : "Normal";
+
+    // ── 1. Notify Sifiso ──
+    try {
+      await transporter.sendMail({
+        from: `"Kereke Hub Support" <${gmailUser}>`,
+        to: "sifisosibuyane@gmail.com",
+        subject: `[${priorityLabel}] New Ticket ${ticketRef}: ${subject}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 32px; border-radius: 8px;">
+            <h2 style="color: #3B9A5F; margin-top: 0;">New Support Ticket</h2>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+              <tr><td style="color: #94A3B8; padding: 6px 0; width: 130px;">Ticket Ref</td><td style="color: #F8FAFC; font-weight: bold;">${ticketRef}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Priority</td><td style="color: ${priority === "urgent" ? "#EF4444" : "#3B9A5F"}; font-weight: bold;">${priorityLabel}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Source</td><td style="color: #F8FAFC;">${sourceLabel}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Category</td><td style="color: #F8FAFC; text-transform: capitalize;">${category.replace(/_/g, " ")}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">From</td><td style="color: #F8FAFC;">${name} &lt;${email}&gt;</td></tr>
+              ${phone ? `<tr><td style="color: #94A3B8; padding: 6px 0;">Phone</td><td style="color: #F8FAFC;">${phone}</td></tr>` : ""}
+              ${churchName ? `<tr><td style="color: #94A3B8; padding: 6px 0;">Church</td><td style="color: #F8FAFC;">${churchName}</td></tr>` : ""}
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Subject</td><td style="color: #F8FAFC; font-weight: bold;">${subject}</td></tr>
+            </table>
+            <div style="background: #1E293B; padding: 20px; border-radius: 6px; border-left: 4px solid #3B9A5F;">
+              <p style="color: #94A3B8; margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Message</p>
+              <p style="color: #F8FAFC; margin: 0; white-space: pre-wrap;">${message}</p>
+            </div>
+            <hr style="border-color: #334155; margin: 24px 0;" />
+            <p style="color: #64748B; font-size: 12px; margin: 0;">
+              Reply directly to ${email} to respond. View all tickets in the Admin Settings panel.
+            </p>
+          </div>
+        `,
+        replyTo: email || undefined,
+      });
+      console.log(`[onSupportTicketCreated] Admin notification sent for ${ticketRef}`);
+    } catch (err) {
+      console.error("[onSupportTicketCreated] Failed to send admin notification:", err);
+    }
+
+    // ── 2. Auto-reply to submitter ──
+    if (!email) {
+      console.log(`[onSupportTicketCreated] No submitter email for ${ticketRef} — skipping auto-reply.`);
+      return;
+    }
+
+    try {
+      await transporter.sendMail({
+        from: `"Kereke Hub Support" <${gmailUser}>`,
+        to: email,
+        subject: `We received your request [${ticketRef}]`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 32px; border-radius: 8px;">
+            <h2 style="color: #3B9A5F; margin-top: 0;">Thanks for reaching out, ${name}.</h2>
+            <p style="color: #F8FAFC;">
+              We've received your message and will get back to you as soon as possible. Here's a copy of what you sent:
+            </p>
+            <div style="background: #1E293B; padding: 20px; border-radius: 6px; margin: 20px 0;">
+              <p style="color: #94A3B8; margin: 0 0 4px 0; font-size: 12px;">TICKET REFERENCE</p>
+              <p style="color: #3B9A5F; font-size: 20px; font-weight: bold; margin: 0 0 16px 0;">${ticketRef}</p>
+              <p style="color: #94A3B8; margin: 0 0 4px 0; font-size: 12px;">SUBJECT</p>
+              <p style="color: #F8FAFC; font-weight: bold; margin: 0 0 16px 0;">${subject}</p>
+              <p style="color: #94A3B8; margin: 0 0 4px 0; font-size: 12px;">YOUR MESSAGE</p>
+              <p style="color: #F8FAFC; margin: 0; white-space: pre-wrap;">${message}</p>
+            </div>
+            <p style="color: #94A3B8;">
+              Please keep your ticket reference handy. If you need to follow up, just reply to this email.
+            </p>
+            <hr style="border-color: #334155; margin: 24px 0;" />
+            <p style="color: #64748B; font-size: 12px; margin: 0;">
+              Kereke Hub &mdash; Church Administration Made Simple &mdash; kerekehub.co.za
+            </p>
+          </div>
+        `,
+      });
+      console.log(`[onSupportTicketCreated] Auto-reply sent to ${email} for ${ticketRef}`);
+    } catch (err) {
+      console.error("[onSupportTicketCreated] Failed to send auto-reply:", err);
     }
   }
 );

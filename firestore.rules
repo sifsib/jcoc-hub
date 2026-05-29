@@ -358,12 +358,23 @@ service cloud.firestore {
 
 
     // ============================================
-    // SUPPORT TICKETS (public marketing form submissions)
+    // SUPPORT TICKETS
+    // Public: anyone can submit (marketing form, unauthenticated)
+    // Tenant: owners/admins can read their own church's tickets
+    // Super admin: full access
     // ============================================
     match /support_tickets/{id} {
 
+      // Anyone can submit — public form and authenticated dashboard users
       allow create: if true;
+
+      // Super admin: full access
       allow read, update, delete: if isSignedIn() && isSuperAdmin();
+
+      // Tenant owner/admin: read only their own church's tickets
+      allow read: if isSignedIn()
+                  && resource.data.tenantId == userTenantId()
+                  && (hasRole('owner') || hasRole('admin'));
     }
 
 
