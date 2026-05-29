@@ -1,70 +1,65 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { auth, db } from "./firebase";
 import { doc, getDoc } from "firebase/firestore";
+import type { User } from "firebase/auth";
 
+// Shape of the merged user object (auth + Firestore user doc)
 export interface AppUser {
   uid: string;
   email: string | null;
+  displayName: string | null;
   tenantId: string;
+  churchName: string;
   role: string;
-  name: string;
-  isSuperAdmin: boolean;
 }
 
-interface UseAppUserResult {
-  appUser: AppUser | null;
+interface UseAppUserReturn {
+  user: User | null;          // raw Firebase Auth user
+  appUser: AppUser | null;    // merged auth + Firestore doc
+  tenantId: string | null;
+  churchName: string | null;
   loading: boolean;
 }
 
-/**
- * Fetches the signed-in user's Firestore profile (tenantId, role, name).
- * Use this everywhere instead of auth.onAuthStateChanged + user.uid,
- * because user.uid !== tenantId for tenant admins.
- */
-export function useAppUser(): UseAppUserResult {
+export function useAppUser(): UseAppUserReturn {
+  const [user, setUser] = useState<User | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (!user) {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null);
         setAppUser(null);
         setLoading(false);
         return;
       }
 
+      setUser(firebaseUser);
+
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setAppUser({
-            uid: user.uid,
-            email: user.email,
-            tenantId: data.tenantId || user.uid,
-            role: data.role || "user",
-            name: data.name || "User",
-            isSuperAdmin: data.role === "super_admin",
-          });
-        } else {
-          // Fallback for accounts that predate the users collection
-          setAppUser({
-            uid: user.uid,
-            email: user.email,
-            tenantId: user.uid,
-            role: "user",
-            name: "User",
-            isSuperAdmin: false,
-          });
-        }
-      } catch (error) {
-        console.error("useAppUser: failed to fetch user profile", error);
+        const userSnap = await getDoc(doc(db, "users", firebaseUser.uid));
+        const data = userSnap.data() ?? {};
         setAppUser({
-          uid: user.uid,
-          email: user.email,
-          tenantId: user.uid,
-          role: "user",
-          name: "User",
-          isSuperAdmin: false,
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName,
+          tenantId: data.tenantId ?? "",
+          churchName: data.churchName ?? "",
+          role: data.role ?? "",
+        });
+      } catch (err) {
+        console.error("useAppUser: failed to load user doc", err);
+        // Still set a minimal appUser so pages don't hang on loading
+        setAppUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName,
+          tenantId: "",
+          churchName: "",
+          role: "",
         });
       } finally {
         setLoading(false);
@@ -74,5 +69,11 @@ export function useAppUser(): UseAppUserResult {
     return () => unsubscribe();
   }, []);
 
-  return { appUser, loading };
+  return {
+    user,
+    appUser,
+    tenantId: appUser?.tenantId || null,
+    churchName: appUser?.churchName || null,
+    loading,
+  };
 }
