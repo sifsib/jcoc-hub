@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import LogoutButton from "./LogoutButton";
+import MobileSidebar from "./MobileSidebar";
 
 export default async function DashboardLayout({
   children,
@@ -46,16 +47,18 @@ export default async function DashboardLayout({
   const churchName = tenantData?.name || "KerekeHub";
   const primaryColor = tenantData?.primaryColor || "#059669";
 
-  const navigation = [
-    { name: "Overview Analytics", href: "/dashboard/analytics", icon: "📊" },
-    { name: "Church Profile", href: "/dashboard/profile", icon: "⛪" },
-    { name: "Management Roster", href: "/dashboard/roster", icon: "👥" },
-    { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝" },
-    { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋" },
-    { name: "Financials", href: "/dashboard/finance", icon: "💰" },
-    { name: "Communications", href: "/dashboard/communications", icon: "💬" },
-    { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑" },
-  ];
+ const navigation = [
+  { name: "Overview Analytics", href: "/dashboard/analytics", icon: "📊" },
+  { name: "Church Profile", href: "/dashboard/profile", icon: "⛪" },
+  { name: "Management Roster", href: "/dashboard/roster", icon: "👥" },
+  { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝" },
+  { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋" },
+  { name: "Financials", href: "/dashboard/finance", icon: "💰" },
+  { name: "Communications", href: "/dashboard/communications", icon: "💬" },
+  { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑" },
+  { name: "Branding", href: "/dashboard/branding", icon: "🎨" },
+  { name: "Support", href: "/dashboard/support", icon: "🎧" },
+];
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-900 antialiased">
@@ -107,8 +110,16 @@ export default async function DashboardLayout({
       </aside>
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-gray-50">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-10 shrink-0">
-          <div className="text-lg font-semibold text-gray-800">Dashboard</div>
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-8 z-10 shrink-0">
+          <div className="flex items-center gap-3">
+            <MobileSidebar
+              navigation={navigation}
+              churchName={churchName}
+              primaryColor={primaryColor}
+              userRole={userRole}
+            />
+            <div className="text-lg font-semibold text-gray-800">Dashboard</div>
+          </div>
 
           <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
             <div className="text-right hidden sm:block">
