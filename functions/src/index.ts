@@ -207,7 +207,182 @@ export const onCommunicationCreated = onDocumentCreated(
 
 
 // ─────────────────────────────────────────────────────────────
-// TRIGGER 3: SUPPORT TICKET NOTIFICATIONS
+// TRIGGER 3: SELF-SERVICE SIGNUP WELCOME EMAIL
+//
+// Fires when a new document is created in /signups/{signupId}.
+// Comes from the marketing site's /api/signup route when a church
+// registers without needing a demo.
+//
+// Actions:
+//   1. Sends a welcome email to the new church admin with their
+//      login link and next steps
+//   2. Notifies Sifiso of the new self-service signup
+//   3. Updates the signup document status to "welcome_sent"
+//
+// Secrets required (already set):
+//   SYSTEM_GMAIL_USER
+//   SYSTEM_GMAIL_APP_PASSWORD
+// ─────────────────────────────────────────────────────────────
+export const onSignupCreated = onDocumentCreated(
+  {
+    document: "signups/{signupId}",
+    secrets: [SYSTEM_GMAIL_USER, SYSTEM_GMAIL_APP_PASSWORD],
+  },
+  async (event) => {
+    const signup = event.data?.data();
+    if (!signup) return;
+
+    // Only process self-service signups
+    if (signup.source !== "self_service") return;
+    // Guard against re-processing
+    if (signup.status !== "pending_welcome") return;
+
+    const signupId = event.params.signupId;
+    const gmailUser = SYSTEM_GMAIL_USER.value();
+    const gmailPass = SYSTEM_GMAIL_APP_PASSWORD.value();
+
+    if (!gmailUser || !gmailPass) {
+      console.error("[onSignupCreated] System Gmail secrets not configured.");
+      return;
+    }
+
+    const { churchName, adminName, email, accountType = "standard" } = signup;
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+
+    const hubLoginUrl = "https://hub.kerekehub.co.za/login";
+
+    // Build the billing summary block depending on account type
+    const billingBlock = (() => {
+      if (accountType === "internal") {
+        return `
+          <div style="background: #1E293B; border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #3B9A5F;">
+            <p style="color: #3B9A5F; font-weight: bold; font-size: 16px; margin: 0 0 4px 0;">Internal Account</p>
+            <p style="color: #94A3B8; font-size: 14px; margin: 0;">This account has free lifetime access to Kereke Hub.</p>
+          </div>`;
+      }
+      if (accountType === "beta") {
+        return `
+          <div style="background: #1E293B; border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #A78BFA;">
+            <p style="color: #A78BFA; font-weight: bold; font-size: 14px; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.05em;">Beta Tester Access</p>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="color: #94A3B8; padding: 4px 0; width: 130px;">Months 1-4</td><td style="color: #F8FAFC; font-weight: bold;">FREE</td></tr>
+              <tr><td style="color: #94A3B8; padding: 4px 0;">Month 5+</td><td style="color: #F8FAFC; font-weight: bold;">R139/mo</td></tr>
+            </table>
+            <p style="color: #94A3B8; font-size: 13px; margin: 12px 0 0 0;">
+              You have 4 full months to explore everything. If you want to continue after that, you will join at the standard R139/mo rate.
+            </p>
+          </div>`;
+      }
+      // standard
+      return `
+        <div style="background: #1E293B; border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #3B9A5F;">
+          <p style="color: #3B9A5F; font-weight: bold; font-size: 14px; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.05em;">Your Pricing</p>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="color: #94A3B8; padding: 4px 0; width: 130px;">Month 1</td><td style="color: #F8FAFC; font-weight: bold;">FREE &mdash; setup &amp; data migration</td></tr>
+            <tr><td style="color: #94A3B8; padding: 4px 0;">Months 2-4</td><td style="color: #F8FAFC; font-weight: bold;">R99/mo &mdash; evaluation window</td></tr>
+            <tr><td style="color: #94A3B8; padding: 4px 0;">Month 5+</td><td style="color: #F8FAFC; font-weight: bold;">R139/mo &mdash; full rate</td></tr>
+          </table>
+          <p style="color: #94A3B8; font-size: 13px; margin: 12px 0 0 0;">
+            No payment is required right now. You will receive details on how to pay before your evaluation window closes.
+          </p>
+        </div>`;
+    })();
+
+    // ── 1. Welcome email to the new church admin ─────────────
+    try {
+      await transporter.sendMail({
+        from: `"Kereke Hub" <${gmailUser}>`,
+        to: email,
+        subject: `Welcome to Kereke Hub, ${adminName}!`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 40px; border-radius: 10px;">
+            <h2 style="color: #3B9A5F; margin-top: 0; font-size: 24px;">Welcome to Kereke Hub!</h2>
+            <p style="color: #F8FAFC; font-size: 16px;">
+              Hi ${adminName}, your church administration platform for
+              <strong>${churchName}</strong> is ready to go.
+            </p>
+            ${billingBlock}
+            <div style="background: #1E293B; border-radius: 8px; padding: 16px; margin: 0 0 24px 0;">
+              <p style="color: #94A3B8; margin: 0 0 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Your Login Email</p>
+              <p style="color: #F8FAFC; font-weight: bold; margin: 0;">${email}</p>
+            </div>
+            <p style="color: #F8FAFC; margin-bottom: 8px;">Here is how to get started:</p>
+            <ol style="color: #CBD5E1; padding-left: 20px; line-height: 1.9;">
+              <li>Click the button below to sign in to your new dashboard.</li>
+              <li>Add your church branches under Admin Settings.</li>
+              <li>Build your member roster and start tracking attendance.</li>
+              <li>Configure your SMTP settings so members receive automated communications.</li>
+            </ol>
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${hubLoginUrl}" style="background: #3B9A5F; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
+                Go to My Dashboard
+              </a>
+            </div>
+            <p style="color: #94A3B8; font-size: 14px;">
+              If you run into anything, just reply to this email or visit
+              <a href="https://kerekehub.co.za/contact" style="color: #3B9A5F;">kerekehub.co.za/contact</a>.
+              We are here to help.
+            </p>
+            <hr style="border-color: #334155; margin: 24px 0;" />
+            <p style="color: #475569; font-size: 12px; margin: 0;">
+              Kereke Hub &mdash; Ministry Management, Simplified &mdash; kerekehub.co.za
+            </p>
+          </div>
+        `,
+      });
+      console.log(`[onSignupCreated] Welcome email sent to ${email} for signup ${signupId}`);
+    } catch (err) {
+      console.error("[onSignupCreated] Failed to send welcome email:", err);
+    }
+
+    // ── 2. Notify Sifiso of the new signup ───────────────────
+    const accountTypeLabel: Record<string, string> = {
+      internal: "Internal (Free Forever)",
+      beta: "Beta Tester (4 months free, then R139)",
+      standard: "Standard (30-day trial, R99, R139)",
+    };
+    try {
+      await transporter.sendMail({
+        from: `"Kereke Hub Signups" <${gmailUser}>`,
+        to: "sifisosibuyane@gmail.com",
+        subject: `New Signup: ${churchName} [${accountType.toUpperCase()}]`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 32px; border-radius: 8px;">
+            <h2 style="color: #3B9A5F; margin-top: 0;">New Church Signup</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="color: #94A3B8; padding: 6px 0; width: 130px;">Church</td><td style="color: #F8FAFC; font-weight: bold;">${churchName}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Admin</td><td style="color: #F8FAFC;">${adminName}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Email</td><td style="color: #F8FAFC;">${email}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Account Type</td><td style="color: #3B9A5F; font-weight: bold;">${accountTypeLabel[accountType] ?? accountType}</td></tr>
+            </table>
+            <hr style="border-color: #334155; margin: 24px 0;" />
+            <p style="color: #64748B; font-size: 12px;">View this tenant in the Admin Settings panel on hub.kerekehub.co.za.</p>
+          </div>
+        `,
+      });
+      console.log(`[onSignupCreated] Admin notification sent for ${signupId}`);
+    } catch (err) {
+      console.error("[onSignupCreated] Failed to send admin notification:", err);
+    }
+
+    // ── 3. Mark signup as welcome sent ───────────────────────
+    try {
+      await db.doc(`signups/${signupId}`).update({
+        status: "welcome_sent",
+        welcomeSentAt: new Date(),
+      });
+    } catch (err) {
+      console.error("[onSignupCreated] Failed to update signup status:", err);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 4: SUPPORT TICKET NOTIFICATIONS
 //
 // Fires when a new document is created in /support_tickets/{ticketId}.
 // Comes from two sources:

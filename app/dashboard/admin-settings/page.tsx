@@ -48,7 +48,24 @@ interface SupportTicket {
   createdAt: string;
 }
 
-type ActiveTab = "tenants" | "demos" | "tickets";
+interface SignupRecord {
+  id: string;
+  churchName: string;
+  adminName: string;
+  email: string;
+  plan: string;
+  accountType: "internal" | "beta" | "standard" | string;
+  billingPhase: string;
+  currentRate: number;
+  trialEndsAt: string | null;
+  evaluationEndsAt: string | null;
+  fullRateStartsAt: string | null;
+  status: string;
+  tenantId: string;
+  createdAt: string;
+}
+
+type ActiveTab = "tenants" | "demos" | "tickets" | "signups";
 
 export default function AdminSettingsPage() {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
@@ -57,6 +74,7 @@ export default function AdminSettingsPage() {
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
   const [demoRequests, setDemoRequests] = useState<DemoRequest[]>([]);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [signups, setSignups] = useState<SignupRecord[]>([]);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("tenants");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -124,6 +142,35 @@ export default function AdminSettingsPage() {
 
       try {
         const snap = await getDocs(
+          query(collection(db, "signups"), orderBy("createdAt", "desc"))
+        );
+        setSignups(
+          snap.docs.map((d) => {
+            const sd = d.data();
+            return {
+              id: d.id,
+              churchName: sd.churchName || "-",
+              adminName: sd.adminName || "-",
+              email: sd.email || "-",
+              plan: sd.plan || "small_church",
+              accountType: sd.accountType || "standard",
+              billingPhase: sd.billingPhase || "trial",
+              currentRate: sd.currentRate ?? 0,
+              trialEndsAt: sd.trialEndsAt || null,
+              evaluationEndsAt: sd.evaluationEndsAt || null,
+              fullRateStartsAt: sd.fullRateStartsAt || null,
+              status: sd.status || "pending_welcome",
+              tenantId: sd.tenantId || d.id,
+              createdAt: sd.createdAt || "",
+            };
+          })
+        );
+      } catch (err) {
+        console.error("Signups fetch error:", err);
+      }
+
+      try {
+        const snap = await getDocs(
           query(collection(db, "support_tickets"), orderBy("createdAt", "desc"))
         );
         setSupportTickets(
@@ -167,6 +214,50 @@ export default function AdminSettingsPage() {
       );
     } catch (err) {
       console.error("Failed to update tenant status:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Manually upgrade a self-service signup to beta access (4 months free then R139)
+  const convertToBeta = async (signup: SignupRecord) => {
+    setActionLoading(signup.id);
+    try {
+      const now = new Date();
+      const freeWindowEnds = new Date(now);
+      freeWindowEnds.setMonth(freeWindowEnds.getMonth() + 4);
+
+      // Update the signups record
+      await updateDoc(doc(db, "signups", signup.id), {
+        accountType: "beta",
+        billingPhase: "trial",
+        currentRate: 0,
+        trialEndsAt: freeWindowEnds.toISOString(),
+        evaluationEndsAt: null,
+        fullRateStartsAt: freeWindowEnds.toISOString(),
+      });
+
+      // Update the actual tenant document too
+      if (signup.tenantId) {
+        await updateDoc(doc(db, "tenants", signup.tenantId), {
+          accountType: "beta",
+          billingPhase: "trial",
+          currentRate: 0,
+          trialEndsAt: freeWindowEnds.toISOString(),
+          evaluationEndsAt: null,
+          fullRateStartsAt: freeWindowEnds.toISOString(),
+        });
+      }
+
+      setSignups((prev) =>
+        prev.map((s) =>
+          s.id === signup.id
+            ? { ...s, accountType: "beta", billingPhase: "trial", currentRate: 0, trialEndsAt: freeWindowEnds.toISOString(), evaluationEndsAt: null }
+            : s
+        )
+      );
+    } catch (err) {
+      console.error("Failed to convert to beta:", err);
     } finally {
       setActionLoading(null);
     }
@@ -251,9 +342,11 @@ export default function AdminSettingsPage() {
   const openTickets = supportTickets.filter((t) => t.status === "open").length;
   const activeTenantsCount = tenants.filter((t) => t.status === "active").length;
   const trialTenantsCount = tenants.filter((t) => t.status === "trial").length;
+  const newSignupsCount = signups.filter((s) => s.status === "welcome_sent" || s.status === "pending_welcome").length;
 
   const tabs: { key: ActiveTab; label: string; count: number }[] = [
     { key: "tenants", label: "Registered Tenants", count: tenants.length },
+    { key: "signups", label: "Self-Service Signups", count: newSignupsCount },
     { key: "demos", label: "Demo Requests", count: demoRequests.length },
     { key: "tickets", label: "Support Tickets", count: openTickets },
   ];
@@ -275,7 +368,7 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Total Tenants</p>
           <h3 className="text-4xl font-black text-gray-900">{tenants.length}</h3>
@@ -287,6 +380,10 @@ export default function AdminSettingsPage() {
         <div className="bg-white border border-amber-200 rounded-xl p-5 shadow-sm">
           <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-3">On Trial</p>
           <h3 className="text-4xl font-black text-amber-700">{trialTenantsCount}</h3>
+        </div>
+        <div className="bg-white border border-violet-200 rounded-xl p-5 shadow-sm">
+          <p className="text-xs font-bold text-violet-600 uppercase tracking-widest mb-3">Self-Signups</p>
+          <h3 className="text-4xl font-black text-violet-700">{signups.length}</h3>
         </div>
         <div className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm">
           <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">Open Tickets</p>
@@ -377,6 +474,85 @@ export default function AdminSettingsPage() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* Self-service signups tab */}
+        {activeTab === "signups" && (
+          <div className="overflow-x-auto">
+            {signups.length === 0 ? (
+              <p className="p-8 text-center text-sm text-gray-400">No self-service signups yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Church</th>
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Admin</th>
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Account Type</th>
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Current Rate</th>
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Full Rate From</th>
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Signed Up</th>
+                    <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {signups.map((s) => {
+                    const accountTypeColors: Record<string, string> = {
+                      internal: "bg-green-50 text-green-700 border border-green-200",
+                      beta: "bg-violet-50 text-violet-700 border border-violet-200",
+                      standard: "bg-gray-100 text-gray-600 border border-gray-200",
+                    };
+                    const accountTypeLabel: Record<string, string> = {
+                      internal: "Internal",
+                      beta: "Beta",
+                      standard: "Standard",
+                    };
+                    return (
+                      <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 font-semibold text-gray-900">{s.churchName}</td>
+                        <td className="px-6 py-4 text-gray-700">{s.adminName}</td>
+                        <td className="px-6 py-4">
+                          <a href={`mailto:${s.email}`} className="text-emerald-600 hover:underline">
+                            {s.email}
+                          </a>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${accountTypeColors[s.accountType] ?? "bg-gray-100 text-gray-500"}`}>
+                            {accountTypeLabel[s.accountType] ?? s.accountType}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-gray-700 font-medium">
+                          {s.accountType === "internal" ? "Free forever" : `R${s.currentRate}/mo`}
+                        </td>
+                        <td className="px-6 py-4 text-gray-500 text-xs">
+                          {s.accountType === "internal"
+                            ? "N/A"
+                            : s.fullRateStartsAt
+                            ? formatDate(s.fullRateStartsAt)
+                            : "-"}
+                        </td>
+                        <td className="px-6 py-4 text-gray-500">{formatDate(s.createdAt)}</td>
+                        <td className="px-6 py-4 text-right">
+                          {s.accountType === "standard" && (
+                            <button
+                              onClick={() => convertToBeta(s)}
+                              disabled={actionLoading === s.id}
+                              className="text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                            >
+                              {actionLoading === s.id ? "..." : "Convert to Beta"}
+                            </button>
+                          )}
+                          {s.accountType !== "standard" && (
+                            <span className="text-xs text-gray-400 italic">No action</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
