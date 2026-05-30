@@ -176,8 +176,8 @@ function MemberBlock({
           </select>
         </F>
       </div>
-      <F label="Email Address" req>
-        <input type="email" value={data.email} onChange={e => set("email", e.target.value)} placeholder="e.g. jane@gmail.com" className={inp} required />
+      <F label="Email Address">
+        <input type="email" value={data.email} onChange={e => set("email", e.target.value)} placeholder="e.g. jane@gmail.com (optional)" className={inp} />
       </F>
       <F label="Contact Number" req>
         <input type="tel" value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="e.g. 0812345678" className={inp} required />
@@ -416,7 +416,7 @@ export default function ManageMembershipPage() {
         await updateDoc(doc(db, "households", hid), { spouseMemberId: spouseDocRef.id });
       }
 
-      // 4. Children who are members — separate member documents
+      // 4. Children who are members — separate member documents, inheriting parent's address
       for (const child of children.filter(c => c.isMember)) {
         await addDoc(collection(db, "members"), {
           tenantId: appUser.tenantId,
@@ -424,6 +424,8 @@ export default function ManageMembershipPage() {
           firstName: child.firstName.trim(), lastName: child.lastName.trim(),
           email: "", phone: "", dob: child.dob, gender: child.gender,
           maritalStatus: "Single", role: "Member",
+          address: primary.address,
+          cellRegion: primary.cellRegion.trim(),
           householdId: hid, householdRole: "child", parentId: primaryRef.id,
           isMember: true, status: "active", source: "manual",
           consentedToPrivacyPolicy: true, consentedToSpecialInfo: false,
