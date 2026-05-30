@@ -34,6 +34,7 @@ interface Workflow {
   trigger: TriggerType;
   active: boolean;
   stepCount: number;
+  instanceCount: number;
 }
 
 interface WorkflowStep {
