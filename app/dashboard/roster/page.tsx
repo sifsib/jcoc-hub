@@ -226,7 +226,7 @@ function MemberBlock({
 export default function ManageMembershipPage() {
   const { appUser, loading: userLoading } = useAppUser();
 
-  const [view, setView] = useState<"list" | "form" | "import">("list");
+  const [view, setView] = useState<"list" | "form" | "import" | "configure">("list");
   const [members, setMembers] = useState<Member[]>([]);
   const [config, setConfig] = useState<TenantConfig>({
     ministries: DEFAULT_MINISTRIES,
@@ -236,6 +236,13 @@ export default function ManageMembershipPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Configure lists state
+  const [editMinistries, setEditMinistries] = useState<string[]>([]);
+  const [editMembershipTypes, setEditMembershipTypes] = useState<string[]>([]);
+  const [newMinistry, setNewMinistry] = useState("");
+  const [newMembershipType, setNewMembershipType] = useState("");
+  const [configSaving, setConfigSaving] = useState(false);
 
   // Primary member
   const [primary, setPrimary] = useState(emptyPerson());
@@ -410,6 +417,34 @@ export default function ManageMembershipPage() {
       console.error("Save error:", err);
       setFeedback({ ok: false, text: "Save failed. Please try again." });
     } finally { setSubmitting(false); }
+  };
+
+  // ─── Configure lists ────────────────────────────────────────────────────────
+
+  const openConfigure = () => {
+    setEditMinistries([...config.ministries]);
+    setEditMembershipTypes([...config.membershipTypes]);
+    setNewMinistry("");
+    setNewMembershipType("");
+    setView("configure");
+  };
+
+  const saveConfig = async () => {
+    if (!appUser) return;
+    setConfigSaving(true);
+    try {
+      await updateDoc(doc(db, "tenants", appUser.tenantId), {
+        ministries: editMinistries,
+        membershipTypes: editMembershipTypes,
+      });
+      setConfig(prev => ({ ...prev, ministries: editMinistries, membershipTypes: editMembershipTypes }));
+      setView("list");
+    } catch (e) {
+      console.error("Config save error:", e);
+      alert("Could not save. Please try again.");
+    } finally {
+      setConfigSaving(false);
+    }
   };
 
   // ─── Delete member ──────────────────────────────────────────────────────────
@@ -700,6 +735,134 @@ export default function ManageMembershipPage() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // CONFIGURE VIEW
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (view === "configure") {
+    const addMinistry = () => {
+      const val = newMinistry.trim();
+      if (!val || editMinistries.includes(val)) return;
+      setEditMinistries(p => [...p, val]);
+      setNewMinistry("");
+    };
+    const addMembershipType = () => {
+      const val = newMembershipType.trim();
+      if (!val || editMembershipTypes.includes(val)) return;
+      setEditMembershipTypes(p => [...p, val]);
+      setNewMembershipType("");
+    };
+
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-6">
+        <button onClick={() => setView("list")} className="text-sm text-blue-600 hover:text-blue-800 font-medium self-start">
+          ← Back to register
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-1">Configure Lists</h1>
+          <p className="text-sm text-gray-500">Customise the ministries and membership types available on your member registration form.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          {/* Ministries */}
+          <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4">
+            <div>
+              <p className="text-base font-bold text-gray-800">Ministries to Serve In</p>
+              <p className="text-xs text-gray-400 mt-0.5">Shown as checkboxes on the registration form.</p>
+            </div>
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+              {editMinistries.map((m) => (
+                <div key={m} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-700">{m}</span>
+                  <button
+                    onClick={() => setEditMinistries(p => p.filter(x => x !== m))}
+                    className="text-red-400 hover:text-red-600 text-xs font-bold ml-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              {editMinistries.length === 0 && (
+                <p className="text-xs text-gray-400 italic py-2">No ministries added yet.</p>
+              )}
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <input
+                value={newMinistry}
+                onChange={e => setNewMinistry(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addMinistry())}
+                placeholder="e.g. Youth Ministry"
+                className={inp}
+              />
+              <button
+                onClick={addMinistry}
+                className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          {/* Membership Types */}
+          <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4">
+            <div>
+              <p className="text-base font-bold text-gray-800">Type of Membership Sought</p>
+              <p className="text-xs text-gray-400 mt-0.5">Shown as a dropdown on the registration form.</p>
+            </div>
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+              {editMembershipTypes.map((t) => (
+                <div key={t} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-700">{t}</span>
+                  <button
+                    onClick={() => setEditMembershipTypes(p => p.filter(x => x !== t))}
+                    className="text-red-400 hover:text-red-600 text-xs font-bold ml-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              {editMembershipTypes.length === 0 && (
+                <p className="text-xs text-gray-400 italic py-2">No types added yet.</p>
+              )}
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <input
+                value={newMembershipType}
+                onChange={e => setNewMembershipType(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addMembershipType())}
+                placeholder="e.g. Youth Member"
+                className={inp}
+              />
+              <button
+                onClick={addMembershipType}
+                className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={saveConfig}
+            disabled={configSaving}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition"
+          >
+            {configSaving ? "Saving..." : "Save Changes"}
+          </button>
+          <button
+            onClick={() => setView("list")}
+            className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // IMPORT VIEW
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -817,6 +980,10 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
           <p className="text-gray-500 text-sm mt-1">Register, import, and manage your congregation.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <button onClick={openConfigure}
+            className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Configure Lists
+          </button>
           <button onClick={() => setView("import")}
             className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Import XLSX
@@ -824,7 +991,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
           {/* ── CSV Export button ── */}
           <ExportCSVButton
-            data={members as unknown as Record<string, unknown>[]}
+            data={members as Record<string, unknown>[]}
             filename="members"
             columns={[
               { key: "fullName", label: "Full Name" },
