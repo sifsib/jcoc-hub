@@ -655,7 +655,7 @@ export default function WorkflowBuilderPage() {
                                 {s.title}
                               </p>
                               <p className="text-xs text-gray-400">
-                                {s.actionType === "whatsapp" && s.subjectPhone ? (
+                                {s.actionType === "whatsapp" && inst.subjectPhone ? (
                                   <a
                                     href={`https://wa.me/${(inst.subjectPhone || "").replace(/\D/g, "")}?text=${encodeURIComponent(s.message)}`}
                                     target="_blank"
