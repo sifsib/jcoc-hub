@@ -1017,7 +1017,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
     <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Manage Membership</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Membership Management</h1>
           <p className="text-gray-500 text-sm mt-1">Register, import, and manage your congregation.</p>
         </div>
         <div className="flex gap-2 flex-wrap">

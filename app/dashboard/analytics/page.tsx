@@ -333,7 +333,9 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Organization Overview</h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            {appUser?.churchName ? `${appUser.churchName} Overview` : "Church Overview"}
+          </h1>
           <p className="text-gray-500 text-sm mt-1">Real-time metrics and ministry growth analytics.</p>
         </div>
       </div>
@@ -341,7 +343,7 @@ export default function AnalyticsPage() {
       {/* Metric cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <p className="text-sm font-semibold text-gray-500 mb-4">Total Registered Roster</p>
+          <p className="text-sm font-semibold text-gray-500 mb-4">Total Registered Members</p>
           <h3 className="text-4xl font-black text-gray-900">{metrics.totalMembers}</h3>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">

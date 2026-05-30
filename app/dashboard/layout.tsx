@@ -49,9 +49,9 @@ export default async function DashboardLayout({
   const primaryColor = tenantData?.primaryColor || "#059669";
 
   const navigation = [
-    { name: "Overview Analytics", href: "/dashboard/analytics", icon: "📊" },
+    { name: "Church Overview", href: "/dashboard/analytics", icon: "📊" },
     { name: "Church Profile", href: "/dashboard/profile", icon: "⛪" },
-    { name: "Management Roster", href: "/dashboard/roster", icon: "👥" },
+    { name: "Membership Management", href: "/dashboard/roster", icon: "👥" },
     { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝" },
     { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋" },
     { name: "Financials", href: "/dashboard/finance", icon: "💰" },
