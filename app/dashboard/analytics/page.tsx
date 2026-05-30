@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from "firebase/firestore";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
@@ -33,6 +33,14 @@ interface MetricSummary {
   standardMembersCount: number;
 }
 
+interface FollowUpNote {
+  id: string;
+  note: string;
+  createdBy: string;
+  createdAt: string;
+  tier: number;
+}
+
 export default function AnalyticsPage() {
   const { appUser, loading: userLoading } = useAppUser();
 
@@ -49,6 +57,13 @@ export default function AnalyticsPage() {
     tier3: [],
     neverAttended: [],
   });
+
+  // Notes modal state
+  const [notesModal, setNotesModal] = useState<{ member: CareTierMember; tier: number } | null>(null);
+  const [allNotes, setAllNotes] = useState<Record<string, FollowUpNote[]>>({});
+  const [noteCountMap, setNoteCountMap] = useState<Record<string, number>>({});
+  const [noteInput, setNoteInput] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
 
   // Prevents Recharts from measuring before the DOM has real pixel dimensions
   const [isMounted, setIsMounted] = useState(false);
@@ -157,6 +172,36 @@ export default function AnalyticsPage() {
 
         setCareTiers(tiers);
 
+        // Fetch all follow-up notes for this tenant
+        const qNotes = query(
+          collection(db, "careTierNotes"),
+          where("tenantId", "==", appUser.tenantId),
+          orderBy("createdAt", "desc")
+        );
+        const notesSnap = await getDocs(qNotes);
+        const notesMap: Record<string, FollowUpNote[]> = {};
+        const countMap: Record<string, number> = {};
+
+        notesSnap.forEach((docSnap) => {
+          const d = docSnap.data();
+          const memberId = d.memberId as string;
+          const note: FollowUpNote = {
+            id: docSnap.id,
+            note: d.note,
+            createdBy: d.createdBy,
+            createdAt: d.createdAt?.toDate
+              ? d.createdAt.toDate().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+              : "",
+            tier: d.tier,
+          };
+          if (!notesMap[memberId]) notesMap[memberId] = [];
+          notesMap[memberId].push(note);
+          countMap[memberId] = (countMap[memberId] || 0) + 1;
+        });
+
+        setAllNotes(notesMap);
+        setNoteCountMap(countMap);
+
       } catch (error) {
         console.error("Error generating analytics data:", error);
       } finally {
@@ -194,31 +239,90 @@ export default function AnalyticsPage() {
     return null;
   };
 
-  const TierList = ({ members, traceLabel }: { members: CareTierMember[]; traceLabel: string }) => (
+  const saveNote = async () => {
+    if (!notesModal || !noteInput.trim() || !appUser) return;
+    setSavingNote(true);
+    try {
+      const newNote = {
+        tenantId: appUser.tenantId,
+        memberId: notesModal.member.id,
+        memberName: notesModal.member.fullName,
+        tier: notesModal.tier,
+        note: noteInput.trim(),
+        createdBy: appUser.email,
+        createdAt: serverTimestamp(),
+      };
+      const docRef = await addDoc(collection(db, "careTierNotes"), newNote);
+
+      const formatted: FollowUpNote = {
+        id: docRef.id,
+        note: noteInput.trim(),
+        createdBy: appUser.email,
+        createdAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+        tier: notesModal.tier,
+      };
+
+      const memberId = notesModal.member.id;
+      setAllNotes((prev) => ({ ...prev, [memberId]: [formatted, ...(prev[memberId] || [])] }));
+      setNoteCountMap((prev) => ({ ...prev, [memberId]: (prev[memberId] || 0) + 1 }));
+      setNoteInput("");
+    } catch (e) {
+      console.error("Failed to save note:", e);
+      alert("Could not save note. Please try again.");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const TierList = ({
+    members,
+    traceLabel,
+    tier,
+  }: {
+    members: CareTierMember[];
+    traceLabel: string;
+    tier: number;
+  }) => (
     <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
       {members.length === 0 ? (
         <p className="p-6 text-center text-xs text-gray-400">No members in this tier.</p>
       ) : (
-        members.map((member) => (
-          <div key={member.id} className="p-4 flex justify-between items-center hover:bg-gray-50 transition">
-            <div>
-              <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
-              {member.daysAbsent > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">{member.daysAbsent} consecutive Sundays absent</p>
-              )}
+        members.map((member) => {
+          const noteCount = noteCountMap[member.id] || 0;
+          return (
+            <div key={member.id} className="p-4 flex justify-between items-center hover:bg-gray-50 transition">
+              <div>
+                <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
+                {member.daysAbsent > 0 && (
+                  <p className="text-xs text-gray-400 mt-0.5">{member.daysAbsent} consecutive Sundays absent</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {member.phone && (
+                  <a
+                    href={`https://wa.me/${member.phone}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition"
+                  >
+                    {traceLabel}
+                  </a>
+                )}
+                <button
+                  onClick={() => { setNotesModal({ member, tier }); setNoteInput(""); }}
+                  className="relative text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition"
+                >
+                  Notes
+                  {noteCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-emerald-600 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                      {noteCount}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
-            {member.phone && (
-              <a
-                href={`https://wa.me/${member.phone}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition"
-              >
-                {traceLabel}
-              </a>
-            )}
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );
@@ -349,7 +453,7 @@ export default function AnalyticsPage() {
               <h3 className="text-sm font-bold text-amber-800">Tier 1: 3 Sundays Absent (Not Reported)</h3>
               <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded-full text-amber-700">{careTiers.tier1.length}</span>
             </div>
-            <TierList members={careTiers.tier1} traceLabel="Trace" />
+            <TierList members={careTiers.tier1} traceLabel="Trace" tier={1} />
           </div>
 
           <div className="bg-white border border-orange-200 rounded-xl overflow-hidden">
@@ -357,7 +461,7 @@ export default function AnalyticsPage() {
               <h3 className="text-sm font-bold text-orange-800">Tier 2: 4 Sundays Absent</h3>
               <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded-full text-orange-700">{careTiers.tier2.length}</span>
             </div>
-            <TierList members={careTiers.tier2} traceLabel="Trace" />
+            <TierList members={careTiers.tier2} traceLabel="Trace" tier={2} />
           </div>
 
           <div className="bg-white border border-red-200 rounded-xl overflow-hidden">
@@ -365,7 +469,7 @@ export default function AnalyticsPage() {
               <h3 className="text-sm font-bold text-red-800">Tier 3: 5 or More Sundays Absent</h3>
               <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded-full text-red-700">{careTiers.tier3.length}</span>
             </div>
-            <TierList members={careTiers.tier3} traceLabel="Trace" />
+            <TierList members={careTiers.tier3} traceLabel="Trace" tier={3} />
           </div>
         </div>
 
@@ -380,10 +484,64 @@ export default function AnalyticsPage() {
                 {careTiers.neverAttended.length}
               </span>
             </div>
-            <TierList members={careTiers.neverAttended} traceLabel="Welcome" />
+            <TierList members={careTiers.neverAttended} traceLabel="Welcome" tier={0} />
           </div>
         )}
       </div>
+
+      {/* Follow-up Notes Modal */}
+      {notesModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col gap-5 p-6 max-h-[85vh]">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Follow-up Notes</h3>
+                <p className="text-sm text-gray-500 mt-0.5">{notesModal.member.fullName}</p>
+              </div>
+              <button
+                onClick={() => setNotesModal(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Add new note */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Add Note</label>
+              <textarea
+                value={noteInput}
+                onChange={(e) => setNoteInput(e.target.value)}
+                placeholder="e.g. Called and left voicemail. Will follow up Sunday."
+                rows={3}
+                className="border border-gray-200 rounded-lg p-3 text-sm text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <button
+                onClick={saveNote}
+                disabled={!noteInput.trim() || savingNote}
+                className="self-end bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white text-sm font-bold px-4 py-2 rounded-lg transition"
+              >
+                {savingNote ? "Saving..." : "Save Note"}
+              </button>
+            </div>
+
+            {/* Past notes */}
+            <div className="flex flex-col gap-3 overflow-y-auto border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">History</p>
+              {(allNotes[notesModal.member.id] || []).length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">No notes yet.</p>
+              ) : (
+                (allNotes[notesModal.member.id] || []).map((n) => (
+                  <div key={n.id} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                    <p className="text-sm text-gray-800">{n.note}</p>
+                    <p className="text-xs text-gray-400 mt-1.5">{n.createdBy} &middot; {n.createdAt}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -379,6 +379,27 @@ service cloud.firestore {
 
 
     // ============================================
+    // CARE TIER FOLLOW-UP NOTES
+    // ============================================
+    match /careTierNotes/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadAttendance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageAttendance();
+
+      allow update: if false;
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageAttendance();
+    }
+
+
+    // ============================================
     // EVERYTHING ELSE: deny by default
     // ============================================
   }
