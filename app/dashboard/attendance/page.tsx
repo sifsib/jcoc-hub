@@ -387,42 +387,44 @@ export default function AttendancePage() {
                 <span className="text-xs text-gray-400">(restricted to your assigned cell)</span>
               </div>
             ) : (
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter by:</span>
+              <>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter by:</span>
 
-            <button
-              onClick={() => { setFilterType("all"); setFilterValue(""); }}
-              className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "all" ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}
-            >
-              All ({members.length})
-            </button>
+                <button
+                  onClick={() => { setFilterType("all"); setFilterValue(""); }}
+                  className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "all" ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}
+                >
+                  All ({members.length})
+                </button>
 
-            {configCellRegions.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-xs text-gray-400 font-medium">Region:</span>
-                {configCellRegions.map(r => (
-                  <button key={r} onClick={() => { setFilterType("cellRegion"); setFilterValue(r); }}
-                    className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "cellRegion" && filterValue === r ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
-                    {r}
-                  </button>
-                ))}
-              </div>
-            )}
+                {configCellRegions.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs text-gray-400 font-medium">Region:</span>
+                    {configCellRegions.map(r => (
+                      <button key={r} onClick={() => { setFilterType("cellRegion"); setFilterValue(r); }}
+                        className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "cellRegion" && filterValue === r ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-            {configMinistryGroups.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-xs text-gray-400 font-medium">Group:</span>
-                {configMinistryGroups.map(g => (
-                  <button key={g} onClick={() => { setFilterType("ministryGroup"); setFilterValue(g); }}
-                    className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "ministryGroup" && filterValue === g ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
-                    {g}
-                  </button>
-                ))}
-              </div>
-            )}
+                {configMinistryGroups.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs text-gray-400 font-medium">Group:</span>
+                    {configMinistryGroups.map(g => (
+                      <button key={g} onClick={() => { setFilterType("ministryGroup"); setFilterValue(g); }}
+                        className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "ministryGroup" && filterValue === g ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-            {configCellRegions.length === 0 && configMinistryGroups.length === 0 && (
-              <span className="text-xs text-gray-400 italic">Add Cell Regions and Ministry Groups in Configure Lists to enable filtering.</span>
-            )}
+                {configCellRegions.length === 0 && configMinistryGroups.length === 0 && (
+                  <span className="text-xs text-gray-400 italic">Add Cell Regions and Ministry Groups in Configure Lists to enable filtering.</span>
+                )}
+              </>
             )}
           </div>
 
