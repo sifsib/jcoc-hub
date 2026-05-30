@@ -249,7 +249,7 @@ export default function AnalyticsPage() {
         memberName: notesModal.member.fullName,
         tier: notesModal.tier,
         note: noteInput.trim(),
-        createdBy: appUser.email,
+        createdBy: appUser.email ?? "",
         createdAt: serverTimestamp(),
       };
       const docRef = await addDoc(collection(db, "careTierNotes"), newNote);
@@ -257,7 +257,7 @@ export default function AnalyticsPage() {
       const formatted: FollowUpNote = {
         id: docRef.id,
         note: noteInput.trim(),
-        createdBy: appUser.email,
+        createdBy: appUser.email ?? "",
         createdAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
         tier: notesModal.tier,
       };
