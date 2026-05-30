@@ -13,6 +13,14 @@ interface ProfileData {
   churchName: string;
 }
 
+interface ServiceSession {
+  id: string;          // uuid-lite: Date.now() string
+  day: string;         // e.g. "Sunday"
+  name: string;        // e.g. "Main Sunday Service"
+}
+
+const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,6 +39,14 @@ export default function ProfilePage() {
   const [pwSaved, setPwSaved] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
 
+  // Service schedule
+  const [sessions, setSessions] = useState<ServiceSession[]>([]);
+  const [sessionsSaving, setSessionsSaving] = useState(false);
+  const [sessionsSaved, setSessionsSaved] = useState(false);
+  const [sessionsError, setSessionsError] = useState("");
+  const [newSessionDay, setNewSessionDay] = useState("Sunday");
+  const [newSessionName, setNewSessionName] = useState("");
+
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (!user) { setLoading(false); return; }
@@ -41,9 +57,12 @@ export default function ProfilePage() {
         const tenantId = data.tenantId || "";
 
         let churchName = "";
+        let loadedSessions: ServiceSession[] = [];
         if (tenantId) {
           const tenantDoc = await getDoc(doc(db, "tenants", tenantId));
-          churchName = tenantDoc.data()?.name || "";
+          const td = tenantDoc.data() || {};
+          churchName = td.name || "";
+          loadedSessions = td.serviceSessions || [];
         }
 
         const p: ProfileData = {
@@ -55,6 +74,7 @@ export default function ProfilePage() {
         };
         setProfile(p);
         setEditName(p.name);
+        setSessions(loadedSessions);
       } catch (err) {
         console.error("Failed to load profile:", err);
         setError("Could not load profile.");
@@ -64,6 +84,36 @@ export default function ProfilePage() {
     });
     return () => unsub();
   }, []);
+
+  const canEditSessions = profile?.role === "owner" || profile?.role === "admin" || profile?.role === "super_admin";
+
+  const handleAddSession = () => {
+    if (!newSessionName.trim()) return;
+    const updated = [...sessions, { id: String(Date.now()), day: newSessionDay, name: newSessionName.trim() }];
+    setSessions(updated);
+    setNewSessionName("");
+  };
+
+  const handleRemoveSession = (id: string) => {
+    setSessions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleSaveSessions = async () => {
+    if (!profile?.tenantId) return;
+    setSessionsSaving(true);
+    setSessionsError("");
+    setSessionsSaved(false);
+    try {
+      await updateDoc(doc(db, "tenants", profile.tenantId), { serviceSessions: sessions });
+      setSessionsSaved(true);
+      setTimeout(() => setSessionsSaved(false), 3000);
+    } catch (err) {
+      console.error("Save sessions failed:", err);
+      setSessionsError("Could not save. Check permissions and try again.");
+    } finally {
+      setSessionsSaving(false);
+    }
+  };
 
   const handleSaveName = async () => {
     if (!auth.currentUser || !profile) return;
@@ -238,6 +288,88 @@ export default function ProfilePage() {
           <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
             Name updated successfully.
           </p>
+        )}
+      </div>
+
+      {/* Service Schedule */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+        <div>
+          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Service Schedule</h2>
+          <p className="text-xs text-gray-400 mt-1">Define your church's weekly service sessions. These are used when recording attendance.</p>
+        </div>
+
+        {/* Existing sessions */}
+        {sessions.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">No service sessions configured yet.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {sessions.map(s => (
+              <li key={s.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5">
+                <div>
+                  <span className="text-sm font-semibold text-gray-800">{s.name}</span>
+                  <span className="ml-2 text-xs text-gray-400">{s.day}s</span>
+                </div>
+                {canEditSessions && (
+                  <button
+                    onClick={() => handleRemoveSession(s.id)}
+                    className="text-xs text-red-500 hover:text-red-700 font-medium"
+                  >
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Add new session */}
+        {canEditSessions && (
+          <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Add a Service Session</p>
+            <div className="flex gap-3 flex-wrap">
+              <select
+                value={newSessionDay}
+                onChange={e => setNewSessionDay(e.target.value)}
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {ALL_DAYS.map(d => <option key={d}>{d}</option>)}
+              </select>
+              <input
+                type="text"
+                value={newSessionName}
+                onChange={e => setNewSessionName(e.target.value)}
+                placeholder="e.g. Main Sunday Service"
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                onKeyDown={e => { if (e.key === "Enter") handleAddSession(); }}
+              />
+              <button
+                onClick={handleAddSession}
+                disabled={!newSessionName.trim()}
+                className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm rounded-xl hover:bg-emerald-100 transition disabled:opacity-40"
+              >
+                + Add
+              </button>
+            </div>
+          </div>
+        )}
+
+        {sessionsError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{sessionsError}</p>
+        )}
+        {sessionsSaved && (
+          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">Service schedule saved.</p>
+        )}
+
+        {canEditSessions && (
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveSessions}
+              disabled={sessionsSaving}
+              className="px-8 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition disabled:opacity-50"
+            >
+              {sessionsSaving ? "Saving..." : "Save Schedule"}
+            </button>
+          </div>
         )}
       </div>
 

@@ -10,8 +10,11 @@ import {
   getDocs,
   setDoc,
   doc,
+  getDoc,
   serverTimestamp,
 } from "firebase/firestore";
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface Member {
   id: string;
@@ -26,6 +29,20 @@ interface AttendanceRecord {
   absenceReason?: string | null;
 }
 
+interface ServiceSession {
+  id: string;    // stored in tenants.serviceSessions
+  day: string;   // "Sunday", "Monday", etc.
+  name: string;  // "Celebration Service", "Midweek Prayer", etc.
+}
+
+// Day-of-week index for each day name
+const DAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+  Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+// ─── Component ─────────────────────────────────────────────────────────────────
+
 export default function AttendancePage() {
   const { appUser, loading: userLoading } = useAppUser();
 
@@ -33,9 +50,13 @@ export default function AttendancePage() {
   const [attendanceCache, setAttendanceCache] = useState<Record<string, AttendanceRecord>>({});
   const [loading, setLoading] = useState(true);
 
+  // Church-configured service sessions
+  const [sessions, setSessions] = useState<ServiceSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+
   // Service state
   const [selectedDate, setSelectedDate] = useState("");
-  const [serviceType, setServiceType] = useState<"sunday" | "tuesday" | null>(null);
+  const [activeSession, setActiveSession] = useState<ServiceSession | null>(null);
   const [dateError, setDateError] = useState("");
 
   // Absence modal state
@@ -45,93 +66,129 @@ export default function AttendancePage() {
   const [absenceReason, setAbsenceReason] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
 
+  // ─── Load tenant service sessions ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (userLoading || !appUser) return;
+
+    const loadSessions = async () => {
+      try {
+        const tenantSnap = await getDoc(doc(db, "tenants", appUser.tenantId));
+        const td = tenantSnap.data() || {};
+        const loaded: ServiceSession[] = td.serviceSessions || [];
+        setSessions(loaded);
+
+        // Set default date: today if it matches a session day, else nearest upcoming match
+        const today = new Date();
+        const todayDay = today.getDay();
+        const matchToday = loaded.find(s => DAY_INDEX[s.day] === todayDay);
+
+        if (matchToday) {
+          const iso = toISO(today);
+          setSelectedDate(iso);
+          setActiveSession(matchToday);
+        } else if (loaded.length > 0) {
+          // Find nearest future service day
+          let nearest: Date | null = null;
+          let nearestSession: ServiceSession | null = null;
+          for (const s of loaded) {
+            const target = nextOccurrence(today, DAY_INDEX[s.day]);
+            if (!nearest || target < nearest) { nearest = target; nearestSession = s; }
+          }
+          if (nearest && nearestSession) {
+            setSelectedDate(toISO(nearest));
+            setActiveSession(nearestSession);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load sessions:", e);
+      } finally {
+        setSessionsLoading(false);
+      }
+    };
+
+    loadSessions();
+  }, [appUser, userLoading]);
+
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
+  function toISO(d: Date) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function nextOccurrence(from: Date, targetDay: number): Date {
+    const d = new Date(from);
+    const diff = (targetDay - d.getDay() + 7) % 7 || 7;
+    d.setDate(d.getDate() + diff);
+    return d;
+  }
+
+  function getSessionForDate(dateStr: string): ServiceSession | null {
+    if (!dateStr) return null;
+    const d = new Date(dateStr + "T00:00:00");
+    const dayOfWeek = d.getDay();
+    return sessions.find(s => DAY_INDEX[s.day] === dayOfWeek) || null;
+  }
+
   const formatDisplayDate = (dateString: string) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    const date = new Date(dateString + "T00:00:00");
     return date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   };
 
-  const getServiceType = (dateStr: string) => {
-    const d = new Date(dateStr + "T00:00:00");
-    const day = d.getDay();
-    if (day === 0) return "sunday";
-    if (day === 2) return "tuesday";
-    return null;
-  };
-
-  // Set default date to today or most recent Sunday/Tuesday
-  useEffect(() => {
-    const today = new Date();
-    const day = today.getDay();
-    let target = new Date(today);
-
-    if (day !== 0 && day !== 2) {
-      if (day === 6) target.setDate(today.getDate() + 1);
-      else if (day === 1) target.setDate(today.getDate() - 1);
-      else target.setDate(today.getDate() - (day - 2));
-    }
-
-    const yyyy = target.getFullYear();
-    const mm = String(target.getMonth() + 1).padStart(2, "0");
-    const dd = String(target.getDate()).padStart(2, "0");
-    const initialDate = `${yyyy}-${mm}-${dd}`;
-
-    setSelectedDate(initialDate);
-    setServiceType(getServiceType(initialDate) as "sunday" | "tuesday" | null);
-  }, []);
+  // ─── Handle date change ─────────────────────────────────────────────────────
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
-    const newType = getServiceType(newDate);
+    const match = getSessionForDate(newDate);
 
-    if (!newType) {
-      setDateError("Please select a Sunday or a Tuesday.");
+    if (!match) {
+      const dayNames = sessions.map(s => s.day + "s").join(", ");
+      setDateError(`This date is not a service day. Your services run on: ${dayNames || "no sessions configured"}.`);
+      setSelectedDate(newDate);
+      setActiveSession(null);
       return;
     }
 
     setDateError("");
     setSelectedDate(newDate);
-    setServiceType(newType as "sunday" | "tuesday");
+    setActiveSession(match);
   };
 
+  // ─── Load members + attendance when session/date changes ───────────────────
+
   useEffect(() => {
-    if (userLoading || !appUser || !selectedDate) return;
+    if (userLoading || !appUser || !selectedDate || !activeSession) return;
 
     const loadData = async () => {
       setLoading(true);
       const tenantId = appUser.tenantId;
+      const serviceId = `${selectedDate}_${activeSession.id}`;
 
       try {
-        const qMembers = query(
-          collection(db, "members"),
-          where("tenantId", "==", tenantId)
-        );
+        const qMembers = query(collection(db, "members"), where("tenantId", "==", tenantId));
         const membersSnap = await getDocs(qMembers);
         const memberList: Member[] = [];
         membersSnap.forEach((d) => memberList.push({ id: d.id, ...d.data() } as Member));
         memberList.sort((a, b) => a.fullName.localeCompare(b.fullName));
         setMembers(memberList);
 
-        if (selectedDate && serviceType) {
-          const serviceId = `${selectedDate}_${serviceType}`;
-          const qAttendance = query(
-            collection(db, "attendance"),
-            where("serviceId", "==", serviceId),
-            where("tenantId", "==", tenantId)
-          );
-          const attendanceSnap = await getDocs(qAttendance);
-
-          const cache: Record<string, AttendanceRecord> = {};
-          attendanceSnap.forEach((d) => {
-            const data = d.data();
-            cache[data.personId] = {
-              status: data.status,
-              reported: data.reported,
-              absenceReason: data.absenceReason,
-            };
-          });
-          setAttendanceCache(cache);
-        }
+        const qAttendance = query(
+          collection(db, "attendance"),
+          where("serviceId", "==", serviceId),
+          where("tenantId", "==", tenantId)
+        );
+        const attendanceSnap = await getDocs(qAttendance);
+        const cache: Record<string, AttendanceRecord> = {};
+        attendanceSnap.forEach((d) => {
+          const data = d.data();
+          cache[data.personId] = {
+            status: data.status,
+            reported: data.reported,
+            absenceReason: data.absenceReason,
+          };
+        });
+        setAttendanceCache(cache);
       } catch (error) {
         console.error("Error loading attendance data:", error);
       } finally {
@@ -140,12 +197,13 @@ export default function AttendancePage() {
     };
 
     loadData();
-  }, [appUser, userLoading, selectedDate, serviceType]);
+  }, [appUser, userLoading, selectedDate, activeSession]);
+
+  // ─── Mark present ───────────────────────────────────────────────────────────
 
   const markPresent = async (personId: string) => {
-    if (!appUser || !serviceType) return;
-
-    const serviceId = `${selectedDate}_${serviceType}`;
+    if (!appUser || !activeSession) return;
+    const serviceId = `${selectedDate}_${activeSession.id}`;
     const attendanceId = `${personId}_${serviceId}`;
 
     setAttendanceCache((prev) => ({ ...prev, [personId]: { status: "present" } }));
@@ -158,7 +216,9 @@ export default function AttendancePage() {
           personId,
           serviceId,
           serviceDate: selectedDate,
-          serviceType,
+          serviceType: activeSession.id,
+          sessionName: activeSession.name,
+          sessionDay: activeSession.day,
           status: "present",
           reported: null,
           absenceReason: null,
@@ -173,6 +233,8 @@ export default function AttendancePage() {
     }
   };
 
+  // ─── Absence modal ──────────────────────────────────────────────────────────
+
   const openAbsentModal = (person: Member) => {
     setSelectedPerson(person);
     setIsReported(null);
@@ -181,10 +243,9 @@ export default function AttendancePage() {
   };
 
   const submitAbsent = async () => {
-    if (!appUser || !selectedPerson || !serviceType) return;
-
+    if (!appUser || !selectedPerson || !activeSession) return;
     setModalLoading(true);
-    const serviceId = `${selectedDate}_${serviceType}`;
+    const serviceId = `${selectedDate}_${activeSession.id}`;
     const attendanceId = `${selectedPerson.id}_${serviceId}`;
 
     setAttendanceCache((prev) => ({
@@ -204,7 +265,9 @@ export default function AttendancePage() {
           personId: selectedPerson.id,
           serviceId,
           serviceDate: selectedDate,
-          serviceType,
+          serviceType: activeSession.id,
+          sessionName: activeSession.name,
+          sessionDay: activeSession.day,
           status: "absent",
           reported: isReported,
           absenceReason: isReported ? absenceReason.trim() : null,
@@ -213,7 +276,6 @@ export default function AttendancePage() {
         },
         { merge: true }
       );
-
       setIsModalOpen(false);
     } catch (error) {
       console.error("Error marking absent:", error);
@@ -223,9 +285,33 @@ export default function AttendancePage() {
     }
   };
 
+  // ─── Stats ─────────────────────────────────────────────────────────────────
+
   const presentCount = Object.values(attendanceCache).filter((r) => r.status === "present").length;
   const absentCount = Object.values(attendanceCache).filter((r) => r.status === "absent").length;
   const pendingCount = members.length - presentCount - absentCount;
+
+  // ─── No sessions configured ────────────────────────────────────────────────
+
+  if (!sessionsLoading && sessions.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+        <div className="text-4xl mb-4">📅</div>
+        <h2 className="text-xl font-bold text-gray-800 mb-2">No service sessions configured</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          An owner or admin needs to set up your church's service schedule before attendance can be recorded.
+        </p>
+        <a
+          href="/dashboard/profile"
+          className="inline-block px-6 py-2.5 bg-blue-600 text-white font-bold text-sm rounded-lg hover:bg-blue-700 transition"
+        >
+          Go to Profile to Set Up Services
+        </a>
+      </div>
+    );
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="max-w-4xl p-10 mx-auto flex flex-col gap-8">
@@ -251,27 +337,23 @@ export default function AttendancePage() {
           {dateError && <p className="text-xs text-red-500 mt-1">{dateError}</p>}
         </div>
 
-        {serviceType && !dateError && (
+        {activeSession && !dateError && (
           <div className="flex items-center gap-3 bg-blue-50 px-4 py-3 rounded-lg border border-blue-100">
-            <span
-              className={`w-3 h-3 rounded-full ${
-                serviceType === "sunday" ? "bg-blue-600" : "bg-amber-500"
-              }`}
-            ></span>
+            <span className="w-3 h-3 rounded-full bg-blue-600"></span>
             <div>
-              <p className="text-sm font-bold text-blue-900 capitalize">{serviceType} Service</p>
+              <p className="text-sm font-bold text-blue-900">{activeSession.name}</p>
               <p className="text-xs text-blue-700">{formatDisplayDate(selectedDate)}</p>
             </div>
           </div>
         )}
       </div>
 
-      {userLoading || loading ? (
+      {userLoading || loading || sessionsLoading ? (
         <div className="flex items-center gap-2">
           <div className="spinner !border-blue-600 !border-t-transparent"></div>
           <p className="text-gray-600">Loading roster...</p>
         </div>
-      ) : (
+      ) : !activeSession ? null : (
         <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
           {/* Stats Header */}
           <div className="bg-gray-50 p-4 border-b border-gray-100 flex gap-6 text-sm">
@@ -363,8 +445,7 @@ export default function AttendancePage() {
             <div>
               <h3 className="text-lg font-bold text-gray-800">Mark Absent</h3>
               <p className="text-gray-500 text-sm mt-1">
-                Did <strong>{selectedPerson.fullName}</strong> report this absence to leadership
-                beforehand?
+                Did <strong>{selectedPerson.fullName}</strong> report this absence to leadership beforehand?
               </p>
             </div>
 
