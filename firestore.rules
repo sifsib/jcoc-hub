@@ -400,6 +400,227 @@ service cloud.firestore {
 
 
     // ============================================
+    // FORMS (church-built custom forms)
+    // ============================================
+    match /forms/{id} {
+
+      // Tenant admins/owners/member_managers can read, create, update, delete their forms
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'));
+
+      // Public: anyone can read an active form (to render the public form page)
+      allow read: if resource.data.active == true;
+    }
+
+
+    // ============================================
+    // FORM SUBMISSIONS (public form responses)
+    // ============================================
+    match /form_submissions/{id} {
+
+      // Anyone can submit (public form — no auth required)
+      allow create: if true;
+
+      // Tenant staff can read their own form submissions
+      allow read: if isSignedIn()
+                  && resource.data.tenantId == userTenantId()
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      // No updates or deletes on submissions (immutable audit trail)
+      allow update, delete: if isSignedIn() && isSuperAdmin();
+    }
+
+
+    // ============================================
+    // WORKFLOWS (templates)
+    // ============================================
+    match /workflows/{id} {
+      allow read: if isSignedIn() && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow update: if isSignedIn() && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow delete: if isSignedIn() && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+    match /workflow_steps/{id} {
+      allow read: if isSignedIn() && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow write: if isSignedIn() && tenantAllowedWrite(request.resource.data)
+                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+    }
+
+    match /workflow_instances/{id} {
+      allow read: if isSignedIn() && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow update: if isSignedIn() && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow delete: if isSignedIn() && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+    match /workflow_instance_steps/{id} {
+      allow read: if isSignedIn() && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow update: if isSignedIn() && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow delete: if isSignedIn() && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+
+    // ============================================
+    // EVENTS
+    // ============================================
+    match /events/{id} {
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+
+    // ============================================
+    // EVENT RSVPS
+    // ============================================
+    match /event_rsvps/{id} {
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+    }
+
+
+    // ============================================
+    // GROUPS
+    // ============================================
+    match /groups/{id} {
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader') || hasRole('viewer'));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+
+    // ============================================
+    // GROUP MEMBERS
+    // ============================================
+    match /group_members/{id} {
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+    }
+
+
+    // ============================================
+    // GROUP ATTENDANCE SESSIONS
+    // ============================================
+    match /group_attendance/{id} {
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+
+    // ============================================
+    // GROUP ATTENDANCE RECORDS (per-member per-session)
+    // ============================================
+    match /group_attendance_records/{id} {
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+
+    // ============================================
     // EVERYTHING ELSE: deny by default
     // ============================================
   }
