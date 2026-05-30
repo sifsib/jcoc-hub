@@ -621,6 +621,74 @@ service cloud.firestore {
 
 
     // ============================================
+    // WORSHIP: SONG LIBRARY (subcollection of tenant)
+    // ============================================
+    match /tenants/{tenantId}/songs/{id} {
+      allow read: if isSignedIn() && tenantId == userTenantId();
+
+      allow create, update: if isSignedIn()
+                             && tenantId == userTenantId()
+                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+
+    // ============================================
+    // WORSHIP: SETLISTS (subcollection of tenant)
+    // ============================================
+    match /tenants/{tenantId}/setlists/{id} {
+      allow read: if isSignedIn() && tenantId == userTenantId();
+
+      allow create: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow update: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin'));
+    }
+
+
+    // ============================================
+    // VOLUNTEER ROLES (subcollection of tenant)
+    // ============================================
+    match /tenants/{tenantId}/volunteerRoles/{id} {
+      allow read: if isSignedIn() && tenantId == userTenantId();
+
+      allow create, delete: if isSignedIn()
+                            && tenantId == userTenantId()
+                            && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow update: if false;
+    }
+
+
+    // ============================================
+    // VOLUNTEER ASSIGNMENTS (subcollection of tenant)
+    // ============================================
+    match /tenants/{tenantId}/volunteerAssignments/{id} {
+      allow read: if isSignedIn() && tenantId == userTenantId();
+
+      allow create: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow update: if false;
+    }
+
+
+    // ============================================
     // EVERYTHING ELSE: deny by default
     // ============================================
   }
