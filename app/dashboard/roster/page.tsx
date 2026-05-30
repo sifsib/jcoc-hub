@@ -28,7 +28,8 @@ interface Member {
   householdRole?: string;
   faithStatus?: { bornAgain: string; waterBaptized: string };
   consentedToPrivacyPolicy: boolean;
-  region?: string;
+  cellRegion?: string;
+  ministryGroup?: string;
   source?: string;
 }
 
@@ -46,6 +47,8 @@ interface TenantConfig {
   ministries: string[];
   membershipTypes: string[];
   roles: string[];
+  cellRegions: string[];
+  ministryGroups: string[];
 }
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
@@ -56,10 +59,12 @@ const DEFAULT_MINISTRIES = [
 ];
 const DEFAULT_MEMBERSHIP_TYPES = ["Full Active", "Associate"];
 const DEFAULT_ROLES = ["Member", "Pastor", "Youth Leader", "Treasurer", "Branch Administrator"];
+const DEFAULT_CELL_REGIONS: string[] = [];
+const DEFAULT_MINISTRY_GROUPS = ["Youth", "Mens Fellowship", "Womens Ministry", "Seniors"];
 
 const emptyPerson = () => ({
   firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
-  maritalStatus: "", region: "",
+  maritalStatus: "", cellRegion: "", ministryGroup: "",
   address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
   bornAgain: "", waterBaptized: "", membershipType: "", ministries: [] as string[],
   role: "Member",
@@ -186,10 +191,19 @@ function MemberBlock({
             {config.roles.map(r => <option key={r}>{r}</option>)}
           </select>
         </F>
-        <F label="Region / Branch">
-          <input value={data.region} onChange={e => set("region", e.target.value)} placeholder="e.g. North" className={inp} />
+        <F label="Cell Region / Branch" req>
+          <select value={data.cellRegion} onChange={e => set("cellRegion", e.target.value)} className={sel} required>
+            <option value="">Select</option>
+            {config.cellRegions.map(r => <option key={r}>{r}</option>)}
+          </select>
         </F>
       </div>
+      <F label="Ministry Group" req>
+        <select value={data.ministryGroup} onChange={e => set("ministryGroup", e.target.value)} className={sel} required>
+          <option value="">Select</option>
+          {config.ministryGroups.map(g => <option key={g}>{g}</option>)}
+        </select>
+      </F>
       {showFaith && (
         <>
           <div className="grid grid-cols-2 gap-4">
@@ -232,6 +246,8 @@ export default function ManageMembershipPage() {
     ministries: DEFAULT_MINISTRIES,
     membershipTypes: DEFAULT_MEMBERSHIP_TYPES,
     roles: DEFAULT_ROLES,
+    cellRegions: DEFAULT_CELL_REGIONS,
+    ministryGroups: DEFAULT_MINISTRY_GROUPS,
   });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -240,8 +256,12 @@ export default function ManageMembershipPage() {
   // Configure lists state
   const [editMinistries, setEditMinistries] = useState<string[]>([]);
   const [editMembershipTypes, setEditMembershipTypes] = useState<string[]>([]);
+  const [editCellRegions, setEditCellRegions] = useState<string[]>([]);
+  const [editMinistryGroups, setEditMinistryGroups] = useState<string[]>([]);
   const [newMinistry, setNewMinistry] = useState("");
   const [newMembershipType, setNewMembershipType] = useState("");
+  const [newCellRegion, setNewCellRegion] = useState("");
+  const [newMinistryGroup, setNewMinistryGroup] = useState("");
   const [configSaving, setConfigSaving] = useState(false);
 
   // Primary member
@@ -283,6 +303,8 @@ export default function ManageMembershipPage() {
             ministries: td.ministries?.length ? td.ministries : DEFAULT_MINISTRIES,
             membershipTypes: td.membershipTypes?.length ? td.membershipTypes : DEFAULT_MEMBERSHIP_TYPES,
             roles: td.churchRoles?.length ? td.churchRoles : DEFAULT_ROLES,
+            cellRegions: td.cellRegions?.length ? td.cellRegions : DEFAULT_CELL_REGIONS,
+            ministryGroups: td.ministryGroups?.length ? td.ministryGroups : DEFAULT_MINISTRY_GROUPS,
           });
         }
         const q = query(collection(db, "members"), where("tenantId", "==", appUser.tenantId));
@@ -360,7 +382,7 @@ export default function ManageMembershipPage() {
         firstName: primary.firstName.trim(), lastName: primary.lastName.trim(),
         email: primary.email.trim().toLowerCase(), phone: fmtPhone(primary.phone),
         dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus,
-        address: primary.address, role: primary.role, region: primary.region.trim(),
+        address: primary.address, role: primary.role, cellRegion: primary.cellRegion.trim(), ministryGroup: primary.ministryGroup.trim(),
         membershipType: primary.membershipType, ministries: primary.ministries,
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
         householdId: hid, householdRole: "primary",
@@ -380,7 +402,7 @@ export default function ManageMembershipPage() {
           firstName: spouse.firstName.trim(), lastName: spouse.lastName.trim(),
           email: spouse.email.trim().toLowerCase(), phone: fmtPhone(spouse.phone),
           dob: spouse.dob, gender: spouse.gender, maritalStatus: "Married",
-          address: spouse.address, role: spouse.role, region: spouse.region.trim(),
+          address: spouse.address, role: spouse.role, cellRegion: spouse.cellRegion.trim(), ministryGroup: spouse.ministryGroup.trim(),
           membershipType: spouse.membershipType, ministries: spouse.ministries,
           faithStatus: { bornAgain: spouse.bornAgain, waterBaptized: spouse.waterBaptized },
           householdId: hid, householdRole: "spouse", spouseId: primaryRef.id,
@@ -424,8 +446,12 @@ export default function ManageMembershipPage() {
   const openConfigure = () => {
     setEditMinistries([...config.ministries]);
     setEditMembershipTypes([...config.membershipTypes]);
+    setEditCellRegions([...config.cellRegions]);
+    setEditMinistryGroups([...config.ministryGroups]);
     setNewMinistry("");
     setNewMembershipType("");
+    setNewCellRegion("");
+    setNewMinistryGroup("");
     setView("configure");
   };
 
@@ -436,8 +462,16 @@ export default function ManageMembershipPage() {
       await updateDoc(doc(db, "tenants", appUser.tenantId), {
         ministries: editMinistries,
         membershipTypes: editMembershipTypes,
+        cellRegions: editCellRegions,
+        ministryGroups: editMinistryGroups,
       });
-      setConfig(prev => ({ ...prev, ministries: editMinistries, membershipTypes: editMembershipTypes }));
+      setConfig(prev => ({
+        ...prev,
+        ministries: editMinistries,
+        membershipTypes: editMembershipTypes,
+        cellRegions: editCellRegions,
+        ministryGroups: editMinistryGroups,
+      }));
       setView("list");
     } catch (e) {
       console.error("Config save error:", e);
@@ -774,32 +808,14 @@ export default function ManageMembershipPage() {
               {editMinistries.map((m) => (
                 <div key={m} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
                   <span className="text-sm text-gray-700">{m}</span>
-                  <button
-                    onClick={() => setEditMinistries(p => p.filter(x => x !== m))}
-                    className="text-red-400 hover:text-red-600 text-xs font-bold ml-2"
-                  >
-                    Remove
-                  </button>
+                  <button onClick={() => setEditMinistries(p => p.filter(x => x !== m))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-2">Remove</button>
                 </div>
               ))}
-              {editMinistries.length === 0 && (
-                <p className="text-xs text-gray-400 italic py-2">No ministries added yet.</p>
-              )}
+              {editMinistries.length === 0 && <p className="text-xs text-gray-400 italic py-2">No ministries added yet.</p>}
             </div>
             <div className="flex gap-2 mt-auto">
-              <input
-                value={newMinistry}
-                onChange={e => setNewMinistry(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addMinistry())}
-                placeholder="e.g. Youth Ministry"
-                className={inp}
-              />
-              <button
-                onClick={addMinistry}
-                className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0"
-              >
-                Add
-              </button>
+              <input value={newMinistry} onChange={e => setNewMinistry(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addMinistry())} placeholder="e.g. Youth Ministry" className={inp} />
+              <button onClick={addMinistry} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0">Add</button>
             </div>
           </div>
 
@@ -813,34 +829,59 @@ export default function ManageMembershipPage() {
               {editMembershipTypes.map((t) => (
                 <div key={t} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
                   <span className="text-sm text-gray-700">{t}</span>
-                  <button
-                    onClick={() => setEditMembershipTypes(p => p.filter(x => x !== t))}
-                    className="text-red-400 hover:text-red-600 text-xs font-bold ml-2"
-                  >
-                    Remove
-                  </button>
+                  <button onClick={() => setEditMembershipTypes(p => p.filter(x => x !== t))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-2">Remove</button>
                 </div>
               ))}
-              {editMembershipTypes.length === 0 && (
-                <p className="text-xs text-gray-400 italic py-2">No types added yet.</p>
-              )}
+              {editMembershipTypes.length === 0 && <p className="text-xs text-gray-400 italic py-2">No types added yet.</p>}
             </div>
             <div className="flex gap-2 mt-auto">
-              <input
-                value={newMembershipType}
-                onChange={e => setNewMembershipType(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addMembershipType())}
-                placeholder="e.g. Youth Member"
-                className={inp}
-              />
-              <button
-                onClick={addMembershipType}
-                className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0"
-              >
-                Add
-              </button>
+              <input value={newMembershipType} onChange={e => setNewMembershipType(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addMembershipType())} placeholder="e.g. Youth Member" className={inp} />
+              <button onClick={addMembershipType} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0">Add</button>
             </div>
           </div>
+
+          {/* Cell Region / Branch */}
+          <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4">
+            <div>
+              <p className="text-base font-bold text-gray-800">Cell Region / Branch</p>
+              <p className="text-xs text-gray-400 mt-0.5">Required dropdown on the registration form. Add each region or branch name.</p>
+            </div>
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+              {editCellRegions.map((r) => (
+                <div key={r} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-700">{r}</span>
+                  <button onClick={() => setEditCellRegions(p => p.filter(x => x !== r))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-2">Remove</button>
+                </div>
+              ))}
+              {editCellRegions.length === 0 && <p className="text-xs text-gray-400 italic py-2">No regions or branches added yet.</p>}
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <input value={newCellRegion} onChange={e => setNewCellRegion(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); const v = newCellRegion.trim(); if (v && !editCellRegions.includes(v)) { setEditCellRegions(p => [...p, v]); setNewCellRegion(""); } }}} placeholder="e.g. North Region" className={inp} />
+              <button onClick={() => { const v = newCellRegion.trim(); if (v && !editCellRegions.includes(v)) { setEditCellRegions(p => [...p, v]); setNewCellRegion(""); }}} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0">Add</button>
+            </div>
+          </div>
+
+          {/* Ministry Group */}
+          <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4">
+            <div>
+              <p className="text-base font-bold text-gray-800">Ministry Group</p>
+              <p className="text-xs text-gray-400 mt-0.5">Required dropdown on the registration form. e.g. Youth, Mens Fellowship.</p>
+            </div>
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+              {editMinistryGroups.map((g) => (
+                <div key={g} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-700">{g}</span>
+                  <button onClick={() => setEditMinistryGroups(p => p.filter(x => x !== g))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-2">Remove</button>
+                </div>
+              ))}
+              {editMinistryGroups.length === 0 && <p className="text-xs text-gray-400 italic py-2">No ministry groups added yet.</p>}
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <input value={newMinistryGroup} onChange={e => setNewMinistryGroup(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); const v = newMinistryGroup.trim(); if (v && !editMinistryGroups.includes(v)) { setEditMinistryGroups(p => [...p, v]); setNewMinistryGroup(""); } }}} placeholder="e.g. Youth" className={inp} />
+              <button onClick={() => { const v = newMinistryGroup.trim(); if (v && !editMinistryGroups.includes(v)) { setEditMinistryGroups(p => [...p, v]); setNewMinistryGroup(""); }}} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0">Add</button>
+            </div>
+          </div>
+
         </div>
 
         <div className="flex gap-3">
@@ -1001,7 +1042,8 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               { key: "membershipType", label: "Membership Type" },
               { key: "gender", label: "Gender" },
               { key: "dob", label: "Date of Birth" },
-              { key: "region", label: "Region" },
+              { key: "cellRegion", label: "Cell Region / Branch" },
+              { key: "ministryGroup", label: "Ministry Group" },
               { key: "maritalStatus", label: "Marital Status" },
             ]}
           />

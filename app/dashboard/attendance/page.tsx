@@ -20,7 +20,8 @@ interface Member {
   id: string;
   fullName: string;
   role: string;
-  region?: string;
+  cellRegion?: string;
+  ministryGroup?: string;
 }
 
 interface AttendanceRecord {
@@ -58,6 +59,10 @@ export default function AttendancePage() {
   const [selectedDate, setSelectedDate] = useState("");
   const [activeSession, setActiveSession] = useState<ServiceSession | null>(null);
   const [dateError, setDateError] = useState("");
+
+  // Attendance filter state
+  const [filterType, setFilterType] = useState<"all" | "cellRegion" | "ministryGroup">("all");
+  const [filterValue, setFilterValue] = useState("");
 
   // Absence modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -285,11 +290,22 @@ export default function AttendancePage() {
     }
   };
 
+  // ─── Filter helpers ────────────────────────────────────────────────────────
+
+  const uniqueCellRegions = Array.from(new Set(members.map(m => m.cellRegion).filter(Boolean))) as string[];
+  const uniqueMinistryGroups = Array.from(new Set(members.map(m => m.ministryGroup).filter(Boolean))) as string[];
+
+  const filteredMembers = members.filter(m => {
+    if (filterType === "cellRegion") return m.cellRegion === filterValue;
+    if (filterType === "ministryGroup") return m.ministryGroup === filterValue;
+    return true;
+  });
+
   // ─── Stats ─────────────────────────────────────────────────────────────────
 
-  const presentCount = Object.values(attendanceCache).filter((r) => r.status === "present").length;
-  const absentCount = Object.values(attendanceCache).filter((r) => r.status === "absent").length;
-  const pendingCount = members.length - presentCount - absentCount;
+  const presentCount = filteredMembers.filter(m => attendanceCache[m.id]?.status === "present").length;
+  const absentCount = filteredMembers.filter(m => attendanceCache[m.id]?.status === "absent").length;
+  const pendingCount = filteredMembers.length - presentCount - absentCount;
 
   // ─── No sessions configured ────────────────────────────────────────────────
 
@@ -355,6 +371,39 @@ export default function AttendancePage() {
         </div>
       ) : !activeSession ? null : (
         <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+          {/* Filter Bar */}
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter by:</span>
+            <button
+              onClick={() => { setFilterType("all"); setFilterValue(""); }}
+              className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "all" ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}
+            >
+              All ({members.length})
+            </button>
+            {uniqueCellRegions.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-xs text-gray-400">Region:</span>
+                {uniqueCellRegions.map(r => (
+                  <button key={r} onClick={() => { setFilterType("cellRegion"); setFilterValue(r); }}
+                    className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "cellRegion" && filterValue === r ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            )}
+            {uniqueMinistryGroups.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-xs text-gray-400">Group:</span>
+                {uniqueMinistryGroups.map(g => (
+                  <button key={g} onClick={() => { setFilterType("ministryGroup"); setFilterValue(g); }}
+                    className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "ministryGroup" && filterValue === g ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
+                    {g}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Stats Header */}
           <div className="bg-gray-50 p-4 border-b border-gray-100 flex gap-6 text-sm">
             <div className="flex items-center gap-2">
@@ -373,12 +422,12 @@ export default function AttendancePage() {
 
           {/* Roster List */}
           <div className="divide-y divide-gray-100">
-            {members.length === 0 ? (
+            {filteredMembers.length === 0 ? (
               <p className="p-8 text-center text-gray-400 text-sm">
-                No members found. Please add members to your roster first.
+                No members found for this filter.
               </p>
             ) : (
-              members.map((person) => {
+              filteredMembers.map((person) => {
                 const record = attendanceCache[person.id];
                 const isPresent = record?.status === "present";
                 const isAbsent = record?.status === "absent";
@@ -394,9 +443,14 @@ export default function AttendancePage() {
                       <p className="font-medium text-gray-900">{person.fullName}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-gray-500">{person.role}</span>
-                        {person.region && (
+                        {person.cellRegion && (
                           <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
-                            {person.region}
+                            {person.cellRegion}
+                          </span>
+                        )}
+                        {person.ministryGroup && (
+                          <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">
+                            {person.ministryGroup}
                           </span>
                         )}
                         {isAbsent && record.absenceReason && (
