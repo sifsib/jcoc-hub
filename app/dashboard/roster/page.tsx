@@ -241,6 +241,7 @@ export default function ManageMembershipPage() {
   const { appUser, loading: userLoading } = useAppUser();
 
   const [view, setView] = useState<"list" | "form" | "import" | "configure">("list");
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [config, setConfig] = useState<TenantConfig>({
     ministries: DEFAULT_MINISTRIES,
@@ -481,6 +482,67 @@ export default function ManageMembershipPage() {
     }
   };
 
+  // ─── Edit member ─────────────────────────────────────────────────────────────
+
+  const openEdit = (m: Member) => {
+    setEditingMemberId(m.id);
+    setPrimary({
+      firstName: m.firstName || "",
+      lastName: m.lastName || "",
+      dob: m.dob || "",
+      gender: m.gender || "",
+      email: m.email || "",
+      phone: m.phone || "",
+      maritalStatus: m.maritalStatus || "",
+      cellRegion: m.cellRegion || "",
+      ministryGroup: m.ministryGroup || "",
+      address: (m as any).address || { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
+      bornAgain: m.faithStatus?.bornAgain || "",
+      waterBaptized: m.faithStatus?.waterBaptized || "",
+      membershipType: m.membershipType || "",
+      ministries: m.ministries || [],
+      role: m.role || "Member",
+    });
+    setFeedback(null);
+    setView("form");
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appUser || !editingMemberId) return;
+    setSubmitting(true); setFeedback(null);
+    try {
+      await updateDoc(doc(db, "members", editingMemberId), {
+        fullName: `${primary.firstName.trim()} ${primary.lastName.trim()}`,
+        firstName: primary.firstName.trim(),
+        lastName: primary.lastName.trim(),
+        email: primary.email.trim().toLowerCase(),
+        phone: fmtPhone(primary.phone),
+        dob: primary.dob,
+        gender: primary.gender,
+        maritalStatus: primary.maritalStatus,
+        address: primary.address,
+        role: primary.role,
+        cellRegion: primary.cellRegion.trim(),
+        ministryGroup: primary.ministryGroup.trim(),
+        membershipType: primary.membershipType,
+        ministries: primary.ministries,
+        faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
+        updatedAt: serverTimestamp(),
+        updatedBy: appUser.email,
+      });
+      await refreshList();
+      setFeedback({ ok: true, text: "Member record updated successfully." });
+      setEditingMemberId(null);
+      reset();
+      setView("list");
+    } catch (err) {
+      console.error("Update error:", err);
+      setFeedback({ ok: false, text: "Update failed. Please try again." });
+    } finally {
+      setSubmitting(false); }
+  };
+
   // ─── Delete member ──────────────────────────────────────────────────────────
 
   const handleDelete = async (id: string) => {
@@ -561,16 +623,24 @@ export default function ManageMembershipPage() {
     let sectionNum = 0;
     const next = () => String(++sectionNum);
 
+    const isEditing = !!editingMemberId;
+
     return (
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <button onClick={() => { setView("list"); reset(); }}
+        <button onClick={() => { setView("list"); reset(); setEditingMemberId(null); }}
           className="text-sm text-blue-600 hover:text-blue-800 font-medium mb-4 flex items-center gap-1">
           ← Back to register
         </button>
-        <h1 className="text-2xl font-bold text-gray-800 mb-1">New Member Registration</h1>
-        <p className="text-sm text-gray-500 mb-6">A household record is created automatically. No signature required for manual capture.</p>
+        <h1 className="text-2xl font-bold text-gray-800 mb-1">
+          {isEditing ? "Edit Member Record" : "New Member Registration"}
+        </h1>
+        <p className="text-sm text-gray-500 mb-6">
+          {isEditing
+            ? "Update this member's details. Changes are saved immediately to their record."
+            : "A household record is created automatically. No signature required for manual capture."}
+        </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <form onSubmit={isEditing ? handleUpdate : handleSubmit} className="flex flex-col gap-6">
 
           {/* ── SECTION 1: Member Details ── */}
           <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
@@ -613,8 +683,8 @@ export default function ManageMembershipPage() {
             </F>
           </div>
 
-          {/* ── SECTION 3: Spouse (conditional on married) ── */}
-          {isMarried && (
+          {/* ── SECTION 3: Spouse (conditional on married, new registrations only) ── */}
+          {!isEditing && isMarried && (
             <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
               <SecHead n={next()} title="Spouse Details" />
               <F label="Is your spouse a member of this church?" req>
@@ -655,8 +725,8 @@ export default function ManageMembershipPage() {
             </div>
           )}
 
-          {/* ── SECTION 4: Children ── */}
-          <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          {/* ── SECTION 4: Children (new registrations only) ── */}
+          {!isEditing && <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
             <SecHead n={next()} title="Children" sub="Add each child. Tick 'is a member' only if they should appear on the register." />
             <button type="button" onClick={addChild}
               className="self-start text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium px-4 py-2 rounded-lg border border-blue-200 transition-colors">
@@ -688,10 +758,10 @@ export default function ManageMembershipPage() {
                 </label>
               </div>
             ))}
-          </div>
+          </div>}
 
-          {/* ── SECTION 5: Parents ── */}
-          <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          {/* ── SECTION 5: Parents (new registrations only) ── */}
+          {!isEditing && <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
             <SecHead n={next()} title="Parents' Details" sub="For record purposes only — no membership question." />
             <div className="grid grid-cols-2 gap-6">
               {(["mother", "father"] as const).map(p => (
@@ -703,10 +773,10 @@ export default function ManageMembershipPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
 
-          {/* ── SECTION 6: Parents-in-law (only if married) ── */}
-          {isMarried && (
+          {/* ── SECTION 6: Parents-in-law (new registrations only, only if married) ── */}
+          {!isEditing && isMarried && (
             <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
               <SecHead n={next()} title="Parents-in-law" sub="For record purposes only — no membership question." />
               <div className="grid grid-cols-2 gap-6">
@@ -722,8 +792,8 @@ export default function ManageMembershipPage() {
             </div>
           )}
 
-          {/* ── SECTION 7: POPIA Consent ── */}
-          <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-4">
+          {/* ── SECTION 7: POPIA Consent (new registrations only) ── */}
+          {!isEditing && <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-4">
             <SecHead n={next()} title="POPIA Consent" sub="Required before any personal information can be stored." />
             <label className="flex items-start gap-3 cursor-pointer">
               <input type="checkbox" checked={consent.privacy} onChange={e => setConsent(p => ({ ...p, privacy: e.target.checked }))}
@@ -744,7 +814,7 @@ export default function ManageMembershipPage() {
                 className="mt-1 h-4 w-4 rounded text-blue-600 border-gray-300" />
               <span className="text-sm text-gray-700">I confirm that all information provided is true and accurate.</span>
             </label>
-          </div>
+          </div>}
 
           {feedback && (
             <div className={`p-3 rounded-lg text-sm font-medium border ${feedback.ok ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
@@ -756,9 +826,9 @@ export default function ManageMembershipPage() {
             <button type="submit" disabled={submitting}
               className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
               {submitting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-              {submitting ? "Saving..." : "Save Member"}
+              {submitting ? "Saving..." : isEditing ? "Save Changes" : "Save Member"}
             </button>
-            <button type="button" onClick={() => { setView("list"); reset(); }}
+            <button type="button" onClick={() => { setView("list"); reset(); setEditingMemberId(null); }}
               className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
               Cancel
             </button>
@@ -1130,7 +1200,10 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                         }
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <button onClick={() => handleDelete(m.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
+                        <div className="flex items-center justify-end gap-3">
+                          <button onClick={() => openEdit(m)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                          <button onClick={() => handleDelete(m.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
+                        </div>
                       </td>
                     </tr>
                   );
