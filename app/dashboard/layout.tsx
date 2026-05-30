@@ -48,18 +48,20 @@ export default async function DashboardLayout({
   const churchName = tenantData?.name || "KerekeHub";
   const primaryColor = tenantData?.primaryColor || "#059669";
 
-  const navigation = [
-    { name: "Church Overview", href: "/dashboard/analytics", icon: "📊" },
-    { name: "Church Profile", href: "/dashboard/profile", icon: "⛪" },
-    { name: "Membership Management", href: "/dashboard/roster", icon: "👥" },
-    { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝" },
-    { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋" },
-    { name: "Financials", href: "/dashboard/finance", icon: "💰" },
-    { name: "Communications", href: "/dashboard/communications", icon: "💬" },
-    { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑" },
-    { name: "Branding", href: "/dashboard/branding", icon: "🎨" },
-    { name: "Support", href: "/dashboard/support", icon: "🎧" },
+  const allNavigation = [
+    { name: "Church Overview", href: "/dashboard/analytics", icon: "📊", roles: ["owner", "admin", "viewer", "finance", "member_manager"] },
+    { name: "Church Profile", href: "/dashboard/profile", icon: "⛪", roles: ["owner", "admin"] },
+    { name: "Membership Management", href: "/dashboard/roster", icon: "👥", roles: ["owner", "admin", "member_manager", "cell_leader"] },
+    { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝", roles: ["owner", "admin", "member_manager", "cell_leader"] },
+    { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋", roles: ["owner", "admin", "member_manager"] },
+    { name: "Financials", href: "/dashboard/finance", icon: "💰", roles: ["owner", "admin", "finance"] },
+    { name: "Communications", href: "/dashboard/communications", icon: "💬", roles: ["owner", "admin", "member_manager"] },
+    { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑", roles: ["owner", "admin"] },
+    { name: "Branding", href: "/dashboard/branding", icon: "🎨", roles: ["owner", "admin"] },
+    { name: "Support", href: "/dashboard/support", icon: "🎧", roles: ["owner", "admin", "member_manager", "finance", "viewer", "cell_leader"] },
   ];
+
+  const navigation = allNavigation.filter(item => item.roles.includes(userRole));
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-900 antialiased">

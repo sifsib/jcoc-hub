@@ -30,7 +30,7 @@ interface TenantBranch {
   name: string;
 }
 
-type AssignableRole = "admin" | "viewer" | "finance" | "member_manager";
+type AssignableRole = "admin" | "viewer" | "finance" | "member_manager" | "cell_leader";
 
 const ROLE_META: Record<AssignableRole, { label: string; description: string; color: string }> = {
   admin: {
@@ -52,6 +52,11 @@ const ROLE_META: Record<AssignableRole, { label: string; description: string; co
     label: "Membership Manager",
     description: "Access to members, attendance, and visitors. No financial data.",
     color: "bg-amber-50 text-amber-700 border border-amber-200",
+  },
+  cell_leader: {
+    label: "Cell Leader",
+    description: "Can mark and view attendance for their assigned cell group only.",
+    color: "bg-teal-50 text-teal-700 border border-teal-200",
   },
 };
 
@@ -83,6 +88,7 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState("");
   const [branches, setBranches] = useState<TenantBranch[]>([]);
+  const [cellRegions, setCellRegions] = useState<string[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [showInvite, setShowInvite] = useState(false);
 
@@ -91,6 +97,7 @@ export default function TeamPage() {
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<AssignableRole>("member_manager");
   const [inviteBranch, setInviteBranch] = useState("");
+  const [inviteCellRegion, setInviteCellRegion] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ resetLink: string } | null>(null);
   const [inviteError, setInviteError] = useState("");
@@ -122,6 +129,7 @@ export default function TeamPage() {
         const tenantDoc = await getDoc(doc(db, "tenants", data.tenantId));
         const tenantData = tenantDoc.data();
         setBranches(tenantData?.branches || []);
+        setCellRegions(tenantData?.cellRegions || []);
 
         // Load all users in this tenant
         await loadTeam(data.tenantId, user.uid);
@@ -168,6 +176,7 @@ export default function TeamPage() {
           displayName: inviteName,
           role: inviteRole,
           branchId: inviteBranch || null,
+          assignedCellRegion: inviteRole === "cell_leader" ? inviteCellRegion : null,
         }),
       });
       const data = await res.json();
@@ -186,7 +195,7 @@ export default function TeamPage() {
 
   function resetInviteForm() {
     setInviteEmail(""); setInviteName(""); setInviteRole("member_manager");
-    setInviteBranch(""); setInviteResult(null); setInviteError("");
+    setInviteBranch(""); setInviteCellRegion(""); setInviteResult(null); setInviteError("");
     setShowInvite(false);
   }
 
@@ -282,7 +291,7 @@ export default function TeamPage() {
       </div>
 
       {/* Role guide cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {(Object.entries(ROLE_META) as [AssignableRole, typeof ROLE_META[AssignableRole]][]).map(([key, meta]) => (
           <div key={key} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
             <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold mb-2 ${meta.color}`}>{meta.label}</span>
@@ -330,6 +339,32 @@ export default function TeamPage() {
                       ))}
                     </select>
                   </div>
+                  {inviteRole === "cell_leader" && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Assigned Cell Region <span className="text-red-500">*</span></label>
+                      {cellRegions.length > 0 ? (
+                        <select
+                          required
+                          value={inviteCellRegion}
+                          onChange={(e) => setInviteCellRegion(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="">Select a cell region</option>
+                          {cellRegions.map((r) => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text" required value={inviteCellRegion}
+                          onChange={(e) => setInviteCellRegion(e.target.value)}
+                          placeholder="e.g. North Region"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      )}
+                      <p className="text-xs text-gray-400 mt-1">This leader will only see members and attendance in this cell.</p>
+                    </div>
+                  )}
                   {branches.length > 0 && (
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Branch (optional)</label>

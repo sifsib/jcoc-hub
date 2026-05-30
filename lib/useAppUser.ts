@@ -14,6 +14,7 @@ export interface AppUser {
   churchName: string;
   name: string;
   role: string;
+  assignedCellRegion: string;
 }
 
 interface UseAppUserReturn {
@@ -51,6 +52,7 @@ export function useAppUser(): UseAppUserReturn {
           churchName: data.churchName ?? "",
           name: data.churchName ?? data.name ?? "",
           role: data.role ?? "",
+          assignedCellRegion: data.assignedCellRegion ?? "",
         });
       } catch (err) {
         console.error("useAppUser: failed to load user doc", err);
@@ -62,6 +64,7 @@ export function useAppUser(): UseAppUserReturn {
           churchName: "",
           name: "",
           role: "",
+          assignedCellRegion: "",
         });
       } finally {
         setLoading(false);

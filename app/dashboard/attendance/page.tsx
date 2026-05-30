@@ -63,6 +63,8 @@ export default function AttendancePage() {
   // Attendance filter state
   const [filterType, setFilterType] = useState<"all" | "cellRegion" | "ministryGroup">("all");
   const [filterValue, setFilterValue] = useState("");
+  const [configCellRegions, setConfigCellRegions] = useState<string[]>([]);
+  const [configMinistryGroups, setConfigMinistryGroups] = useState<string[]>([]);
 
   // Absence modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -82,6 +84,8 @@ export default function AttendancePage() {
         const td = tenantSnap.data() || {};
         const loaded: ServiceSession[] = td.serviceSessions || [];
         setSessions(loaded);
+        setConfigCellRegions(td.cellRegions || []);
+        setConfigMinistryGroups(td.ministryGroups || []);
 
         // Set default date: today if it matches a session day, else nearest upcoming match
         const today = new Date();
@@ -171,7 +175,11 @@ export default function AttendancePage() {
       const serviceId = `${selectedDate}_${activeSession.id}`;
 
       try {
-        const qMembers = query(collection(db, "members"), where("tenantId", "==", tenantId));
+        // Cell leaders only see their assigned cell region
+        const isCellLeader = appUser.role === "cell_leader";
+        const qMembers = isCellLeader && appUser.assignedCellRegion
+          ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("cellRegion", "==", appUser.assignedCellRegion))
+          : query(collection(db, "members"), where("tenantId", "==", tenantId));
         const membersSnap = await getDocs(qMembers);
         const memberList: Member[] = [];
         membersSnap.forEach((d) => memberList.push({ id: d.id, ...d.data() } as Member));
@@ -292,9 +300,6 @@ export default function AttendancePage() {
 
   // ─── Filter helpers ────────────────────────────────────────────────────────
 
-  const uniqueCellRegions = Array.from(new Set(members.map(m => m.cellRegion).filter(Boolean))) as string[];
-  const uniqueMinistryGroups = Array.from(new Set(members.map(m => m.ministryGroup).filter(Boolean))) as string[];
-
   const filteredMembers = members.filter(m => {
     if (filterType === "cellRegion") return m.cellRegion === filterValue;
     if (filterType === "ministryGroup") return m.ministryGroup === filterValue;
@@ -373,17 +378,28 @@ export default function AttendancePage() {
         <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
           {/* Filter Bar */}
           <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+            {appUser?.role === "cell_leader" ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Showing:</span>
+                <span className="text-xs px-3 py-1 rounded-full font-semibold bg-teal-100 text-teal-700 border border-teal-300">
+                  {appUser.assignedCellRegion || "Your Cell"}
+                </span>
+                <span className="text-xs text-gray-400">(restricted to your assigned cell)</span>
+              </div>
+            ) : (
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter by:</span>
+
             <button
               onClick={() => { setFilterType("all"); setFilterValue(""); }}
               className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "all" ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}
             >
               All ({members.length})
             </button>
-            {uniqueCellRegions.length > 0 && (
+
+            {configCellRegions.length > 0 && (
               <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-xs text-gray-400">Region:</span>
-                {uniqueCellRegions.map(r => (
+                <span className="text-xs text-gray-400 font-medium">Region:</span>
+                {configCellRegions.map(r => (
                   <button key={r} onClick={() => { setFilterType("cellRegion"); setFilterValue(r); }}
                     className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "cellRegion" && filterValue === r ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
                     {r}
@@ -391,16 +407,22 @@ export default function AttendancePage() {
                 ))}
               </div>
             )}
-            {uniqueMinistryGroups.length > 0 && (
+
+            {configMinistryGroups.length > 0 && (
               <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-xs text-gray-400">Group:</span>
-                {uniqueMinistryGroups.map(g => (
+                <span className="text-xs text-gray-400 font-medium">Group:</span>
+                {configMinistryGroups.map(g => (
                   <button key={g} onClick={() => { setFilterType("ministryGroup"); setFilterValue(g); }}
                     className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "ministryGroup" && filterValue === g ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
                     {g}
                   </button>
                 ))}
               </div>
+            )}
+
+            {configCellRegions.length === 0 && configMinistryGroups.length === 0 && (
+              <span className="text-xs text-gray-400 italic">Add Cell Regions and Ministry Groups in Configure Lists to enable filtering.</span>
+            )}
             )}
           </div>
 

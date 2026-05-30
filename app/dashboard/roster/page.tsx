@@ -308,7 +308,11 @@ export default function ManageMembershipPage() {
             ministryGroups: td.ministryGroups?.length ? td.ministryGroups : DEFAULT_MINISTRY_GROUPS,
           });
         }
-        const q = query(collection(db, "members"), where("tenantId", "==", appUser.tenantId));
+        // Cell leaders only see their assigned cell
+        const isCellLeader = appUser.role === "cell_leader";
+        const q = isCellLeader && appUser.assignedCellRegion
+          ? query(collection(db, "members"), where("tenantId", "==", appUser.tenantId), where("cellRegion", "==", appUser.assignedCellRegion))
+          : query(collection(db, "members"), where("tenantId", "==", appUser.tenantId));
         const snap = await getDocs(q);
         const list: Member[] = [];
         snap.forEach(d => list.push({ id: d.id, ...d.data() } as Member));
@@ -1090,9 +1094,14 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Membership Management</h1>
-          <p className="text-gray-500 text-sm mt-1">Register, import, and manage your congregation.</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {appUser?.role === "cell_leader"
+              ? `Viewing your cell: ${appUser.assignedCellRegion || "assigned cell"}`
+              : "Register, import, and manage your congregation."}
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {appUser?.role !== "cell_leader" && <>
           <button onClick={openConfigure}
             className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Configure Lists
@@ -1124,6 +1133,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
             className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
             + Add Member
           </button>
+          </>}
         </div>
       </div>
 
@@ -1202,10 +1212,12 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                         }
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <div className="flex items-center justify-end gap-3">
-                          <button onClick={() => openEdit(m)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
-                          <button onClick={() => handleDelete(m.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
-                        </div>
+                        {appUser?.role !== "cell_leader" && (
+                          <div className="flex items-center justify-end gap-3">
+                            <button onClick={() => openEdit(m)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                            <button onClick={() => handleDelete(m.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
