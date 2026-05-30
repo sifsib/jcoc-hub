@@ -81,22 +81,32 @@ export default function AnalyticsPage() {
         setMetrics({ totalMembers: total, leadershipCount: leadership, standardMembersCount: standard });
         setRoleChartData(Object.keys(roleCounts).map((role) => ({ name: role, Count: roleCounts[role] })));
 
-        const qAttendance = query(collection(db, "attendance"), where("tenantId", "==", appUser.tenantId));
+        // Fetch only Sunday attendance records
+        const qAttendance = query(
+          collection(db, "attendance"),
+          where("tenantId", "==", appUser.tenantId),
+          where("sessionDay", "==", "Sunday")
+        );
         const attendanceSnap = await getDocs(qAttendance);
-        const lastAttendanceMap: Record<string, Date> = {};
+
+        // Build per-member Sunday map: { memberId: { dateStr: { status, reported } } }
+        const memberSundayMap: Record<string, Record<string, { status: string; reported: boolean | null }>> = {};
+        const allSundayDates = new Set<string>();
 
         attendanceSnap.forEach((docSnap) => {
           const data = docSnap.data();
-          if (data.personId && data.serviceDate) {
-            const date = new Date(data.serviceDate);
-            if (!lastAttendanceMap[data.personId] || date > lastAttendanceMap[data.personId]) {
-              lastAttendanceMap[data.personId] = date;
-            }
-          }
+          if (!data.personId || !data.serviceDate) return;
+          allSundayDates.add(data.serviceDate);
+          if (!memberSundayMap[data.personId]) memberSundayMap[data.personId] = {};
+          memberSundayMap[data.personId][data.serviceDate] = {
+            status: data.status,
+            reported: data.reported ?? null,
+          };
         });
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Sort all recorded Sunday dates descending (most recent first)
+        const sortedSundays = Array.from(allSundayDates).sort((a, b) => b.localeCompare(a));
+
         const tiers: CareTiers = { tier1: [], tier2: [], tier3: [], neverAttended: [] };
 
         const membersForTiers: CareTierMember[] = [];
@@ -111,12 +121,38 @@ export default function AnalyticsPage() {
         });
 
         membersForTiers.forEach((member) => {
-          const lastDate = lastAttendanceMap[member.id];
-          if (!lastDate) { tiers.neverAttended.push({ ...member, daysAbsent: -1 }); return; }
-          const diffDays = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays >= 14 && diffDays <= 21) { tiers.tier1.push({ ...member, daysAbsent: diffDays }); }
-          else if (diffDays >= 22 && diffDays <= 30) { tiers.tier2.push({ ...member, daysAbsent: diffDays }); }
-          else if (diffDays > 30) { tiers.tier3.push({ ...member, daysAbsent: diffDays }); }
+          const sundayRecords = memberSundayMap[member.id] || {};
+          const recordedSundays = sortedSundays.filter((d) => sundayRecords[d]);
+
+          // No Sunday records at all — never attended
+          if (recordedSundays.length === 0) {
+            tiers.neverAttended.push({ ...member, daysAbsent: -1 });
+            return;
+          }
+
+          // Count consecutive absent Sundays from most recent recorded Sunday
+          let consecutiveAbsent = 0;
+          let allNotReported = true;
+
+          for (const date of recordedSundays) {
+            const record = sundayRecords[date];
+            if (record.status === "absent") {
+              consecutiveAbsent++;
+              if (record.reported === true) allNotReported = false;
+            } else {
+              break; // present — streak ends
+            }
+          }
+
+          // Apply tier rules (highest applicable tier wins)
+          if (consecutiveAbsent >= 5) {
+            tiers.tier3.push({ ...member, daysAbsent: consecutiveAbsent });
+          } else if (consecutiveAbsent === 4) {
+            tiers.tier2.push({ ...member, daysAbsent: consecutiveAbsent });
+          } else if (consecutiveAbsent === 3 && allNotReported) {
+            tiers.tier1.push({ ...member, daysAbsent: consecutiveAbsent });
+          }
+          // 3 Sundays but all reported = no tier (grace given)
         });
 
         setCareTiers(tiers);
@@ -168,7 +204,7 @@ export default function AnalyticsPage() {
             <div>
               <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
               {member.daysAbsent > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">{member.daysAbsent} days absent</p>
+                <p className="text-xs text-gray-400 mt-0.5">{member.daysAbsent} consecutive Sundays absent</p>
               )}
             </div>
             {member.phone && (
@@ -287,17 +323,17 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
             <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Tier 1</p>
-            <p className="text-xs text-amber-500 mt-0.5">14 to 21 days</p>
+            <p className="text-xs text-amber-500 mt-0.5">3 Sundays, not reported</p>
             <h3 className="text-4xl font-black text-amber-700 mt-2">{careTiers.tier1.length}</h3>
           </div>
           <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
             <p className="text-xs font-bold text-orange-600 uppercase tracking-wider">Tier 2</p>
-            <p className="text-xs text-orange-500 mt-0.5">22 to 30 days</p>
+            <p className="text-xs text-orange-500 mt-0.5">4 Sundays absent</p>
             <h3 className="text-4xl font-black text-orange-700 mt-2">{careTiers.tier2.length}</h3>
           </div>
           <div className="bg-red-50 border border-red-200 rounded-xl p-5">
             <p className="text-xs font-bold text-red-600 uppercase tracking-wider">Tier 3</p>
-            <p className="text-xs text-red-500 mt-0.5">31 or more days</p>
+            <p className="text-xs text-red-500 mt-0.5">5 or more Sundays absent</p>
             <h3 className="text-4xl font-black text-red-700 mt-2">{careTiers.tier3.length}</h3>
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
@@ -310,7 +346,7 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-white border border-amber-200 rounded-xl overflow-hidden">
             <div className="px-5 py-4 bg-amber-50 border-b border-amber-100 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-amber-800">Tier 1: 14 to 21 Days</h3>
+              <h3 className="text-sm font-bold text-amber-800">Tier 1: 3 Sundays Absent (Not Reported)</h3>
               <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded-full text-amber-700">{careTiers.tier1.length}</span>
             </div>
             <TierList members={careTiers.tier1} traceLabel="Trace" />
@@ -318,7 +354,7 @@ export default function AnalyticsPage() {
 
           <div className="bg-white border border-orange-200 rounded-xl overflow-hidden">
             <div className="px-5 py-4 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-orange-800">Tier 2: 22 to 30 Days</h3>
+              <h3 className="text-sm font-bold text-orange-800">Tier 2: 4 Sundays Absent</h3>
               <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded-full text-orange-700">{careTiers.tier2.length}</span>
             </div>
             <TierList members={careTiers.tier2} traceLabel="Trace" />
@@ -326,7 +362,7 @@ export default function AnalyticsPage() {
 
           <div className="bg-white border border-red-200 rounded-xl overflow-hidden">
             <div className="px-5 py-4 bg-red-50 border-b border-red-100 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-red-800">Tier 3: 31 or More Days</h3>
+              <h3 className="text-sm font-bold text-red-800">Tier 3: 5 or More Sundays Absent</h3>
               <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded-full text-red-700">{careTiers.tier3.length}</span>
             </div>
             <TierList members={careTiers.tier3} traceLabel="Trace" />
