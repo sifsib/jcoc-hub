@@ -149,13 +149,16 @@ export default function GroupDetailPage() {
     });
   }, [groupId]);
 
-  // Load roster for add-member search
+  // Load roster for add-member search (no orderBy to avoid composite index requirement — sort client-side)
   useEffect(() => {
     if (!tenantId || !showAddMember) return;
     getDocs(
-      query(collection(db, "members"), where("tenantId", "==", tenantId), orderBy("firstName"))
+      query(collection(db, "members"), where("tenantId", "==", tenantId))
     ).then((snap) => {
-      setRosterMembers(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<RosterMember, "id">) })));
+      const sorted = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<RosterMember, "id">) }))
+        .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
+      setRosterMembers(sorted);
     });
   }, [tenantId, showAddMember]);
 

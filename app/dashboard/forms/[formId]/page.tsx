@@ -78,12 +78,25 @@ export default function FormEditorPage() {
   async function saveForm(updatedForm: ChurchForm) {
     setSaving(true);
     try {
+      // Strip undefined values — Firestore rejects them (e.g. options: undefined on non-dropdown fields)
+      const sanitizedFields = updatedForm.fields.map((f) => {
+        const clean: Record<string, any> = {
+          id: f.id,
+          type: f.type,
+          label: f.label,
+          required: f.required,
+        };
+        if (f.placeholder !== undefined) clean.placeholder = f.placeholder;
+        if (f.type === "dropdown") clean.options = f.options || [];
+        return clean;
+      });
+
       await updateDoc(doc(db, "forms", formId), {
         title: updatedForm.title,
         description: updatedForm.description,
-        fields: updatedForm.fields,
+        fields: sanitizedFields,
         active: updatedForm.active,
-        fieldCount: updatedForm.fields.length,
+        fieldCount: sanitizedFields.length,
         updatedAt: serverTimestamp(),
       });
       setSaved(true);
