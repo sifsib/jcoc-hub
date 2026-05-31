@@ -43,7 +43,7 @@ export default async function DashboardLayout({
   }
 
   const userRole = userDocData?.role || "user";
-  const userName = userDocData?.name || "Member";
+  const userName = userDocData?.displayName || userDocData?.name || "Member";
 
   const churchName = tenantData?.name || "KerekeHub";
   const primaryColor = tenantData?.primaryColor || "#059669";
