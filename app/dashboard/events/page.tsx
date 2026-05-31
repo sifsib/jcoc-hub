@@ -78,6 +78,7 @@ export default function EventsPage() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
+  const [copiedRsvpId, setCopiedRsvpId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -241,18 +242,31 @@ export default function EventsPage() {
                   )}
                 </div>
 
-                {/* RSVP count */}
-                <div className="shrink-0 text-right">
-                  <p className="text-sm font-bold text-gray-800">
-                    {event.rsvpCount}
-                    {event.capacity > 0 && (
-                      <span className="text-gray-400 font-normal">/{event.capacity}</span>
+                {/* RSVP count + copy link */}
+                <div className="shrink-0 text-right flex flex-col items-end gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">
+                      {event.rsvpCount}
+                      {event.capacity > 0 && (
+                        <span className="text-gray-400 font-normal">/{event.capacity}</span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-400">RSVPs</p>
+                    {isFull && (
+                      <span className="text-xs font-semibold text-red-500">Full</span>
                     )}
-                  </p>
-                  <p className="text-xs text-gray-400">RSVPs</p>
-                  {isFull && (
-                    <span className="text-xs font-semibold text-red-500">Full</span>
-                  )}
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(`${window.location.origin}/rsvp/${event.id}`);
+                      setCopiedRsvpId(event.id);
+                      setTimeout(() => setCopiedRsvpId(null), 2500);
+                    }}
+                    className="text-xs font-medium text-emerald-600 hover:text-emerald-800 border border-emerald-200 hover:border-emerald-300 px-2 py-1 rounded-lg transition-colors"
+                  >
+                    {copiedRsvpId === event.id ? "Copied!" : "RSVP Link"}
+                  </button>
                 </div>
               </div>
             );

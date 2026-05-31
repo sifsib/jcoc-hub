@@ -71,6 +71,7 @@ export default function GroupsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
   const [filterType, setFilterType] = useState<GroupType | "all">("all");
+  const [nameSearch, setNameSearch] = useState("");
 
   useEffect(() => {
     if (!tenantId) return;
@@ -109,7 +110,9 @@ export default function GroupsPage() {
     }
   }
 
-  const filtered = filterType === "all" ? groups : groups.filter((g) => g.type === filterType);
+  const filtered = groups
+    .filter((g) => filterType === "all" || g.type === filterType)
+    .filter((g) => !nameSearch.trim() || g.name.toLowerCase().includes(nameSearch.toLowerCase()));
 
   if (userLoading || loading) {
     return (
@@ -136,6 +139,19 @@ export default function GroupsPage() {
           <span className="text-lg leading-none">+</span> New Group
         </button>
       </div>
+
+      {/* Name search */}
+      {groups.length > 0 && (
+        <div className="mb-4">
+          <input
+            type="text"
+            value={nameSearch}
+            onChange={(e) => setNameSearch(e.target.value)}
+            placeholder="Search groups by name..."
+            className="w-full max-w-sm border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+      )}
 
       {/* Type filter */}
       {groups.length > 0 && (

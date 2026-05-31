@@ -139,11 +139,16 @@ export default function VolunteersPage() {
     );
 
     const unsubMembers = onSnapshot(
-      query(collection(db, "tenants", tenantId, "members"), where("role", "!=", "archived")),
+      query(collection(db, "members"), where("tenantId", "==", tenantId)),
       (snap) =>
         setMembers(
           snap.docs
-            .map((d) => ({ id: d.id, fullName: d.data().fullName || "", role: d.data().role || "" }))
+            .map((d) => {
+              const data = d.data();
+              const fullName = data.fullName || `${data.firstName || ""} ${data.lastName || ""}`.trim();
+              return { id: d.id, fullName, role: data.role || "" };
+            })
+            .filter((m) => m.fullName && m.role !== "archived")
             .sort((a, b) => a.fullName.localeCompare(b.fullName))
         )
     );

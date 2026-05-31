@@ -118,6 +118,8 @@ export default function WorshipPage() {
 
   const [setlistNotesDraft, setSetlistNotesDraft] = useState("");
   const [savingSetlistNotes, setSavingSetlistNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
+  const [notesSaveError, setNotesSaveError] = useState("");
 
   const canManage = appUser?.role === "owner" || appUser?.role === "admin" || appUser?.role === "member_manager";
 
@@ -270,10 +272,19 @@ export default function WorshipPage() {
   async function saveSetlistNotes() {
     if (!tenantId || !selectedSetlist) return;
     setSavingSetlistNotes(true);
-    await updateDoc(doc(db, "tenants", tenantId, "setlists", selectedSetlist.id), {
-      notes: setlistNotesDraft,
-    });
-    setSavingSetlistNotes(false);
+    setNotesSaveError("");
+    try {
+      await updateDoc(doc(db, "tenants", tenantId, "setlists", selectedSetlist.id), {
+        notes: setlistNotesDraft,
+      });
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2500);
+    } catch (e) {
+      console.error("saveSetlistNotes error:", e);
+      setNotesSaveError("Failed to save. Please try again.");
+    } finally {
+      setSavingSetlistNotes(false);
+    }
   }
 
   // Sync notes draft when setlist changes
@@ -548,13 +559,16 @@ export default function WorshipPage() {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-400 resize-none"
                   />
                   {canManage && (
-                    <div className="flex justify-end">
+                    <div className="flex items-center justify-end gap-3">
+                      {notesSaveError && (
+                        <p className="text-xs text-red-500">{notesSaveError}</p>
+                      )}
                       <button
                         onClick={saveSetlistNotes}
                         disabled={savingSetlistNotes}
                         className="px-4 py-1.5 bg-gray-800 text-white text-xs font-semibold rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors"
                       >
-                        {savingSetlistNotes ? "Saving..." : "Save Notes"}
+                        {savingSetlistNotes ? "Saving..." : notesSaved ? "Saved!" : "Save Notes"}
                       </button>
                     </div>
                   )}

@@ -456,10 +456,9 @@ service cloud.firestore {
     // ============================================
     match /forms/{id} {
 
-      // Tenant admins/owners/member_managers can read, create, update, delete their forms
-      allow read: if isSignedIn()
-                  && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      // Public: anyone can read any form (active check is enforced in app code,
+      // so inactive forms show "Form is closed" instead of "not found")
+      allow read: if true;
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
@@ -473,9 +472,6 @@ service cloud.firestore {
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'));
-
-      // Public: anyone can read an active form (to render the public form page)
-      allow read: if resource.data.active == true;
     }
 
 
@@ -515,8 +511,11 @@ service cloud.firestore {
     match /workflow_steps/{id} {
       allow read: if isSignedIn() && tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-      allow write: if isSignedIn() && tenantAllowedWrite(request.resource.data)
-                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      // create/update: check new data; delete: check existing resource (request.resource.data is null on delete)
+      allow create, update: if isSignedIn() && tenantAllowedWrite(request.resource.data)
+                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow delete: if isSignedIn() && tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
     }
 
     match /workflow_instances/{id} {
@@ -546,6 +545,9 @@ service cloud.firestore {
     // EVENTS
     // ============================================
     match /events/{id} {
+      // Public can read active events so the RSVP link page can render event details
+      allow read: if resource.data.active == true;
+
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'));
@@ -572,6 +574,9 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'));
+
+      // Public RSVP link: anyone can submit an RSVP without being logged in
+      allow create: if true;
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
