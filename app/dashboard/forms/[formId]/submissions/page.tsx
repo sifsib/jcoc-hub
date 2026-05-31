@@ -9,7 +9,6 @@ import {
   collection,
   query,
   where,
-  orderBy,
   onSnapshot,
 } from "firebase/firestore";
 
@@ -49,19 +48,21 @@ export default function SubmissionsPage() {
       }
     });
 
+    // No orderBy — avoids composite index requirement; sort client-side instead
     const q = query(
       collection(db, "form_submissions"),
-      where("formId", "==", formId),
-      orderBy("submittedAt", "desc")
+      where("formId", "==", formId)
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setSubmissions(
-        snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<Submission, "id">),
-        }))
-      );
+      const docs = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<Submission, "id">) }))
+        .sort((a, b) => {
+          const ta = a.submittedAt?.toMillis?.() ?? 0;
+          const tb = b.submittedAt?.toMillis?.() ?? 0;
+          return tb - ta; // newest first
+        });
+      setSubmissions(docs);
       setLoading(false);
     });
 

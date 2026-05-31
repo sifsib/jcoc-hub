@@ -188,6 +188,12 @@ export default function FormEditorPage() {
           ← Back to Forms
         </button>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push(`/dashboard/forms/${formId}/submissions`)}
+            className="text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300 px-3 py-2 rounded-lg transition-colors"
+          >
+            View Responses
+          </button>
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
             <div
               onClick={() => setForm({ ...form, active: !form.active })}
