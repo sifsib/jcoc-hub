@@ -11,10 +11,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
 
 const INTERNAL_EMAIL = "info@kfwc.org.za";
-const SESSION_DURATION_MS = 60 * 60 * 24 * 14 * 1000; // 14 days
 
 function addMonths(date: Date, n: number): Date {
   const d = new Date(date);
@@ -84,7 +82,7 @@ export async function POST(req: NextRequest) {
 
     const uid = newUser.uid;
     const tenantId = uid;
-    const ts = FieldValue.serverTimestamp();
+    const ts = new Date().toISOString();
 
     // 2. Create tenant document
     await adminDb.collection("tenants").doc(tenantId).set({
