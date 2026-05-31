@@ -68,7 +68,7 @@ export default function LoginPage() {
             <label className="text-sm font-medium block mb-1">Email Address</label>
             <input
               type="email"
-              placeholder="info@kfwc.org.za"
+              placeholder="admin@yourchurch.co.za"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full border p-2 rounded focus:outline-blue-500"

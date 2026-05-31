@@ -97,7 +97,7 @@ export default function SignupPage() {
               </label>
               <input
                 type="text"
-                placeholder="e.g. Grace Community Church"
+                placeholder="e.g. Abundant Life Church"
                 value={form.churchName}
                 onChange={set("churchName")}
                 required
@@ -112,7 +112,7 @@ export default function SignupPage() {
               </label>
               <input
                 type="text"
-                placeholder="e.g. Pastor John Dube"
+                placeholder="e.g. Pastor Thabo Mokoena"
                 value={form.adminName}
                 onChange={set("adminName")}
                 required
@@ -127,7 +127,7 @@ export default function SignupPage() {
               </label>
               <input
                 type="email"
-                placeholder="pastor@yourchurch.co.za"
+                placeholder="admin@yourchurch.co.za"
                 value={form.email}
                 onChange={set("email")}
                 required
@@ -158,7 +158,7 @@ export default function SignupPage() {
               </label>
               <input
                 type="text"
-                placeholder="e.g. KEREKEBETA2026"
+                placeholder="Enter your code here"
                 value={form.accessCode}
                 onChange={set("accessCode")}
                 disabled={loading}

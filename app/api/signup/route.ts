@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
       invitedBy: null,
     });
 
-    // 4. Log the signup
+    // 4. Log the signup — source: "self_service" triggers the welcome email Cloud Function
     await adminDb.collection("signups").add({
       uid, tenantId,
       churchName: churchName.trim(),
@@ -123,15 +123,12 @@ export async function POST(req: NextRequest) {
       accountType,
       ...billing,
       status: "pending_welcome",
-      source: "self_service_hub",
+      source: "self_service",
       createdAt: ts,
     });
 
-    // 5. Create session cookie so user lands on dashboard immediately
-    const customToken = await adminAuth.createCustomToken(uid);
-    // Note: session cookie requires an ID token (from client sign-in).
-    // We return success + accountType; the client signs in and then calls /api/login.
-    return NextResponse.json({ success: true, tenantId, accountType, customToken }, { status: 201 });
+    // Client will signInWithEmailAndPassword then call /api/login for the session cookie
+    return NextResponse.json({ success: true, tenantId, accountType }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/signup] Error:", err);
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
