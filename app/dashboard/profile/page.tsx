@@ -13,6 +13,19 @@ interface ProfileData {
   churchName: string;
 }
 
+interface BankDetails {
+  bankName: string;
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankBranchCode: string;
+}
+
+interface PayFastCredentials {
+  payfastMerchantId: string;
+  payfastMerchantKey: string;
+  payfastPassphrase: string;
+}
+
 interface ServiceSession {
   id: string;          // uuid-lite: Date.now() string
   day: string;         // e.g. "Sunday"
@@ -39,6 +52,23 @@ export default function ProfilePage() {
   const [pwSaved, setPwSaved] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
 
+  // Banking details
+  const [bankDetails, setBankDetails] = useState<BankDetails>({
+    bankName: "", bankAccountName: "", bankAccountNumber: "", bankBranchCode: "",
+  });
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankSaved, setBankSaved] = useState(false);
+  const [bankError, setBankError] = useState("");
+
+  // PayFast credentials
+  const [payfast, setPayfast] = useState<PayFastCredentials>({
+    payfastMerchantId: "", payfastMerchantKey: "", payfastPassphrase: "",
+  });
+  const [payfastSaving, setPayfastSaving] = useState(false);
+  const [payfastSaved, setPayfastSaved] = useState(false);
+  const [payfastError, setPayfastError] = useState("");
+  const [showPayfastKey, setShowPayfastKey] = useState(false);
+
   // Service schedule
   const [sessions, setSessions] = useState<ServiceSession[]>([]);
   const [sessionsSaving, setSessionsSaving] = useState(false);
@@ -63,6 +93,17 @@ export default function ProfilePage() {
           const td = tenantDoc.data() || {};
           churchName = td.name || "";
           loadedSessions = td.serviceSessions || [];
+          setBankDetails({
+            bankName: td.bankName || "",
+            bankAccountName: td.bankAccountName || "",
+            bankAccountNumber: td.bankAccountNumber || "",
+            bankBranchCode: td.bankBranchCode || "",
+          });
+          setPayfast({
+            payfastMerchantId: td.payfastMerchantId || "",
+            payfastMerchantKey: td.payfastMerchantKey || "",
+            payfastPassphrase: td.payfastPassphrase || "",
+          });
         }
 
         const p: ProfileData = {
@@ -112,6 +153,53 @@ export default function ProfilePage() {
       setSessionsError("Could not save. Check permissions and try again.");
     } finally {
       setSessionsSaving(false);
+    }
+  };
+
+  const handleSaveBankDetails = async () => {
+    if (!profile?.tenantId) return;
+    setBankSaving(true);
+    setBankError("");
+    setBankSaved(false);
+    try {
+      await updateDoc(doc(db, "tenants", profile.tenantId), {
+        bankName: bankDetails.bankName.trim(),
+        bankAccountName: bankDetails.bankAccountName.trim(),
+        bankAccountNumber: bankDetails.bankAccountNumber.trim(),
+        bankBranchCode: bankDetails.bankBranchCode.trim(),
+      });
+      setBankSaved(true);
+      setTimeout(() => setBankSaved(false), 3000);
+    } catch (err) {
+      console.error("Save bank details failed:", err);
+      setBankError("Could not save. Check permissions and try again.");
+    } finally {
+      setBankSaving(false);
+    }
+  };
+
+  const handleSavePayfast = async () => {
+    if (!profile?.tenantId) return;
+    if (!payfast.payfastMerchantId.trim() || !payfast.payfastMerchantKey.trim()) {
+      setPayfastError("Merchant ID and Merchant Key are required.");
+      return;
+    }
+    setPayfastSaving(true);
+    setPayfastError("");
+    setPayfastSaved(false);
+    try {
+      await updateDoc(doc(db, "tenants", profile.tenantId), {
+        payfastMerchantId: payfast.payfastMerchantId.trim(),
+        payfastMerchantKey: payfast.payfastMerchantKey.trim(),
+        payfastPassphrase: payfast.payfastPassphrase.trim(),
+      });
+      setPayfastSaved(true);
+      setTimeout(() => setPayfastSaved(false), 3000);
+    } catch (err) {
+      console.error("Save PayFast credentials failed:", err);
+      setPayfastError("Could not save. Check permissions and try again.");
+    } finally {
+      setPayfastSaving(false);
     }
   };
 
@@ -372,6 +460,148 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Banking Details — owner/admin only */}
+      {canEditSessions && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          <div>
+            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Banking Details</h2>
+            <p className="text-xs text-gray-400 mt-1">
+              Shown to donors who choose EFT on your giving page. Leave blank if you only want card payments.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(
+              [
+                { key: "bankName", label: "Bank Name", placeholder: "e.g. FNB, Absa, Standard Bank" },
+                { key: "bankAccountName", label: "Account Name", placeholder: "e.g. KFWC Church Account" },
+                { key: "bankAccountNumber", label: "Account Number", placeholder: "e.g. 62012345678" },
+                { key: "bankBranchCode", label: "Branch Code", placeholder: "e.g. 250655" },
+              ] as { key: keyof BankDetails; label: string; placeholder: string }[]
+            ).map(({ key, label, placeholder }) => (
+              <div key={key}>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">{label}</label>
+                <input
+                  type="text"
+                  value={bankDetails[key]}
+                  onChange={(e) => setBankDetails((prev) => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                />
+              </div>
+            ))}
+          </div>
+
+          {bankError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{bankError}</p>
+          )}
+          {bankSaved && (
+            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">Banking details saved.</p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveBankDetails}
+              disabled={bankSaving}
+              className="px-8 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition disabled:opacity-50"
+            >
+              {bankSaving ? "Saving..." : "Save Banking Details"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PayFast Online Giving Setup — owner/admin only */}
+      {canEditSessions && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          <div>
+            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Online Giving Setup</h2>
+            <p className="text-xs text-gray-400 mt-1">
+              Your PayFast merchant credentials. Card payments from donors go directly into your PayFast account and settle to your church bank account. Kereke Hub never holds your funds.
+            </p>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+            <strong>Where to find these:</strong> Log in at{" "}
+            <a href="https://www.payfast.co.za" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+              payfast.co.za
+            </a>{" "}
+            then go to Settings. Your Merchant ID and Key are displayed there. Set a Passphrase in Security settings and enter the same one here.
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Merchant ID</label>
+              <input
+                type="text"
+                value={payfast.payfastMerchantId}
+                onChange={(e) => setPayfast((p) => ({ ...p, payfastMerchantId: e.target.value }))}
+                placeholder="e.g. 10012345"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Merchant Key</label>
+              <div className="relative">
+                <input
+                  type={showPayfastKey ? "text" : "password"}
+                  value={payfast.payfastMerchantKey}
+                  onChange={(e) => setPayfast((p) => ({ ...p, payfastMerchantKey: e.target.value }))}
+                  placeholder="Your merchant key"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-20 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPayfastKey((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 font-medium"
+                >
+                  {showPayfastKey ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+                Passphrase <span className="text-gray-400 font-normal">(optional but recommended)</span>
+              </label>
+              <input
+                type="password"
+                value={payfast.payfastPassphrase}
+                onChange={(e) => setPayfast((p) => ({ ...p, payfastPassphrase: e.target.value }))}
+                placeholder="Your PayFast passphrase"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
+            </div>
+          </div>
+
+          {payfast.payfastMerchantId && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-600">
+              Your giving page link:{" "}
+              <span className="font-mono font-semibold text-emerald-700">
+                kerekehub.co.za/give/{profile?.tenantId}
+              </span>
+              {" "}&mdash; share this on your website or WhatsApp group.
+            </div>
+          )}
+
+          {payfastError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{payfastError}</p>
+          )}
+          {payfastSaved && (
+            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">PayFast credentials saved. Card giving is now live.</p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSavePayfast}
+              disabled={payfastSaving}
+              className="px-8 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition disabled:opacity-50"
+            >
+              {payfastSaving ? "Saving..." : "Save PayFast Credentials"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Change password */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">

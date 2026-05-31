@@ -45,16 +45,16 @@ function getNextBillingEvent(t: TenantBilling): {
     return { label: "Free forever", date: null, amount: 0 };
   }
   if (t.accountType === "beta") {
-    return { label: "R139/mo starts", date: t.trialEndsAt, amount: 139 };
+    return { label: "R159/mo starts", date: t.trialEndsAt, amount: 159 };
   }
   // standard
   if (t.billingPhase === "trial" && t.trialEndsAt) {
     return { label: "Evaluation period starts (R99/mo)", date: t.trialEndsAt, amount: 99 };
   }
   if (t.billingPhase === "evaluation" && t.evaluationEndsAt) {
-    return { label: "Full rate starts (R139/mo)", date: t.evaluationEndsAt, amount: 139 };
+    return { label: "Full rate starts (R159/mo)", date: t.evaluationEndsAt, amount: 159 };
   }
-  return { label: "Full rate", date: null, amount: 139 };
+  return { label: "Full rate", date: null, amount: 159 };
 }
 
 export default function BillingPage() {
@@ -169,7 +169,7 @@ export default function BillingPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Month 5+</span>
-              <span className="text-white font-semibold">R139/mo</span>
+              <span className="text-white font-semibold">R159/mo</span>
             </div>
           </div>
         ) : (
@@ -184,7 +184,7 @@ export default function BillingPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Month 5+</span>
-              <span className="text-white font-semibold">R139/mo</span>
+              <span className="text-white font-semibold">R159/mo</span>
             </div>
           </div>
         )}

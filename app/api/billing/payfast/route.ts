@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Determine the amount to charge
-  let recurringAmount = 139; // default full rate
+  let recurringAmount = 159; // default full rate
   if (tenant.accountType === "standard" && tenant.billingPhase === "trial") {
     recurringAmount = 99; // moves to evaluation rate first
   }

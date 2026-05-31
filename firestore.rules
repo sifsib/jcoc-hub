@@ -379,6 +379,58 @@ service cloud.firestore {
 
 
     // ============================================
+    // ONLINE GIVING RECORDS
+    // Public: anyone can create (unauthenticated giving form)
+    // Finance roles: read their own tenant's records
+    // Super admin: full access
+    // ============================================
+    match /giving_records/{id} {
+
+      // Public giving form writes without auth
+      allow create: if true;
+
+      // Super admin full access
+      allow read, update, delete: if isSignedIn() && isSuperAdmin();
+
+      // Finance roles can read their own church records
+      allow read: if isSignedIn()
+                  && resource.data.tenantId == userTenantId()
+                  && canReadFinance();
+
+      // Finance roles can update (e.g. marking EFT as confirmed)
+      allow update: if isSignedIn()
+                    && resource.data.tenantId == userTenantId()
+                    && canManageFinance();
+    }
+
+
+    // ============================================
+    // FINANCE CATEGORIES (configurable per tenant)
+    // Finance roles: read
+    // Owner/Admin: full CRUD
+    // Public giving API: read (via admin SDK, bypasses rules)
+    // ============================================
+    match /finance_categories/{id} {
+
+      allow read: if isSignedIn()
+                  && resource.data.tenantId == userTenantId()
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && request.resource.data.tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
+
+      allow update: if isSignedIn()
+                    && resource.data.tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
+
+      allow delete: if isSignedIn()
+                    && resource.data.tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
+    }
+
+
+    // ============================================
     // CARE TIER FOLLOW-UP NOTES
     // ============================================
     match /careTierNotes/{id} {
