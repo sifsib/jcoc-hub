@@ -174,9 +174,13 @@ export default function GroupDetailPage() {
 
   // Load attendance records when a session is opened
   useEffect(() => {
-    if (!activeSessionId) return;
+    if (!activeSessionId || !tenantId) return;
     getDocs(
-      query(collection(db, "group_attendance_records"), where("sessionId", "==", activeSessionId))
+      query(
+        collection(db, "group_attendance_records"),
+        where("tenantId", "==", tenantId),
+        where("sessionId", "==", activeSessionId)
+      )
     ).then((snap) => {
       const records: Record<string, boolean> = {};
       snap.docs.forEach((d) => {
@@ -274,7 +278,11 @@ export default function GroupDetailPage() {
 
       // Update each record
       const existingSnap = await getDocs(
-        query(collection(db, "group_attendance_records"), where("sessionId", "==", activeSessionId))
+        query(
+          collection(db, "group_attendance_records"),
+          where("tenantId", "==", tenantId),
+          where("sessionId", "==", activeSessionId)
+        )
       );
       const batch = writeBatch(db);
       existingSnap.docs.forEach((d) => {

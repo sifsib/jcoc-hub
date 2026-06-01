@@ -159,9 +159,10 @@ export default function WorkflowBuilderPage() {
 
   // Live steps — no orderBy to avoid composite index; sort by .order client-side
   useEffect(() => {
-    if (!workflowId) return;
+    if (!workflowId || !tenantId) return;
     const q = query(
       collection(db, "workflow_steps"),
+      where("tenantId", "==", tenantId),
       where("workflowId", "==", workflowId)
     );
     return onSnapshot(q, (snap) => {
@@ -170,13 +171,14 @@ export default function WorkflowBuilderPage() {
         .sort((a, b) => a.order - b.order);
       setSteps(sorted);
     });
-  }, [workflowId]);
+  }, [workflowId, tenantId]);
 
   // Live instances — no orderBy to avoid composite index; sort by startedAt client-side
   useEffect(() => {
-    if (!workflowId) return;
+    if (!workflowId || !tenantId) return;
     const q = query(
       collection(db, "workflow_instances"),
+      where("tenantId", "==", tenantId),
       where("workflowId", "==", workflowId)
     );
     return onSnapshot(q, (snap) => {
@@ -189,7 +191,7 @@ export default function WorkflowBuilderPage() {
         });
       setInstances(sorted);
     });
-  }, [workflowId]);
+  }, [workflowId, tenantId]);
 
   // Load roster for manual start
   useEffect(() => {
@@ -212,10 +214,11 @@ export default function WorkflowBuilderPage() {
 
   // Load instance steps when expanded
   useEffect(() => {
-    if (!expandedInstance || instanceSteps[expandedInstance]) return;
+    if (!expandedInstance || instanceSteps[expandedInstance] || !tenantId) return;
     getDocs(
       query(
         collection(db, "workflow_instance_steps"),
+        where("tenantId", "==", tenantId),
         where("instanceId", "==", expandedInstance),
         orderBy("stepOrder", "asc")
       )
