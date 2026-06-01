@@ -95,6 +95,7 @@ export default function EventDetailPage() {
   const [settings, setSettings] = useState<Partial<ChurchEvent>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [rsvpLinkCopied, setRsvpLinkCopied] = useState(false);
 
   useEffect(() => {
     if (!eventId) return;
@@ -109,16 +110,17 @@ export default function EventDetailPage() {
   }, [eventId]);
 
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventId || !tenantId) return;
     const q = query(
       collection(db, "event_rsvps"),
+      where("tenantId", "==", tenantId),
       where("eventId", "==", eventId),
       orderBy("respondedAt", "asc")
     );
     return onSnapshot(q, (snap) => {
       setRsvps(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Rsvp, "id">) })));
     });
-  }, [eventId]);
+  }, [eventId, tenantId]);
 
   useEffect(() => {
     if (!tenantId || !showAddRsvp) return;
@@ -252,6 +254,17 @@ export default function EventDetailPage() {
             </span>
           </div>
         </div>
+        {/* Copy RSVP Link */}
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(`${window.location.origin}/rsvp/${eventId}`);
+            setRsvpLinkCopied(true);
+            setTimeout(() => setRsvpLinkCopied(false), 2500);
+          }}
+          className="shrink-0 flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-colors"
+        >
+          🔗 {rsvpLinkCopied ? "Link Copied!" : "Copy RSVP Link"}
+        </button>
       </div>
 
       {/* Tabs */}

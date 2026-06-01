@@ -125,9 +125,10 @@ export default function GroupDetailPage() {
 
   // Live group members — no orderBy to avoid composite index; sort by joinedAt client-side
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !tenantId) return;
     const q = query(
       collection(db, "group_members"),
+      where("tenantId", "==", tenantId),
       where("groupId", "==", groupId)
     );
     return onSnapshot(q, (snap) => {
@@ -140,13 +141,14 @@ export default function GroupDetailPage() {
         });
       setGroupMembers(sorted);
     });
-  }, [groupId]);
+  }, [groupId, tenantId]);
 
   // Live attendance sessions — no orderBy to avoid composite index; sort by date client-side
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !tenantId) return;
     const q = query(
       collection(db, "group_attendance"),
+      where("tenantId", "==", tenantId),
       where("groupId", "==", groupId)
     );
     return onSnapshot(q, (snap) => {
@@ -155,7 +157,7 @@ export default function GroupDetailPage() {
         .sort((a, b) => b.date.localeCompare(a.date)); // newest first
       setSessions(sorted);
     });
-  }, [groupId]);
+  }, [groupId, tenantId]);
 
   // Load roster for add-member search (no orderBy to avoid composite index requirement — sort client-side)
   useEffect(() => {
