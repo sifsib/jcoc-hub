@@ -492,9 +492,13 @@ export default function ManageMembershipPage() {
 
   const openEdit = (m: Member) => {
     setEditingMemberId(m.id);
+    // Imported members may only have fullName — fall back to splitting it
+    const parts = (m.fullName || "").trim().split(/\s+/);
+    const fallbackFirst = parts[0] || "";
+    const fallbackLast = parts.slice(1).join(" ") || "";
     setPrimary({
-      firstName: m.firstName || "",
-      lastName: m.lastName || "",
+      firstName: m.firstName || fallbackFirst,
+      lastName: m.lastName || fallbackLast,
       dob: m.dob || "",
       gender: m.gender || "",
       email: m.email || "",
@@ -1113,7 +1117,23 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
           {/* ── CSV Export button ── */}
           <ExportCSVButton
-            data={members as unknown as Record<string, unknown>[]}
+            data={members.map(m => ({
+              fullName: m.fullName,
+              email: m.email,
+              phone: m.phone,
+              role: m.role,
+              membershipType: m.membershipType,
+              gender: m.gender,
+              dob: m.dob,
+              maritalStatus: m.maritalStatus,
+              cellRegion: m.cellRegion,
+              ministryGroup: m.ministryGroup,
+              addressLine1: (m as any).address?.line1 || "",
+              addressLine2: (m as any).address?.line2 || "",
+              suburb: (m as any).address?.suburb || "",
+              town: (m as any).address?.town || "",
+              postalCode: (m as any).address?.postalCode || "",
+            }))}
             filename="members"
             columns={[
               { key: "fullName", label: "Full Name" },
@@ -1123,9 +1143,14 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               { key: "membershipType", label: "Membership Type" },
               { key: "gender", label: "Gender" },
               { key: "dob", label: "Date of Birth" },
+              { key: "maritalStatus", label: "Marital Status" },
               { key: "cellRegion", label: "Cell Region / Branch" },
               { key: "ministryGroup", label: "Ministry Group" },
-              { key: "maritalStatus", label: "Marital Status" },
+              { key: "addressLine1", label: "Street Address" },
+              { key: "addressLine2", label: "Address Line 2" },
+              { key: "suburb", label: "Suburb" },
+              { key: "town", label: "Town / City" },
+              { key: "postalCode", label: "Postal Code" },
             ]}
           />
 
