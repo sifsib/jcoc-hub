@@ -7,9 +7,12 @@ import {
   getDocs,
   query,
   orderBy,
+  where,
   doc,
   getDoc,
   updateDoc,
+  deleteDoc,
+  writeBatch,
 } from "firebase/firestore";
 
 interface TenantRecord {
@@ -79,6 +82,13 @@ export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("tenants");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    tenantId: string;
+    tenantName: string;
+    step: 1 | 2;
+    inputValue: string;
+    deleting: boolean;
+  } | null>(null);
   const [ticketStatusFilter, setTicketStatusFilter] = useState<string>("all");
 
   useEffect(() => {
@@ -216,6 +226,45 @@ export default function AdminSettingsPage() {
       console.error("Failed to update tenant status:", err);
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const deleteTenant = async (tenantId: string) => {
+    if (!deleteConfirm) return;
+    setDeleteConfirm(prev => prev ? { ...prev, deleting: true } : null);
+    try {
+      // Collections that are scoped by tenantId
+      const tenantCollections = [
+        "members", "households", "events", "event_rsvps",
+        "attendance", "groups", "group_members", "group_attendance",
+        "group_attendance_records", "visitors", "careTierNotes",
+        "forms", "form_submissions", "workflows", "workflow_steps",
+        "workflow_instances", "workflow_instance_steps",
+        "finance_categories", "transactions", "giving_records",
+        "communications",
+      ];
+      for (const col of tenantCollections) {
+        const snap = await getDocs(query(collection(db, col), where("tenantId", "==", tenantId)));
+        if (!snap.empty) {
+          const batch = writeBatch(db);
+          snap.docs.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+      // Delete users belonging to this tenant
+      const userSnap = await getDocs(query(collection(db, "users"), where("tenantId", "==", tenantId)));
+      if (!userSnap.empty) {
+        const batch = writeBatch(db);
+        userSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+      // Delete the tenant document itself
+      await deleteDoc(doc(db, "tenants", tenantId));
+      setTenants(prev => prev.filter(t => t.id !== tenantId));
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error("Delete tenant failed:", err);
+      setDeleteConfirm(prev => prev ? { ...prev, deleting: false } : null);
     }
   };
 
@@ -454,23 +503,31 @@ export default function AdminSettingsPage() {
                       <td className="px-6 py-4 text-gray-600 capitalize">{tenant.plan}</td>
                       <td className="px-6 py-4 text-gray-500">{formatDate(tenant.createdAt)}</td>
                       <td className="px-6 py-4 text-right">
-                        {tenant.status !== "suspended" ? (
+                        <div className="flex items-center justify-end gap-2">
+                          {tenant.status !== "suspended" ? (
+                            <button
+                              onClick={() => updateTenantStatus(tenant.id, "suspended")}
+                              disabled={actionLoading === tenant.id}
+                              className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                            >
+                              {actionLoading === tenant.id ? "..." : "Suspend"}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => updateTenantStatus(tenant.id, "active")}
+                              disabled={actionLoading === tenant.id}
+                              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                            >
+                              {actionLoading === tenant.id ? "..." : "Reactivate"}
+                            </button>
+                          )}
                           <button
-                            onClick={() => updateTenantStatus(tenant.id, "suspended")}
-                            disabled={actionLoading === tenant.id}
-                            className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                            onClick={() => setDeleteConfirm({ tenantId: tenant.id, tenantName: tenant.name, step: 1, inputValue: "", deleting: false })}
+                            className="text-xs font-bold text-gray-500 hover:text-red-700 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-3 py-1.5 rounded-lg transition"
                           >
-                            {actionLoading === tenant.id ? "..." : "Suspend"}
+                            Delete
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => updateTenantStatus(tenant.id, "active")}
-                            disabled={actionLoading === tenant.id}
-                            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
-                          >
-                            {actionLoading === tenant.id ? "..." : "Reactivate"}
-                          </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -748,6 +805,73 @@ export default function AdminSettingsPage() {
           );
         })()}
       </div>
+      {/* ── Delete Tenant Modal ── */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md mx-4 p-6 flex flex-col gap-5">
+
+            {/* Step 1: Warning */}
+            {deleteConfirm.step === 1 && (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-lg">🗑️</div>
+                  <div>
+                    <p className="text-base font-bold text-gray-900">Delete Church Account</p>
+                    <p className="text-sm text-gray-500 mt-0.5">This will permanently delete <strong>{deleteConfirm.tenantName}</strong> and all their data — members, attendance, finance records, and everything else. This cannot be undone.</p>
+                  </div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-medium">
+                  All church data will be wiped from the platform permanently.
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                  <button onClick={() => setDeleteConfirm(prev => prev ? { ...prev, step: 2 } : null)} className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition">
+                    Yes, I want to delete this church
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2: Type church name to confirm */}
+            {deleteConfirm.step === 2 && (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-lg">⚠️</div>
+                  <div>
+                    <p className="text-base font-bold text-gray-900">Final Confirmation</p>
+                    <p className="text-sm text-gray-500 mt-0.5">Type the church name exactly to confirm deletion.</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Type <span className="text-red-600 font-mono">{deleteConfirm.tenantName}</span> to confirm
+                  </label>
+                  <input
+                    autoFocus
+                    value={deleteConfirm.inputValue}
+                    onChange={e => setDeleteConfirm(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-400"
+                    placeholder={deleteConfirm.tenantName}
+                  />
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                  <button
+                    onClick={() => deleteTenant(deleteConfirm.tenantId)}
+                    disabled={deleteConfirm.inputValue !== deleteConfirm.tenantName || deleteConfirm.deleting}
+                    className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {deleteConfirm.deleting && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                    {deleteConfirm.deleting ? "Deleting..." : "Permanently Delete"}
+                  </button>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
