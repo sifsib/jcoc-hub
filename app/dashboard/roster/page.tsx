@@ -89,6 +89,15 @@ function normalizeDob(val: any): string {
   return str;
 }
 
+function isUnder16(dob?: string): boolean {
+  if (!dob) return false;
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return false;
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 16);
+  return birth > cutoff;
+}
+
 function fmtPhone(raw: string): string {
   const c = raw.trim().replace(/\s+/g, "");
   return c.startsWith("0") ? "27" + c.substring(1) : c;
@@ -170,12 +179,13 @@ function MinChecks({ list, sel: selected, on }: { list: string[]; sel: string[];
 // ─── Full member input block (reused for primary + spouse) ────────────────────
 
 function MemberBlock({
-  data, set, config, showFaith = true,
+  data, set, config, showFaith = true, ageRestricted = false,
 }: {
   data: ReturnType<typeof emptyPerson>;
   set: (k: string, v: any) => void;
   config: TenantConfig;
   showFaith?: boolean;
+  ageRestricted?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -195,8 +205,8 @@ function MemberBlock({
       <F label="Email Address">
         <input type="email" value={data.email} onChange={e => set("email", e.target.value)} placeholder="e.g. jane@gmail.com (optional)" className={inp} />
       </F>
-      <F label="Contact Number" req>
-        <input type="tel" value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="e.g. 0812345678" className={inp} required />
+      <F label="Contact Number" req={!ageRestricted}>
+        <input type="tel" value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="e.g. 0812345678" className={inp} required={!ageRestricted} />
       </F>
       <F label="Residential Address" req>
         <AddrBlock v={data.address} on={(k, v) => set("address", { ...data.address, [k]: v })} />
@@ -814,7 +824,7 @@ export default function ManageMembershipPage() {
           {/* ── SECTION 1: Member Details ── */}
           <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
             <SecHead n={next()} title="Member Details" sub="Primary member's personal information" />
-            <MemberBlock data={primary} set={setP} config={config} showFaith={false} />
+            <MemberBlock data={primary} set={setP} config={config} showFaith={false} ageRestricted={isUnder16(primary.dob)} />
             <F label="Marital Status" req>
               <select value={primary.maritalStatus} onChange={e => setP("maritalStatus", e.target.value)} className={sel} required>
                 <option value="">Select</option>
@@ -827,22 +837,28 @@ export default function ManageMembershipPage() {
           </div>
 
           {/* ── SECTION 2: Faith & Membership (primary) ── */}
+          {(() => { const u16 = isUnder16(primary.dob); return (
           <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
             <SecHead n={next()} title="Faith & Membership" />
+            {u16 && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+                Faith and membership fields are optional for members under 16 as they cannot yet make these decisions independently.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-4">
-              <F label="Born Again?" req>
-                <select value={primary.bornAgain} onChange={e => setP("bornAgain", e.target.value)} className={sel} required>
+              <F label="Born Again?" req={!u16}>
+                <select value={primary.bornAgain} onChange={e => setP("bornAgain", e.target.value)} className={sel} required={!u16}>
                   <option value="">Select</option><option>Yes</option><option>No</option>
                 </select>
               </F>
-              <F label="Water Baptized?" req>
-                <select value={primary.waterBaptized} onChange={e => setP("waterBaptized", e.target.value)} className={sel} required>
+              <F label="Water Baptized?" req={!u16}>
+                <select value={primary.waterBaptized} onChange={e => setP("waterBaptized", e.target.value)} className={sel} required={!u16}>
                   <option value="">Select</option><option>Yes</option><option>No</option>
                 </select>
               </F>
             </div>
-            <F label="Type of Membership Sought" req>
-              <select value={primary.membershipType} onChange={e => setP("membershipType", e.target.value)} className={sel} required>
+            <F label="Type of Membership Sought" req={!u16}>
+              <select value={primary.membershipType} onChange={e => setP("membershipType", e.target.value)} className={sel} required={!u16}>
                 <option value="">Select</option>
                 {config.membershipTypes.map(t => <option key={t}>{t}</option>)}
               </select>
@@ -851,6 +867,7 @@ export default function ManageMembershipPage() {
               <MinChecks list={config.ministries} sel={primary.ministries} on={v => setP("ministries", v)} />
             </F>
           </div>
+          ); })()}
 
           {/* ── SECTION 3: Spouse (conditional on married, new registrations only) ── */}
           {!isEditing && isMarried && (
