@@ -609,6 +609,7 @@ export default function ManageMembershipPage() {
         const lastName = String(row.lastName || row["Last Name"] || row.surname || "").trim();
         const fullName = String(row.fullName || row["Full Name"] || `${firstName} ${lastName}`).trim();
         if (!fullName) continue;
+        const rawAddress = String(row.address || row["Address"] || row["Residential Address"] || "").trim();
         await addDoc(collection(db, "members"), {
           tenantId: appUser.tenantId,
           fullName, firstName, lastName,
@@ -618,6 +619,9 @@ export default function ManageMembershipPage() {
           gender: String(row.gender || row["Gender"] || ""),
           maritalStatus: String(row.maritalStatus || row["Marital Status"] || ""),
           membershipType: String(row.membershipType || row["Membership Type"] || ""),
+          cellRegion: String(row.cellRegion || row["Cell Region / Branch"] || row["Cell Region"] || "").trim(),
+          ministryGroup: String(row.ministryGroup || row["Ministry Group"] || "").trim(),
+          address: { line1: rawAddress, line2: "", suburb: "", town: "", postalCode: "" },
           faithStatus: {
             bornAgain: String(row.bornAgain || ""),
             waterBaptized: String(row.waterBaptized || ""),
@@ -1143,40 +1147,36 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
           {/* ── CSV Export button ── */}
           <ExportCSVButton
-            data={members.map(m => ({
-              fullName: m.fullName,
-              email: m.email,
-              phone: m.phone,
-              role: m.role,
-              membershipType: m.membershipType,
-              gender: m.gender,
-              dob: m.dob,
-              maritalStatus: m.maritalStatus,
-              cellRegion: m.cellRegion,
-              ministryGroup: m.ministryGroup,
-              addressLine1: (m as any).address?.line1 || "",
-              addressLine2: (m as any).address?.line2 || "",
-              suburb: (m as any).address?.suburb || "",
-              town: (m as any).address?.town || "",
-              postalCode: (m as any).address?.postalCode || "",
-            }))}
+            data={members.map(m => {
+              const a = (m as any).address || {};
+              const addrParts = [a.line1, a.line2, a.suburb, a.town, a.postalCode].filter(Boolean);
+              return {
+                fullName: m.fullName || "",
+                email: m.email || "",
+                phone: m.phone || "",
+                address: addrParts.join(", "),
+                role: m.role || "",
+                membershipType: m.membershipType || "",
+                gender: m.gender || "",
+                dob: m.dob || "",
+                cellRegion: m.cellRegion || "",
+                ministryGroup: m.ministryGroup || "",
+                maritalStatus: m.maritalStatus || "",
+              };
+            })}
             filename="members"
             columns={[
               { key: "fullName", label: "Full Name" },
               { key: "email", label: "Email" },
               { key: "phone", label: "Phone" },
+              { key: "address", label: "Address" },
               { key: "role", label: "Role" },
               { key: "membershipType", label: "Membership Type" },
               { key: "gender", label: "Gender" },
               { key: "dob", label: "Date of Birth" },
-              { key: "maritalStatus", label: "Marital Status" },
               { key: "cellRegion", label: "Cell Region / Branch" },
               { key: "ministryGroup", label: "Ministry Group" },
-              { key: "addressLine1", label: "Street Address" },
-              { key: "addressLine2", label: "Address Line 2" },
-              { key: "suburb", label: "Suburb" },
-              { key: "town", label: "Town / City" },
-              { key: "postalCode", label: "Postal Code" },
+              { key: "maritalStatus", label: "Marital Status" },
             ]}
           />
 
