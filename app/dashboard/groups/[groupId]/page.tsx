@@ -123,29 +123,37 @@ export default function GroupDetailPage() {
     });
   }, [groupId]);
 
-  // Live group members
+  // Live group members — no orderBy to avoid composite index; sort by joinedAt client-side
   useEffect(() => {
     if (!groupId) return;
     const q = query(
       collection(db, "group_members"),
-      where("groupId", "==", groupId),
-      orderBy("joinedAt", "asc")
+      where("groupId", "==", groupId)
     );
     return onSnapshot(q, (snap) => {
-      setGroupMembers(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<GroupMember, "id">) })));
+      const sorted = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<GroupMember, "id">) }))
+        .sort((a, b) => {
+          const ta = a.joinedAt?.toMillis?.() ?? 0;
+          const tb = b.joinedAt?.toMillis?.() ?? 0;
+          return ta - tb;
+        });
+      setGroupMembers(sorted);
     });
   }, [groupId]);
 
-  // Live attendance sessions
+  // Live attendance sessions — no orderBy to avoid composite index; sort by date client-side
   useEffect(() => {
     if (!groupId) return;
     const q = query(
       collection(db, "group_attendance"),
-      where("groupId", "==", groupId),
-      orderBy("date", "desc")
+      where("groupId", "==", groupId)
     );
     return onSnapshot(q, (snap) => {
-      setSessions(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AttendanceSession, "id">) })));
+      const sorted = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<AttendanceSession, "id">) }))
+        .sort((a, b) => b.date.localeCompare(a.date)); // newest first
+      setSessions(sorted);
     });
   }, [groupId]);
 

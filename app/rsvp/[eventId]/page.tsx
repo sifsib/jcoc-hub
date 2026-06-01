@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { db } from "../../../lib/firebase";
-import { doc, getDoc, collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 interface ChurchEvent {
   tenantId: string;
@@ -98,28 +98,7 @@ export default function PublicRsvpPage() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      // Check if this person already RSVP'd (by phone or email)
-      const existingChecks = [];
-      if (phone.trim()) {
-        existingChecks.push(
-          getDocs(query(collection(db, "event_rsvps"), where("eventId", "==", eventId), where("phone", "==", phone.trim())))
-        );
-      }
-      if (email.trim()) {
-        existingChecks.push(
-          getDocs(query(collection(db, "event_rsvps"), where("eventId", "==", eventId), where("email", "==", email.trim())))
-        );
-      }
-
-      const results = await Promise.all(existingChecks);
-      const alreadyRsvp = results.some((r) => !r.empty);
-
-      if (alreadyRsvp) {
-        setSubmitError("It looks like you've already RSVP'd for this event.");
-        setSubmitting(false);
-        return;
-      }
-
+      // Duplicate check removed — unauthenticated users cannot read event_rsvps
       await addDoc(collection(db, "event_rsvps"), {
         eventId,
         tenantId: event.tenantId,

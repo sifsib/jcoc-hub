@@ -157,29 +157,37 @@ export default function WorkflowBuilderPage() {
     });
   }, [workflowId]);
 
-  // Live steps
+  // Live steps — no orderBy to avoid composite index; sort by .order client-side
   useEffect(() => {
     if (!workflowId) return;
     const q = query(
       collection(db, "workflow_steps"),
-      where("workflowId", "==", workflowId),
-      orderBy("order", "asc")
+      where("workflowId", "==", workflowId)
     );
     return onSnapshot(q, (snap) => {
-      setSteps(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WorkflowStep, "id">) })));
+      const sorted = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<WorkflowStep, "id">) }))
+        .sort((a, b) => a.order - b.order);
+      setSteps(sorted);
     });
   }, [workflowId]);
 
-  // Live instances
+  // Live instances — no orderBy to avoid composite index; sort by startedAt client-side
   useEffect(() => {
     if (!workflowId) return;
     const q = query(
       collection(db, "workflow_instances"),
-      where("workflowId", "==", workflowId),
-      orderBy("startedAt", "desc")
+      where("workflowId", "==", workflowId)
     );
     return onSnapshot(q, (snap) => {
-      setInstances(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WorkflowInstance, "id">) })));
+      const sorted = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<WorkflowInstance, "id">) }))
+        .sort((a, b) => {
+          const ta = a.startedAt?.toMillis?.() ?? 0;
+          const tb = b.startedAt?.toMillis?.() ?? 0;
+          return tb - ta;
+        });
+      setInstances(sorted);
     });
   }, [workflowId]);
 
