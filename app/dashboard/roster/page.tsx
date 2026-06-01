@@ -603,40 +603,169 @@ export default function ManageMembershipPage() {
   const handleImport = async () => {
     if (!appUser || !importRows.length) return;
     setImporting(true); let count = 0;
+
+    const s = (v: any) => String(v ?? "").trim();
+    const yn = (v: any) => s(v).toLowerCase() === "yes" ? "Yes" : s(v).toLowerCase() === "no" ? "No" : "";
+    const baseConsent = {
+      consentedToPrivacyPolicy: true, consentedToSpecialInfo: false,
+      consentTimestamp: serverTimestamp(), consentPolicyVersion: "v1.0",
+    };
+
     try {
       for (const row of importRows) {
-        const firstName = String(row.firstName || row["First Name"] || row.name || "").trim();
-        const lastName = String(row.lastName || row["Last Name"] || row.surname || "").trim();
-        const fullName = String(row.fullName || row["Full Name"] || `${firstName} ${lastName}`).trim();
+        const firstName = s(row["First Name"] || row.firstName || row.name);
+        const lastName = s(row["Last Name"] || row.lastName || row.surname);
+        const fullName = s(row["Full Name"] || row.fullName || `${firstName} ${lastName}`);
         if (!fullName) continue;
-        const rawAddress = String(row.address || row["Address"] || row["Residential Address"] || "").trim();
-        await addDoc(collection(db, "members"), {
+
+        const isMarried = s(row["Marital Status"] || row.maritalStatus).toLowerCase() === "married";
+        const spouseIsMember = yn(row["Is Spouse a Member"] || row["Is Spouse a member"]) === "Yes";
+
+        // ── Build children arrays ──────────────────────────────────────────────
+        const allChildren = [1, 2, 3].map(n => ({
+          firstName: s(row[`Child ${n} First Name`]),
+          lastName: s(row[`Child ${n} Last Name`]),
+          dob: normalizeDob(row[`Child ${n} DOB`]),
+          gender: s(row[`Child ${n} Gender`]),
+          isMember: yn(row[`Is Child ${n} a Member`] || row[`Is child ${n} a member`]) === "Yes",
+        })).filter(c => c.firstName || c.lastName);
+
+        const memberChildren = allChildren.filter(c => c.isMember);
+        const nonMemberChildren = allChildren.filter(c => !c.isMember);
+
+        // ── Parents ───────────────────────────────────────────────────────────
+        const motherName = s(row["Mother Name"] || row.motherName);
+        const motherSur = s(row["Mother Surname"] || row.motherSurname);
+        const fatherName = s(row["Father Name"] || row.fatherName);
+        const fatherSur = s(row["Father Surname"] || row.fatherSurname);
+        const milName = s(row["Mother-in-Law Name"] || row.motherInLawName);
+        const milSur = s(row["Mother-in-Law Surname"] || row.motherInLawSurname);
+        const filName = s(row["Father-in-Law Name"] || row.fatherInLawName);
+        const filSur = s(row["Father-in-Law Surname"] || row.fatherInLawSurname);
+
+        // ── Non-member spouse basic ────────────────────────────────────────────
+        const nonMemberSpouse = isMarried && !spouseIsMember && s(row["Spouse First Name"] || row["Spouse Name"]) ? {
+          firstName: s(row["Spouse First Name"] || row["Spouse Name"]),
+          lastName: s(row["Spouse Last Name"] || row["Spouse Surname"]),
+          dob: normalizeDob(row["Spouse DOB"]),
+          gender: s(row["Spouse Gender"]),
+          phone: s(row["Spouse Phone"] || row["Contact Number.1"]),
+        } : null;
+
+        // ── 1. Household ──────────────────────────────────────────────────────
+        const householdRef = await addDoc(collection(db, "households"), {
+          tenantId: appUser.tenantId,
+          familyName: lastName,
+          parents: {
+            mother: { name: motherName, surname: motherSur, dob: "" },
+            father: { name: fatherName, surname: fatherSur, dob: "" },
+          },
+          inLaws: isMarried ? {
+            motherInLaw: { name: milName, surname: milSur, dob: "" },
+            fatherInLaw: { name: filName, surname: filSur, dob: "" },
+          } : null,
+          nonMemberSpouse,
+          nonMemberChildren,
+          createdAt: serverTimestamp(),
+          capturedBy: appUser.email,
+        });
+        const hid = householdRef.id;
+
+        // ── 2. Primary member ─────────────────────────────────────────────────
+        const primaryRef = await addDoc(collection(db, "members"), {
           tenantId: appUser.tenantId,
           fullName, firstName, lastName,
-          email: String(row.email || row["Email"] || "").trim().toLowerCase(),
-          phone: row.phone ? fmtPhone(String(row.phone)) : "",
-          dob: normalizeDob(row.dob || row["Date of Birth"] || ""),
-          gender: String(row.gender || row["Gender"] || ""),
-          maritalStatus: String(row.maritalStatus || row["Marital Status"] || ""),
-          membershipType: String(row.membershipType || row["Membership Type"] || ""),
-          cellRegion: String(row.cellRegion || row["Cell Region / Branch"] || row["Cell Region"] || "").trim(),
-          ministryGroup: String(row.ministryGroup || row["Ministry Group"] || "").trim(),
-          address: { line1: rawAddress, line2: "", suburb: "", town: "", postalCode: "" },
-          faithStatus: {
-            bornAgain: String(row.bornAgain || ""),
-            waterBaptized: String(row.waterBaptized || ""),
+          email: s(row["Email"] || row.email).toLowerCase(),
+          phone: s(row["Phone"] || row.phone || row["Contact Number"]) ? fmtPhone(s(row["Phone"] || row.phone || row["Contact Number"])) : "",
+          dob: normalizeDob(row["Date of Birth"] || row.dob || row["Date of birth"]),
+          gender: s(row["Gender"] || row.gender),
+          maritalStatus: s(row["Marital Status"] || row.maritalStatus),
+          membershipType: s(row["Membership Type"] || row.membershipType),
+          cellRegion: s(row["Cell Region / Branch"] || row["Cell Region"] || row.cellRegion),
+          ministryGroup: s(row["Ministry Group"] || row.ministryGroup),
+          address: {
+            line1: s(row["Address Line 1"] || row["Line 1"] || row.address || ""),
+            line2: s(row["Address Line 2"] || row["Line 2"] || ""),
+            suburb: s(row["Suburb"] || row.suburb || ""),
+            town: s(row["Town"] || row.town || ""),
+            postalCode: s(row["Postal Code"] || row["Postal code"] || row.postalCode || ""),
           },
-          ministries: String(row.ministries || "").split(",").map((s: string) => s.trim()).filter(Boolean),
-          role: String(row.role || row["Role"] || "Member"),
-          isMember: true, status: "active", source: "website_import",
-          consentedToPrivacyPolicy: true, consentedToSpecialInfo: false,
-          consentTimestamp: serverTimestamp(), consentPolicyVersion: "v1.0",
-          createdAt: serverTimestamp(), capturedBy: appUser.email,
+          faithStatus: {
+            bornAgain: yn(row["Born Again"] || row.bornAgain),
+            waterBaptized: yn(row["Water Baptized"] || row.waterBaptized),
+          },
+          ministries: s(row["Ministries"] || row.ministries).split(/[,;]/).map((x: string) => x.trim()).filter(Boolean),
+          role: s(row["Role"] || row.role) || "Member",
+          householdId: hid, householdRole: "primary",
+          isMember: true, status: "active", source: "xlsx_import",
+          ...baseConsent, createdAt: serverTimestamp(), capturedBy: appUser.email,
         });
+
+        await updateDoc(doc(db, "households", hid), { primaryMemberId: primaryRef.id });
         count++;
+
+        // ── 3. Spouse as member ───────────────────────────────────────────────
+        if (isMarried && spouseIsMember) {
+          const spFirst = s(row["Spouse First Name"] || row["Spouse Name"]);
+          const spLast = s(row["Spouse Last Name"] || row["Spouse Surname"]);
+          if (spFirst || spLast) {
+            const spouseRef = await addDoc(collection(db, "members"), {
+              tenantId: appUser.tenantId,
+              fullName: `${spFirst} ${spLast}`.trim(),
+              firstName: spFirst, lastName: spLast,
+              email: s(row["Spouse Email"] || row["Email.1"]).toLowerCase(),
+              phone: s(row["Spouse Phone"] || row["Contact Number.1"]) ? fmtPhone(s(row["Spouse Phone"] || row["Contact Number.1"])) : "",
+              dob: normalizeDob(row["Spouse DOB"]),
+              gender: s(row["Spouse Gender"]),
+              maritalStatus: "Married",
+              membershipType: s(row["Spouse Membership Type"]),
+              address: {
+                line1: s(row["Address Line 1"] || row["Line 1.1"] || row["Line 1"] || ""),
+                line2: s(row["Address Line 2"] || row["Line 2.1"] || row["Line 2"] || ""),
+                suburb: s(row["Suburb.1"] || row["Suburb"] || ""),
+                town: s(row["Town.1"] || row["Town"] || ""),
+                postalCode: s(row["Postal Code"] || row["Postal code"] || ""),
+              },
+              faithStatus: { bornAgain: "", waterBaptized: "" },
+              ministries: [],
+              role: "Member",
+              householdId: hid, householdRole: "spouse", spouseId: primaryRef.id,
+              isMember: true, status: "active", source: "xlsx_import",
+              ...baseConsent, createdAt: serverTimestamp(), capturedBy: appUser.email,
+            });
+            await updateDoc(doc(db, "members", primaryRef.id), { spouseId: spouseRef.id });
+            await updateDoc(doc(db, "households", hid), { spouseMemberId: spouseRef.id });
+            count++;
+          }
+        }
+
+        // ── 4. Member children ────────────────────────────────────────────────
+        for (const child of memberChildren) {
+          await addDoc(collection(db, "members"), {
+            tenantId: appUser.tenantId,
+            fullName: `${child.firstName} ${child.lastName}`.trim(),
+            firstName: child.firstName, lastName: child.lastName,
+            email: "", phone: "",
+            dob: child.dob, gender: child.gender,
+            maritalStatus: "Single", role: "Member",
+            address: {
+              line1: s(row["Address Line 1"] || row["Line 1"] || ""),
+              line2: s(row["Address Line 2"] || row["Line 2"] || ""),
+              suburb: s(row["Suburb"] || ""),
+              town: s(row["Town"] || ""),
+              postalCode: s(row["Postal Code"] || row["Postal code"] || ""),
+            },
+            faithStatus: { bornAgain: "", waterBaptized: "" },
+            ministries: [],
+            householdId: hid, householdRole: "child", parentId: primaryRef.id,
+            isMember: true, status: "active", source: "xlsx_import",
+            ...baseConsent, createdAt: serverTimestamp(), capturedBy: appUser.email,
+          });
+          count++;
+        }
       }
       await refreshList();
-      alert(`${count} member${count !== 1 ? "s" : ""} imported.`);
+      alert(`${count} member record${count !== 1 ? "s" : ""} imported successfully.`);
       setImportRows([]); if (fileRef.current) fileRef.current.value = "";
       setView("list");
     } catch (err) { console.error("Import error:", err); alert("Import failed. Check console."); }
