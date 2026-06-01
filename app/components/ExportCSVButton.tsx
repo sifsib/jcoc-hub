@@ -1,6 +1,6 @@
 "use client";
 
-interface Props<T extends Record<string, unknown>> {
+interface Props<T extends object> {
   data: T[];
   filename: string;
   columns?: { key: keyof T; label: string }[];
@@ -13,7 +13,7 @@ function escapeCell(value: string): string {
   return /[,"\r\n]/.test(str) ? `"${str}"` : str;
 }
 
-function downloadCSV<T extends Record<string, unknown>>(
+function downloadCSV<T extends object>(
   data: T[],
   filename: string,
   columns?: { key: keyof T; label: string }[]
@@ -22,11 +22,11 @@ function downloadCSV<T extends Record<string, unknown>>(
 
   const cols = columns
     ? columns
-    : (Object.keys(data[0]) as (keyof T)[]).map((k) => ({ key: k, label: String(k) }));
+    : (Object.keys(data[0] as Record<string, unknown>) as (keyof T)[]).map((k) => ({ key: k, label: String(k) }));
 
   const header = cols.map((c) => escapeCell(c.label)).join(",");
   const rows = data.map((row) =>
-    cols.map((c) => escapeCell(String(row[c.key] ?? ""))).join(",")
+    cols.map((c) => escapeCell(String((row as Record<keyof T, unknown>)[c.key] ?? ""))).join(",")
   );
 
   const csvContent = [header, ...rows].join("\r\n");
@@ -40,7 +40,7 @@ function downloadCSV<T extends Record<string, unknown>>(
   URL.revokeObjectURL(url);
 }
 
-export default function ExportCSVButton<T extends Record<string, unknown>>({
+export default function ExportCSVButton<T extends object>({
   data,
   filename,
   columns,

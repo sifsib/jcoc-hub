@@ -73,6 +73,22 @@ const emptyParent = (): ParentInput => ({ name: "", surname: "", dob: "" });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Convert Excel serial date numbers (e.g. 39710) to YYYY-MM-DD strings
+function normalizeDob(val: any): string {
+  if (!val && val !== 0) return "";
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  const str = String(val).trim();
+  if (/^\d+$/.test(str)) {
+    const n = parseInt(str, 10);
+    // Excel serial range sanity check (1 Jan 1900 = 1, 1 Jan 2100 = ~73050)
+    if (n > 1000 && n < 80000) {
+      const d = new Date((n - 25569) * 86400000);
+      return d.toISOString().slice(0, 10);
+    }
+  }
+  return str;
+}
+
 function fmtPhone(raw: string): string {
   const c = raw.trim().replace(/\s+/g, "");
   return c.startsWith("0") ? "27" + c.substring(1) : c;
@@ -191,16 +207,22 @@ function MemberBlock({
             {config.roles.map(r => <option key={r}>{r}</option>)}
           </select>
         </F>
-        <F label="Cell Region / Branch" req>
-          <select value={data.cellRegion} onChange={e => set("cellRegion", e.target.value)} className={sel} required>
+        <F label="Cell Region / Branch">
+          <select value={data.cellRegion} onChange={e => set("cellRegion", e.target.value)} className={sel}>
             <option value="">Select</option>
+            {data.cellRegion && !config.cellRegions.includes(data.cellRegion) && (
+              <option value={data.cellRegion}>{data.cellRegion}</option>
+            )}
             {config.cellRegions.map(r => <option key={r}>{r}</option>)}
           </select>
         </F>
       </div>
-      <F label="Ministry Group" req>
-        <select value={data.ministryGroup} onChange={e => set("ministryGroup", e.target.value)} className={sel} required>
+      <F label="Ministry Group">
+        <select value={data.ministryGroup} onChange={e => set("ministryGroup", e.target.value)} className={sel}>
           <option value="">Select</option>
+          {data.ministryGroup && !config.ministryGroups.includes(data.ministryGroup) && (
+            <option value={data.ministryGroup}>{data.ministryGroup}</option>
+          )}
           {config.ministryGroups.map(g => <option key={g}>{g}</option>)}
         </select>
       </F>
@@ -507,8 +529,8 @@ export default function ManageMembershipPage() {
       cellRegion: m.cellRegion || "",
       ministryGroup: m.ministryGroup || "",
       address: (m as any).address || { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
-      bornAgain: m.faithStatus?.bornAgain || "",
-      waterBaptized: m.faithStatus?.waterBaptized || "",
+      bornAgain: m.faithStatus?.bornAgain || (m as any).bornAgain || "",
+      waterBaptized: m.faithStatus?.waterBaptized || (m as any).waterBaptized || "",
       membershipType: m.membershipType || "",
       ministries: m.ministries || [],
       role: m.role || "Member",
@@ -573,7 +595,7 @@ export default function ManageMembershipPage() {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      setImportRows(XLSX.utils.sheet_to_json(ws, { defval: "" }) as any[]);
+      setImportRows(XLSX.utils.sheet_to_json(ws, { defval: "", cellDates: true }) as any[]);
     } catch { alert("Could not read file. Make sure it is a valid .xlsx file."); }
     finally { setImportParsing(false); }
   };
@@ -592,13 +614,17 @@ export default function ManageMembershipPage() {
           fullName, firstName, lastName,
           email: String(row.email || row["Email"] || "").trim().toLowerCase(),
           phone: row.phone ? fmtPhone(String(row.phone)) : "",
-          dob: String(row.dob || row["Date of Birth"] || ""),
+          dob: normalizeDob(row.dob || row["Date of Birth"] || ""),
           gender: String(row.gender || row["Gender"] || ""),
           maritalStatus: String(row.maritalStatus || row["Marital Status"] || ""),
           membershipType: String(row.membershipType || row["Membership Type"] || ""),
-          bornAgain: String(row.bornAgain || ""), waterBaptized: String(row.waterBaptized || ""),
+          faithStatus: {
+            bornAgain: String(row.bornAgain || ""),
+            waterBaptized: String(row.waterBaptized || ""),
+          },
           ministries: String(row.ministries || "").split(",").map((s: string) => s.trim()).filter(Boolean),
-          role: "Member", isMember: true, status: "active", source: "website_import",
+          role: String(row.role || row["Role"] || "Member"),
+          isMember: true, status: "active", source: "website_import",
           consentedToPrivacyPolicy: true, consentedToSpecialInfo: false,
           consentTimestamp: serverTimestamp(), consentPolicyVersion: "v1.0",
           createdAt: serverTimestamp(), capturedBy: appUser.email,
