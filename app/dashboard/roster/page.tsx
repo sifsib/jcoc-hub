@@ -593,9 +593,9 @@ export default function ManageMembershipPage() {
     try {
       const XLSX = await import("xlsx");
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
+      const wb = XLSX.read(buf, { type: "array", cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      setImportRows(XLSX.utils.sheet_to_json(ws, { defval: "", cellDates: true }) as any[]);
+      setImportRows(XLSX.utils.sheet_to_json(ws, { defval: "" }) as any[]);
     } catch { alert("Could not read file. Make sure it is a valid .xlsx file."); }
     finally { setImportParsing(false); }
   };
