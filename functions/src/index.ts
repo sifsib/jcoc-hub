@@ -210,18 +210,10 @@ export const onCommunicationCreated = onDocumentCreated(
 // TRIGGER 3: SELF-SERVICE SIGNUP WELCOME EMAIL
 //
 // Fires when a new document is created in /signups/{signupId}.
-// Comes from the marketing site's /api/signup route when a church
-// registers without needing a demo.
-//
 // Actions:
-//   1. Sends a welcome email to the new church admin with their
-//      login link and next steps
-//   2. Notifies Sifiso of the new self-service signup
+//   1. Sends a welcome email to the new church admin
+//   2. Notifies Sifiso of the new signup
 //   3. Updates the signup document status to "welcome_sent"
-//
-// Secrets required (already set):
-//   SYSTEM_GMAIL_USER
-//   SYSTEM_GMAIL_APP_PASSWORD
 // ─────────────────────────────────────────────────────────────
 export const onSignupCreated = onDocumentCreated(
   {
@@ -232,9 +224,7 @@ export const onSignupCreated = onDocumentCreated(
     const signup = event.data?.data();
     if (!signup) return;
 
-    // Only process self-service signups
     if (signup.source !== "self_service") return;
-    // Guard against re-processing
     if (signup.status !== "pending_welcome") return;
 
     const signupId = event.params.signupId;
@@ -255,7 +245,6 @@ export const onSignupCreated = onDocumentCreated(
 
     const hubLoginUrl = "https://hub.kerekehub.co.za/login";
 
-    // Build the billing summary block depending on account type
     const billingBlock = (() => {
       if (accountType === "internal") {
         return `
@@ -270,21 +259,20 @@ export const onSignupCreated = onDocumentCreated(
             <p style="color: #A78BFA; font-weight: bold; font-size: 14px; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.05em;">Beta Tester Access</p>
             <table style="width: 100%; border-collapse: collapse;">
               <tr><td style="color: #94A3B8; padding: 4px 0; width: 130px;">Months 1-4</td><td style="color: #F8FAFC; font-weight: bold;">FREE</td></tr>
-              <tr><td style="color: #94A3B8; padding: 4px 0;">Month 5+</td><td style="color: #F8FAFC; font-weight: bold;">R139/mo</td></tr>
+              <tr><td style="color: #94A3B8; padding: 4px 0;">Month 5+</td><td style="color: #F8FAFC; font-weight: bold;">R159/mo</td></tr>
             </table>
             <p style="color: #94A3B8; font-size: 13px; margin: 12px 0 0 0;">
-              You have 4 full months to explore everything. If you want to continue after that, you will join at the standard R139/mo rate.
+              You have 4 full months to explore everything. If you want to continue after that, you will join at the standard R159/mo rate.
             </p>
           </div>`;
       }
-      // standard
       return `
         <div style="background: #1E293B; border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #3B9A5F;">
           <p style="color: #3B9A5F; font-weight: bold; font-size: 14px; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.05em;">Your Pricing</p>
           <table style="width: 100%; border-collapse: collapse;">
-            <tr><td style="color: #94A3B8; padding: 4px 0; width: 130px;">Month 1</td><td style="color: #F8FAFC; font-weight: bold;">FREE &mdash; setup &amp; data migration</td></tr>
-            <tr><td style="color: #94A3B8; padding: 4px 0;">Months 2-4</td><td style="color: #F8FAFC; font-weight: bold;">R99/mo &mdash; evaluation window</td></tr>
-            <tr><td style="color: #94A3B8; padding: 4px 0;">Month 5+</td><td style="color: #F8FAFC; font-weight: bold;">R139/mo &mdash; full rate</td></tr>
+            <tr><td style="color: #94A3B8; padding: 4px 0; width: 130px;">Month 1</td><td style="color: #F8FAFC; font-weight: bold;">FREE - setup &amp; data migration</td></tr>
+            <tr><td style="color: #94A3B8; padding: 4px 0;">Months 2-4</td><td style="color: #F8FAFC; font-weight: bold;">R99/mo - evaluation window</td></tr>
+            <tr><td style="color: #94A3B8; padding: 4px 0;">Month 5+</td><td style="color: #F8FAFC; font-weight: bold;">R159/mo - full rate</td></tr>
           </table>
           <p style="color: #94A3B8; font-size: 13px; margin: 12px 0 0 0;">
             No payment is required right now. You will receive details on how to pay before your evaluation window closes.
@@ -329,7 +317,7 @@ export const onSignupCreated = onDocumentCreated(
             </p>
             <hr style="border-color: #334155; margin: 24px 0;" />
             <p style="color: #475569; font-size: 12px; margin: 0;">
-              Kereke Hub &mdash; Ministry Management, Simplified &mdash; kerekehub.co.za
+              Kereke Hub - Ministry Management, Simplified - kerekehub.co.za
             </p>
           </div>
         `,
@@ -337,6 +325,158 @@ export const onSignupCreated = onDocumentCreated(
       console.log(`[onSignupCreated] Welcome email sent to ${email} for signup ${signupId}`);
     } catch (err) {
       console.error("[onSignupCreated] Failed to send welcome email:", err);
+    }
+
+    // ── 2. Notify Sifiso of the new signup ───────────────────
+    const accountTypeLabel: Record<string, string> = {
+      internal: "Internal (Free Forever)",
+      beta: "Beta Tester (4 months free, then R159)",
+      standard: "Standard (30-day trial, R99, R159)",
+    };
+    try {
+      await transporter.sendMail({
+        from: `"Kereke Hub Signups" <${gmailUser}>`,
+        to: "sifisosibuyane@gmail.com",
+        subject: `New Signup: ${churchName} [${accountType.toUpperCase()}]`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 32px; border-radius: 8px;">
+            <h2 style="color: #3B9A5F; margin-top: 0;">New Church Signup</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="color: #94A3B8; padding: 6px 0; width: 130px;">Church</td><td style="color: #F8FAFC; font-weight: bold;">${churchName}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Admin</td><td style="color: #F8FAFC;">${adminName}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Email</td><td style="color: #F8FAFC;">${email}</td></tr>
+              <tr><td style="color: #94A3B8; padding: 6px 0;">Account Type</td><td style="color: #3B9A5F; font-weight: bold;">${accountTypeLabel[accountType] ?? accountType}</td></tr>
+            </table>
+            <hr style="border-color: #334155; margin: 24px 0;" />
+            <p style="color: #64748B; font-size: 12px;">View this tenant in the Admin Settings panel on hub.kerekehub.co.za.</p>
+          </div>
+        `,
+      });
+      console.log(`[onSignupCreated] Admin notification sent for ${signupId}`);
+    } catch (err) {
+      console.error("[onSignupCreated] Failed to send admin notification:", err);
+    }
+
+    // ── 3. Mark signup as welcome sent ───────────────────────
+    try {
+      await db.doc(`signups/${signupId}`).update({
+        status: "welcome_sent",
+        welcomeSentAt: new Date(),
+      });
+    } catch (err) {
+      console.error("[onSignupCreated] Failed to update signup status:", err);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 3b: INVITED TEAM MEMBER EMAIL
+//
+// Fires when a new document is created in /users/{userId}
+// with status: "invited". Sends the invitee a setup email
+// with a password-reset link so they can choose their own
+// password and log in for the first time.
+//
+// Required fields on the user document:
+//   - email       (string)
+//   - displayName (string)
+//   - tenantId    (string)
+//   - role        (string)
+//   - status      (string — must be "invited")
+// ─────────────────────────────────────────────────────────────
+import { getAuth } from "firebase-admin/auth";
+
+export const onInvitedUserCreated = onDocumentCreated(
+  {
+    document: "users/{userId}",
+    secrets: [SYSTEM_GMAIL_USER, SYSTEM_GMAIL_APP_PASSWORD],
+  },
+  async (event) => {
+    const user = event.data?.data();
+    if (!user) return;
+
+    // Only fire for invited team members, not self-registered owners
+    if (user.status !== "invited") return;
+
+    const gmailUser = SYSTEM_GMAIL_USER.value();
+    const gmailPass = SYSTEM_GMAIL_APP_PASSWORD.value();
+
+    if (!gmailUser || !gmailPass) {
+      console.error("[onInvitedUserCreated] System Gmail secrets not configured.");
+      return;
+    }
+
+    const { email, displayName, tenantId, role } = user;
+    if (!email || !tenantId) {
+      console.log(`[onInvitedUserCreated] Skipped ${event.params.userId} — missing email or tenantId.`);
+      return;
+    }
+
+    // Fetch church name for the email
+    const tenantSnap = await db.doc(`tenants/${tenantId}`).get();
+    const churchName = tenantSnap.data()?.name || "Your Church";
+
+    // Generate a password-reset link so they can set their own password
+    let setupLink = "https://hub.kerekehub.co.za/login";
+    try {
+      setupLink = await getAuth().generatePasswordResetLink(email);
+    } catch (err) {
+      console.error("[onInvitedUserCreated] Failed to generate setup link:", err);
+    }
+
+    const roleLabels: Record<string, string> = {
+      admin: "Administrator",
+      viewer: "Viewer",
+      finance: "Finance Manager",
+      member_manager: "Member Manager",
+    };
+    const roleLabel = roleLabels[role] || role;
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+
+    try {
+      await transporter.sendMail({
+        from: `"Kereke Hub" <${gmailUser}>`,
+        to: email,
+        subject: `You have been invited to ${churchName} on Kereke Hub`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 40px; border-radius: 10px;">
+            <h2 style="color: #3B9A5F; margin-top: 0; font-size: 24px;">You have been invited!</h2>
+            <p style="color: #F8FAFC; font-size: 16px;">
+              Hi ${displayName || email}, you have been added as a
+              <strong>${roleLabel}</strong> on the
+              <strong>${churchName}</strong> Kereke Hub account.
+            </p>
+            <div style="background: #1E293B; border-radius: 8px; padding: 16px; margin: 24px 0;">
+              <p style="color: #94A3B8; margin: 0 0 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Your Login Email</p>
+              <p style="color: #F8FAFC; font-weight: bold; margin: 0;">${email}</p>
+            </div>
+            <p style="color: #CBD5E1;">
+              Click the button below to set your password and access your dashboard.
+              This link is valid for 24 hours.
+            </p>
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${setupLink}" style="background: #3B9A5F; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
+                Set Up My Account
+              </a>
+            </div>
+            <p style="color: #94A3B8; font-size: 13px;">
+              If the button does not work, copy and paste this link into your browser:<br/>
+              <span style="color: #3B9A5F; word-break: break-all;">${setupLink}</span>
+            </p>
+            <hr style="border-color: #334155; margin: 24px 0;" />
+            <p style="color: #475569; font-size: 12px; margin: 0;">
+              Kereke Hub - Ministry Management, Simplified - kerekehub.co.za
+            </p>
+          </div>
+        `,
+      });
+      console.log(`[onInvitedUserCreated] Invitation email sent to ${email}`);
+    } catch (err) {
+      console.error("[onInvitedUserCreated] Failed to send invitation email:", err);
     }
   }
 );
@@ -405,16 +545,16 @@ export const billingReminder = onSchedule(
 
       if (t.accountType === "beta") {
         checkDate = t.trialEndsAt;
-        upcomingRate = 139;
-        upcomingLabel = "R139/mo";
+        upcomingRate = 159;
+        upcomingLabel = "R159/mo";
       } else if (t.billingPhase === "trial") {
         checkDate = t.trialEndsAt;
         upcomingRate = 99;
         upcomingLabel = "R99/mo";
       } else if (t.billingPhase === "evaluation") {
         checkDate = t.evaluationEndsAt;
-        upcomingRate = 139;
-        upcomingLabel = "R139/mo";
+        upcomingRate = 159;
+        upcomingLabel = "R159/mo";
       }
 
       const is7Days = isDaysAway(checkDate, 7);
@@ -476,46 +616,6 @@ export const billingReminder = onSchedule(
     }
 
     console.log(`[billingReminder] Done. ${sent} reminder(s) sent.`);
-
-    // ── 2. Notify Sifiso of the new signup ───────────────────
-    const accountTypeLabel: Record<string, string> = {
-      internal: "Internal (Free Forever)",
-      beta: "Beta Tester (4 months free, then R139)",
-      standard: "Standard (30-day trial, R99, R139)",
-    };
-    try {
-      await transporter.sendMail({
-        from: `"Kereke Hub Signups" <${gmailUser}>`,
-        to: "sifisosibuyane@gmail.com",
-        subject: `New Signup: ${churchName} [${accountType.toUpperCase()}]`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 32px; border-radius: 8px;">
-            <h2 style="color: #3B9A5F; margin-top: 0;">New Church Signup</h2>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr><td style="color: #94A3B8; padding: 6px 0; width: 130px;">Church</td><td style="color: #F8FAFC; font-weight: bold;">${churchName}</td></tr>
-              <tr><td style="color: #94A3B8; padding: 6px 0;">Admin</td><td style="color: #F8FAFC;">${adminName}</td></tr>
-              <tr><td style="color: #94A3B8; padding: 6px 0;">Email</td><td style="color: #F8FAFC;">${email}</td></tr>
-              <tr><td style="color: #94A3B8; padding: 6px 0;">Account Type</td><td style="color: #3B9A5F; font-weight: bold;">${accountTypeLabel[accountType] ?? accountType}</td></tr>
-            </table>
-            <hr style="border-color: #334155; margin: 24px 0;" />
-            <p style="color: #64748B; font-size: 12px;">View this tenant in the Admin Settings panel on hub.kerekehub.co.za.</p>
-          </div>
-        `,
-      });
-      console.log(`[onSignupCreated] Admin notification sent for ${signupId}`);
-    } catch (err) {
-      console.error("[onSignupCreated] Failed to send admin notification:", err);
-    }
-
-    // ── 3. Mark signup as welcome sent ───────────────────────
-    try {
-      await db.doc(`signups/${signupId}`).update({
-        status: "welcome_sent",
-        welcomeSentAt: new Date(),
-      });
-    } catch (err) {
-      console.error("[onSignupCreated] Failed to update signup status:", err);
-    }
   }
 );
 

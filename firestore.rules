@@ -99,7 +99,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
                     && (isSuperAdmin() || (tenantId == userTenantId() && canEditChurchProfile()));
 
-      allow delete: if false;
+      allow delete: if isSignedIn() && isSuperAdmin();
     }
 
 
@@ -413,8 +413,7 @@ service cloud.firestore {
     match /finance_categories/{id} {
 
       allow read: if isSignedIn()
-                  && resource.data.tenantId == userTenantId()
-                  && canReadFinance();
+                  && (isSuperAdmin() || (resource.data.tenantId == userTenantId() && canReadFinance()));
 
       allow create: if isSignedIn()
                     && request.resource.data.tenantId == userTenantId()
@@ -425,8 +424,8 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
 
       allow delete: if isSignedIn()
-                    && resource.data.tenantId == userTenantId()
-                    && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
+                    && (isSuperAdmin() || (resource.data.tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
 
@@ -470,8 +469,8 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
 
       allow delete: if isSignedIn()
-                    && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin'));
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
 
@@ -483,10 +482,10 @@ service cloud.firestore {
       // Anyone can submit (public form — no auth required)
       allow create: if true;
 
-      // Tenant staff can read their own form submissions
+      // Super admin or tenant staff can read form submissions
       allow read: if isSignedIn()
-                  && resource.data.tenantId == userTenantId()
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                  && (isSuperAdmin() || (resource.data.tenantId == userTenantId()
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
 
       // No updates or deletes on submissions (immutable audit trail)
       allow update, delete: if isSignedIn() && isSuperAdmin();
@@ -497,47 +496,51 @@ service cloud.firestore {
     // WORKFLOWS (templates)
     // ============================================
     match /workflows/{id} {
-      allow read: if isSignedIn() && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
       allow update: if isSignedIn() && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-      allow delete: if isSignedIn() && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin'));
+      allow delete: if isSignedIn()
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
     match /workflow_steps/{id} {
-      allow read: if isSignedIn() && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
       // create/update: check new data; delete: check existing resource (request.resource.data is null on delete)
       allow create, update: if isSignedIn() && tenantAllowedWrite(request.resource.data)
                              && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-      allow delete: if isSignedIn() && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow delete: if isSignedIn()
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
     }
 
     match /workflow_instances/{id} {
-      allow read: if isSignedIn() && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
       allow update: if isSignedIn() && tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-      allow delete: if isSignedIn() && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin'));
+      allow delete: if isSignedIn()
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
     match /workflow_instance_steps/{id} {
-      allow read: if isSignedIn() && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
       allow update: if isSignedIn() && tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-      allow delete: if isSignedIn() && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin'));
+      allow delete: if isSignedIn()
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
 
@@ -549,8 +552,8 @@ service cloud.firestore {
       allow read: if resource.data.active == true;
 
       allow read: if isSignedIn()
-                  && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'));
+                  && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
@@ -562,8 +565,8 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
 
       allow delete: if isSignedIn()
-                    && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin'));
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
 
@@ -572,8 +575,8 @@ service cloud.firestore {
     // ============================================
     match /event_rsvps/{id} {
       allow read: if isSignedIn()
-                  && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'));
+                  && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
 
       // Public RSVP link: anyone can submit an RSVP without being logged in
       allow create: if true;
@@ -587,8 +590,8 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
 
       allow delete: if isSignedIn()
-                    && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
     }
 
 
@@ -597,8 +600,8 @@ service cloud.firestore {
     // ============================================
     match /groups/{id} {
       allow read: if isSignedIn()
-                  && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader') || hasRole('viewer'));
+                  && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader') || hasRole('viewer'))));
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
@@ -610,8 +613,8 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
 
       allow delete: if isSignedIn()
-                    && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin'));
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
 
@@ -620,16 +623,16 @@ service cloud.firestore {
     // ============================================
     match /group_members/{id} {
       allow read: if isSignedIn()
-                  && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+                  && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'))));
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
 
       allow delete: if isSignedIn()
-                    && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
     }
 
 
@@ -638,8 +641,8 @@ service cloud.firestore {
     // ============================================
     match /group_attendance/{id} {
       allow read: if isSignedIn()
-                  && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+                  && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'))));
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
@@ -650,8 +653,8 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
 
       allow delete: if isSignedIn()
-                    && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin'));
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
 
@@ -660,8 +663,8 @@ service cloud.firestore {
     // ============================================
     match /group_attendance_records/{id} {
       allow read: if isSignedIn()
-                  && tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
+                  && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'))));
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
@@ -672,8 +675,8 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
 
       allow delete: if isSignedIn()
-                    && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin'));
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
     }
 
 
@@ -746,8 +749,17 @@ service cloud.firestore {
 
 
     // ============================================
+    // SELF-SERVICE SIGNUPS
+    // Written by API route (admin SDK) on registration.
+    // Super admin: full access for management dashboard.
+    // ============================================
+    match /signups/{id} {
+      allow read, write: if isSignedIn() && isSuperAdmin();
+    }
+
+
+    // ============================================
     // EVERYTHING ELSE: deny by default
     // ============================================
   }
 }
-
