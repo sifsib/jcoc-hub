@@ -7,5 +7,6 @@ export async function GET(req: NextRequest) {
     headers: { apikey: API_KEY },
   });
   const data = await res.json();
-  return NextResponse.json(data);
+  // Return everything so we can debug the shape
+  return NextResponse.json({ status: res.status, data });
 }
