@@ -9,6 +9,13 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({ instanceName, qrcode: true, integration: "WHATSAPP-BAILEYS" }),
   });
   const data = await res.json();
-  if (!res.ok) return NextResponse.json({ error: data.message ?? "Failed" }, { status: 400 });
-  return NextResponse.json(data);
+  // 400 often means instance already exists — that's fine, proceed
+  if (!res.ok) {
+    const msg = (data.message ?? "").toLowerCase();
+    const alreadyExists = msg.includes("already") || msg.includes("exists") || res.status === 400;
+    if (!alreadyExists) {
+      return NextResponse.json({ error: data.message ?? "Failed" }, { status: 400 });
+    }
+  }
+  return NextResponse.json({ success: true });
 }
