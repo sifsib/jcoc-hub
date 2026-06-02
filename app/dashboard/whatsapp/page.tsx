@@ -45,8 +45,7 @@ export default function WhatsAppPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instanceName }),
       });
-      const createData = await createRes.json();
-      if (!createRes.ok) throw new Error(createData.error || "Failed to create instance");
+      await createRes.json(); // proceed even if instance already exists
 
       const qrRes = await fetch(`/api/whatsapp/qr-code?instanceName=${instanceName}`);
       const qrData = await qrRes.json();
