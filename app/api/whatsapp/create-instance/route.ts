@@ -23,11 +23,12 @@ export async function POST(req: NextRequest) {
       );
     }
   }
-  // Restart the instance to trigger QR code generation
-  await fetch(`${BASE_URL}/instance/restart/${instanceName}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", apikey: API_KEY },
-  }).catch(() => { /* ignore restart errors */ });
+  // Log full create response so we can see if QR is included
+  console.log("[create-instance] Evolution API response:", JSON.stringify(data).slice(0, 500));
 
-  return NextResponse.json({ success: true });
+  // Extract QR base64 from create response if present (Evolution API v2 returns it directly)
+  const qrBase64 =
+    (data as Record<string, unknown> & { qrcode?: { base64?: string }; hash?: { base64?: string } })?.qrcode?.base64 ?? null;
+
+  return NextResponse.json({ success: true, qrBase64 });
 }
