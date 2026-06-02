@@ -30,6 +30,7 @@ interface Member {
   consentedToPrivacyPolicy: boolean;
   cellRegion?: string;
   ministryGroup?: string;
+  churchRole?: string;
   source?: string;
 }
 
@@ -49,6 +50,7 @@ interface TenantConfig {
   roles: string[];
   cellRegions: string[];
   ministryGroups: string[];
+  churchRoles: string[];
 }
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
@@ -61,10 +63,11 @@ const DEFAULT_MEMBERSHIP_TYPES = ["Full Active", "Associate"];
 const DEFAULT_ROLES = ["Member", "Pastor", "Youth Leader", "Treasurer", "Branch Administrator"];
 const DEFAULT_CELL_REGIONS: string[] = [];
 const DEFAULT_MINISTRY_GROUPS = ["Youth", "Mens Fellowship", "Womens Ministry", "Seniors"];
+const DEFAULT_CHURCH_ROLES: string[] = ["Elder", "Deacon", "Deaconess", "Trustee"];
 
 const emptyPerson = () => ({
   firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
-  maritalStatus: "", cellRegion: "", ministryGroup: "",
+  maritalStatus: "", cellRegion: "", ministryGroup: "", churchRole: "",
   address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
   bornAgain: "", waterBaptized: "", membershipType: "", ministries: [] as string[],
   role: "Member",
@@ -260,6 +263,15 @@ function MemberBlock({
           {config.ministryGroups.map(g => <option key={g}>{g}</option>)}
         </select>
       </F>
+      <F label="Church Role / Office">
+        <select value={data.churchRole} onChange={e => set("churchRole", e.target.value)} className={sel}>
+          <option value="">None / General Member</option>
+          {data.churchRole && !config.churchRoles.includes(data.churchRole) && (
+            <option value={data.churchRole}>{data.churchRole}</option>
+          )}
+          {config.churchRoles.map(r => <option key={r}>{r}</option>)}
+        </select>
+      </F>
       {showFaith && (
         <>
           <div className="grid grid-cols-2 gap-4">
@@ -305,6 +317,7 @@ export default function ManageMembershipPage() {
     roles: DEFAULT_ROLES,
     cellRegions: DEFAULT_CELL_REGIONS,
     ministryGroups: DEFAULT_MINISTRY_GROUPS,
+    churchRoles: DEFAULT_CHURCH_ROLES,
   });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -315,10 +328,12 @@ export default function ManageMembershipPage() {
   const [editMembershipTypes, setEditMembershipTypes] = useState<string[]>([]);
   const [editCellRegions, setEditCellRegions] = useState<string[]>([]);
   const [editMinistryGroups, setEditMinistryGroups] = useState<string[]>([]);
+  const [editChurchRoles, setEditChurchRoles] = useState<string[]>([]);
   const [newMinistry, setNewMinistry] = useState("");
   const [newMembershipType, setNewMembershipType] = useState("");
   const [newCellRegion, setNewCellRegion] = useState("");
   const [newMinistryGroup, setNewMinistryGroup] = useState("");
+  const [newChurchRole, setNewChurchRole] = useState("");
   const [configSaving, setConfigSaving] = useState(false);
 
   // Primary member
@@ -359,9 +374,10 @@ export default function ManageMembershipPage() {
           setConfig({
             ministries: td.ministries?.length ? td.ministries : DEFAULT_MINISTRIES,
             membershipTypes: td.membershipTypes?.length ? td.membershipTypes : DEFAULT_MEMBERSHIP_TYPES,
-            roles: td.churchRoles?.length ? td.churchRoles : DEFAULT_ROLES,
+            roles: td.roles?.length ? td.roles : DEFAULT_ROLES,
             cellRegions: td.cellRegions?.length ? td.cellRegions : DEFAULT_CELL_REGIONS,
             ministryGroups: td.ministryGroups?.length ? td.ministryGroups : DEFAULT_MINISTRY_GROUPS,
+            churchRoles: td.churchRoles?.length ? td.churchRoles : DEFAULT_CHURCH_ROLES,
           });
         }
         // Cell leaders only see their assigned cell
@@ -444,6 +460,7 @@ export default function ManageMembershipPage() {
         email: primary.email.trim().toLowerCase(), phone: fmtPhone(primary.phone),
         dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus,
         address: primary.address, role: primary.role, cellRegion: primary.cellRegion.trim(), ministryGroup: primary.ministryGroup.trim(),
+        churchRole: primary.churchRole?.trim() || "",
         membershipType: primary.membershipType, ministries: primary.ministries,
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
         householdId: hid, householdRole: "primary",
@@ -464,6 +481,7 @@ export default function ManageMembershipPage() {
           email: spouse.email.trim().toLowerCase(), phone: fmtPhone(spouse.phone),
           dob: spouse.dob, gender: spouse.gender, maritalStatus: "Married",
           address: spouse.address, role: spouse.role, cellRegion: spouse.cellRegion.trim(), ministryGroup: spouse.ministryGroup.trim(),
+          churchRole: spouse.churchRole?.trim() || "",
           membershipType: spouse.membershipType, ministries: spouse.ministries,
           faithStatus: { bornAgain: spouse.bornAgain, waterBaptized: spouse.waterBaptized },
           householdId: hid, householdRole: "spouse", spouseId: primaryRef.id,
@@ -511,10 +529,12 @@ export default function ManageMembershipPage() {
     setEditMembershipTypes([...config.membershipTypes]);
     setEditCellRegions([...config.cellRegions]);
     setEditMinistryGroups([...config.ministryGroups]);
+    setEditChurchRoles([...config.churchRoles]);
     setNewMinistry("");
     setNewMembershipType("");
     setNewCellRegion("");
     setNewMinistryGroup("");
+    setNewChurchRole("");
     setView("configure");
   };
 
@@ -527,6 +547,7 @@ export default function ManageMembershipPage() {
         membershipTypes: editMembershipTypes,
         cellRegions: editCellRegions,
         ministryGroups: editMinistryGroups,
+        churchRoles: editChurchRoles,
       });
       setConfig(prev => ({
         ...prev,
@@ -534,6 +555,7 @@ export default function ManageMembershipPage() {
         membershipTypes: editMembershipTypes,
         cellRegions: editCellRegions,
         ministryGroups: editMinistryGroups,
+        churchRoles: editChurchRoles,
       }));
       setView("list");
     } catch (e) {
@@ -562,6 +584,7 @@ export default function ManageMembershipPage() {
       maritalStatus: m.maritalStatus || "",
       cellRegion: m.cellRegion || "",
       ministryGroup: m.ministryGroup || "",
+      churchRole: m.churchRole || "",
       address: (m as any).address || { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
       bornAgain: m.faithStatus?.bornAgain || (m as any).bornAgain || "",
       waterBaptized: m.faithStatus?.waterBaptized || (m as any).waterBaptized || "",
@@ -591,6 +614,7 @@ export default function ManageMembershipPage() {
         role: primary.role,
         cellRegion: primary.cellRegion.trim(),
         ministryGroup: primary.ministryGroup.trim(),
+        churchRole: primary.churchRole?.trim() || "",
         membershipType: primary.membershipType,
         ministries: primary.ministries,
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
@@ -717,6 +741,7 @@ export default function ManageMembershipPage() {
           membershipType: s(row["Membership Type"] || row.membershipType),
           cellRegion: s(row["Cell Region / Branch"] || row["Cell Region"] || row.cellRegion),
           ministryGroup: s(row["Ministry Group"] || row.ministryGroup) || assignMinistryGroup(normalizeDob(row["Date of Birth"] || row.dob || row["Date of birth"]), s(row["Gender"] || row.gender), s(row["Marital Status"] || row.maritalStatus)),
+          churchRole: s(row["Church Role"] || row.churchRole),
           address: {
             line1: s(row["Address Line 1"] || row["Line 1"] || row.address || ""),
             line2: s(row["Address Line 2"] || row["Line 2"] || ""),
@@ -1165,6 +1190,27 @@ export default function ManageMembershipPage() {
             </div>
           </div>
 
+          {/* Church Role / Office */}
+          <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4">
+            <div>
+              <p className="text-base font-bold text-gray-800">Church Role / Office</p>
+              <p className="text-xs text-gray-400 mt-0.5">Formal church offices. e.g. Elder, Deacon, Trustee. Shown as a dropdown on the registration form.</p>
+            </div>
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+              {editChurchRoles.map((r) => (
+                <div key={r} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-700">{r}</span>
+                  <button onClick={() => setEditChurchRoles(p => p.filter(x => x !== r))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-2">Remove</button>
+                </div>
+              ))}
+              {editChurchRoles.length === 0 && <p className="text-xs text-gray-400 italic py-2">No church roles added yet.</p>}
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <input value={newChurchRole} onChange={e => setNewChurchRole(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); const v = newChurchRole.trim(); if (v && !editChurchRoles.includes(v)) { setEditChurchRoles(p => [...p, v]); setNewChurchRole(""); } }}} placeholder="e.g. Elder" className={inp} />
+              <button onClick={() => { const v = newChurchRole.trim(); if (v && !editChurchRoles.includes(v)) { setEditChurchRoles(p => [...p, v]); setNewChurchRole(""); }}} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0">Add</button>
+            </div>
+          </div>
+
         </div>
 
         <div className="flex gap-3">
@@ -1427,6 +1473,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                             "bg-gray-100 text-gray-600"
                           }`}>{m.role}</span>
                           {m.membershipType && <span className="text-xs text-gray-500">{m.membershipType}</span>}
+                          {m.churchRole && <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.5 rounded w-fit">{m.churchRole}</span>}
                         </div>
                       </td>
                       <td className="px-5 py-4">
