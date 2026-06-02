@@ -45,12 +45,18 @@ export default function WhatsAppPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instanceName }),
       });
-      await createRes.json(); // proceed even if instance already exists
+      const createData = await createRes.json();
+      if (!createRes.ok) throw new Error(createData.error || "Failed to create instance");
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
-const qrRes = await fetch(`/api/whatsapp/qr-code?instanceName=${instanceName}`);
-      const qrData = await qrRes.json();
-      const base64 = qrData.qrcode?.base64 ?? qrData.base64;
+      // Give Evolution API time to initialize the instance before fetching QR
+      let base64: string | null = null;
+      for (let attempt = 0; attempt < 12; attempt++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const qrRes = await fetch(`/api/whatsapp/qr-code?instanceName=${instanceName}`);
+        const qrData = await qrRes.json();
+        base64 = qrData.qrcode?.base64 ?? qrData.base64 ?? qrData.qr?.base64 ?? null;
+        if (base64) break;
+      }
       if (!base64) throw new Error("Could not load QR code. Please try again.");
       setQrCode(base64);
 
