@@ -7,6 +7,6 @@ export async function GET(req: NextRequest) {
     headers: { apikey: API_KEY },
   });
   const data = await res.json();
-  // Return everything so we can debug the shape
-  return NextResponse.json({ status: res.status, data });
+  console.log("[qr-code] Evolution API response:", JSON.stringify(data).slice(0, 300));
+  return NextResponse.json(data);
 }
