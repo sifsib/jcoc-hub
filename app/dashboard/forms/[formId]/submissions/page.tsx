@@ -42,31 +42,37 @@ export default function SubmissionsPage() {
   useEffect(() => {
     if (!formId) return;
 
+    let unsub: (() => void) | undefined;
+
     getDoc(doc(db, "forms", formId)).then((snap) => {
-      if (snap.exists()) {
-        setForm(snap.data() as ChurchForm);
+      if (!snap.exists()) {
+        setLoading(false);
+        return;
       }
+      const formData = snap.data() as ChurchForm;
+      setForm(formData);
+
+      // Include tenantId so Firestore rules can verify tenant access
+      const q = query(
+        collection(db, "form_submissions"),
+        where("tenantId", "==", formData.tenantId),
+        where("formId", "==", formId)
+      );
+
+      unsub = onSnapshot(q, (snap) => {
+        const docs = snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as Omit<Submission, "id">) }))
+          .sort((a, b) => {
+            const ta = a.submittedAt?.toMillis?.() ?? 0;
+            const tb = b.submittedAt?.toMillis?.() ?? 0;
+            return tb - ta; // newest first
+          });
+        setSubmissions(docs);
+        setLoading(false);
+      });
     });
 
-    // No orderBy — avoids composite index requirement; sort client-side instead
-    const q = query(
-      collection(db, "form_submissions"),
-      where("formId", "==", formId)
-    );
-
-    const unsub = onSnapshot(q, (snap) => {
-      const docs = snap.docs
-        .map((d) => ({ id: d.id, ...(d.data() as Omit<Submission, "id">) }))
-        .sort((a, b) => {
-          const ta = a.submittedAt?.toMillis?.() ?? 0;
-          const tb = b.submittedAt?.toMillis?.() ?? 0;
-          return tb - ta; // newest first
-        });
-      setSubmissions(docs);
-      setLoading(false);
-    });
-
-    return () => unsub();
+    return () => unsub?.();
   }, [formId]);
 
   function exportCSV() {

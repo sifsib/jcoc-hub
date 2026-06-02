@@ -1,0 +1,97 @@
+This document serves as the comprehensive engineering handover for the unified Kereke Hub ecosystem. It contains all architectural structures, system configurations, color codes, and database patterns required for a smooth transition to an incoming developer or AI collaborator.
+
+1. Project Overview & Separation of Concerns
+The ecosystem is built as a unified church administration platform split across two distinct Next.js applications sharing a single backend database instance.
+
+kerekehub.co.za (Kereke Marketing Website): A multi-page Next.js front-end focused entirely on high-conversion leads, channel metrics, support ticketing, and onboarding workflows. It acts as the public visitor center.
+
+hub.kerekehub.co.za (Kereke Hub Core Application): The secure, multi-tenant administrative engine where verified church staff manage data, generate rosters, and parse financials.
+
+Both systems are built on an identical engineering engine—utilizing Next.js, TypeScript, Tailwind CSS, and Firebase. They share the exact same Firebase production database instance, allowing marketing data and support tickets to feed straight into active platform administration backends.
+
+2. Shared Visual Identity & Branding Matrix
+The branding palette has evolved from a stark high-contrast white setup into a premium, unified tech-slate and sage-green configuration to maximize typography legibility across modern interfaces.
+
+Core Tailwind Theme Matrix
+JavaScript
+colors: {
+  'primary-slate-950':   '#020617', // Main deep layout background
+  'primary-slate-900':   '#0F172A', // Secondary content blocks
+  'text-slate-100':      '#F8FAFC', // Crisp primary typography
+  'text-slate-400':      '#94A3B8', // Subheadings and descriptors
+  'vibrant-sage-green':  '#3B9A5F', // Accent elements, borders, and icons
+  'emerald-600':         '#059669', // Primary call-to-action color
+  'accent-gold':         '#EAC96F', // Highlighted text components
+}
+Registered Layout Gradients
+Hero Radial Glow: radial-gradient(circle at top, #3B9A5F 0%, #0F172A 70%)
+
+Vertical Section Blend: linear-gradient(to bottom, #0F172A 0%, #020617 100%)
+
+3. Database Architecture & Production Schema
+The platform relies on an enterprise-grade multi-tenant model mapped within Cloud Firestore. Complete data isolation is strictly enforced at the database layer using a distinct tenantId structural pattern.
+
+Key Production Collections Matrix
+tenants: Tracks registered organizations, subdomains, payment states, and workspace profile criteria.
+
+users: Houses user profiles, email descriptors, and Role-Based Access Control (RBAC) tokens (e.g., Admin, Staff, Volunteer).
+
+members: Stores deep membership details, cross-generational family nesting fields (Spouse, Parents, In-Laws), and critical faith milestones.
+
+attendance: Captures regular service metrics and cell-group tracking indexes.
+
+support_tickets: Automatically logs inbound engineering assistance records pushed from the marketing domain interface.
+
+demo_requests: Indexes walkthrough registrations from prospective church leaders.
+
+4. Advanced System Features & Functionalities
+The architecture has been designed around specific structural modules customized for local, cost-sensitive church environments:
+
+Tiered Core Analytics: Evaluates running weekend and cell assembly attendance profiles to identify alignment trends and automatically flag sudden membership drop-offs.
+
+Secure Financial Ledger: Allows leaders to track localized contributions against budgeting goals. Includes a built-in function to export datasets cleanly into CSV format for easy external bank statement audits, as well as an upload attachment option to capture supporting receipt photos at the exact point of entry.
+
+Per-Tenant Custom Branding: Enables individual organizations to input their own unique church name and primary brand color accent to override system display frames dynamically.
+
+Gmail SMTP Cloud Routing: Bypasses expensive global transactional mail layers by allowing individual churches to plug in their own official Gmail SMTP credentials. Automated member notifications, statements, and outreach are processed through a backend Firebase Cloud Function triggered on update metrics.
+
+5. Security & Multi-Page Routing Configuration
+API Route Isolation (v1 Pipeline)
+To prevent internal Next.js folder-system collisions between public user-facing web pages and backend API channels, all data-capture targets use explicit namespace prefixes inside the file tree:
+
+app/api/v1-demo/route.ts (Handles demo registrations to demo_requests)
+
+app/api/v1-contact/route.ts (Handles general inquiries)
+
+app/api/v1-tickets/route.ts (Pushes technical tickets to support_tickets)
+
+Environment Key Management (.env.local)
+Both project folders contain localized environmental key configurations to communicate safely via the Firebase Admin SDK. The variables mirror your existing production app credentials:
+
+Plaintext
+FIREBASE_PROJECT_ID="kereke-hub"
+FIREBASE_CLIENT_EMAIL="firebase-adminsdk-fbsvc@kereke-hub.iam.gserviceaccount.com"
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n[Encrypted Private String]\n-----END PRIVATE KEY-----\n"
+6. Business Funnel & PayFast Logic
+The monetization strategy focuses heavily on rapid adoption for small churches by eliminating automated sign-up friction:
+
+Manual Trial Validation: Users submit their information on the marketing site. After a live tour, an administrator issues a manual code.
+
+Payment Bypass Onboarding: Pastors type their 30-day code into the sign-up form at hub.kerekehub.co.za/register. This creates their isolated database workspace without forcing credit card capture up front.
+
+PayFast Step-Billing Tokenization: On Day 31, users are restricted by a soft wall prompting payment authorization. Due to the custom pricing structure (Month 1 Free, Months 2–4 at R99 p/m, and Standard Month 5+ at R139 p/m), you must implement PayFast Tokenization instead of a fixed standard subscription. This allows the backend to securely pass explicit step-up charge values to PayFast over time using a single authorized transaction token.
+
+7. Current Project State & Next Deliverables
+Frontend Foundations: Both code folders are initialized. The marketing site has been split into clean, modular sub-pages (/about, /features, /pricing, /demo, /faqs, /contact) using consistent slate configurations.
+
+Tactile Hover State: Key interaction nodes across the layout have been upgraded with Tailwind animations (hover:scale-105 transition-all duration-300 transform ease-out active:scale-95) to give clear visual feedback.
+
+Database Integration: Forms are fully functional and successfully process server-side REST requests to document collections.
+
+Next Immediates:
+
+Embed your final overview video link inside the placeholder frame at app/demo/page.tsx.
+
+Deploy the updated multi-page marketing project folder to Vercel and link it to the primary domain kerekehub.co.za.
+
+Finalize the backend tokenization webhook loop with PayFast sandbox environments to initiate the stepped automated billing process.

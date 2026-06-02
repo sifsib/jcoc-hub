@@ -540,20 +540,16 @@ export const billingReminder = onSchedule(
       // Determine which date to check and what the upcoming rate is
       let checkDate: string | null = null;
       let daysLabel = "";
-      let upcomingRate = 0;
       let upcomingLabel = "";
 
       if (t.accountType === "beta") {
         checkDate = t.trialEndsAt;
-        upcomingRate = 159;
         upcomingLabel = "R159/mo";
       } else if (t.billingPhase === "trial") {
         checkDate = t.trialEndsAt;
-        upcomingRate = 99;
         upcomingLabel = "R99/mo";
       } else if (t.billingPhase === "evaluation") {
         checkDate = t.evaluationEndsAt;
-        upcomingRate = 159;
         upcomingLabel = "R159/mo";
       }
 

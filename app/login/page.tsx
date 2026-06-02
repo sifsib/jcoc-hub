@@ -42,12 +42,13 @@ export default function LoginPage() {
         throw new Error("Failed to establish session on the server.");
       }
 
+      // Keep loading=true during navigation so the button stays in its loading
+      // state rather than snapping back to idle while the page transitions.
       router.push("/dashboard");
       router.refresh();
     } catch (err: any) {
       console.error("Login error details:", err);
       setError(err.message || "Invalid email or password.");
-    } finally {
       setLoading(false);
     }
   };
@@ -98,11 +99,19 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white p-2 rounded transition font-medium mt-2 disabled:bg-blue-300"
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white p-2 rounded transition font-medium mt-2 disabled:bg-blue-300 flex items-center justify-center gap-2"
             disabled={loading}
           >
+            {loading && (
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            )}
             {loading ? "Signing in..." : "Login"}
           </button>
+          {loading && (
+            <p className="text-center text-xs text-gray-400 mt-1">
+              Verifying credentials and loading your dashboard...
+            </p>
+          )}
         </form>
       </div>
 

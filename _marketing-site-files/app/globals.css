@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@layer utilities {
+     .bg-radial-gradient-hero {
+       background: radial-gradient(circle at top, #3B9A5F 0%, #143521 70%);
+     }
+     .bg-vertical-gradient-features {
+       background: linear-gradient(to bottom, #143521 0%, #FDFBF0 15%, #FDFBF0 85%, #143521 100%);
+     }
+     .bg-vertical-gradient-isolation {
+       background: linear-gradient(to bottom, #143521 0%, #112c1c 100%);
+     }
+     .bg-vertical-gradient-demo {
+       background: linear-gradient(to bottom, #143521 0%, #3B9A5F 100%);
+     }
+   }

@@ -38,7 +38,7 @@ service cloud.firestore {
     }
 
     function canEditChurchProfile() {
-      return isOwner();
+      return isOwner() || hasRole('admin');
     }
 
     function canManageMembers() {
@@ -46,15 +46,15 @@ service cloud.firestore {
     }
 
     function canReadMembers() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer') || hasRole('cell_leader');
     }
 
     function canManageAttendance() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader');
     }
 
     function canReadAttendance() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer') || hasRole('cell_leader');
     }
 
     function canManageFinance() {
