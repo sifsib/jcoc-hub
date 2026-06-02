@@ -22,6 +22,7 @@ interface TeamMember {
   role: string;
   status: string;
   branchId: string | null;
+  assignedCellRegion: string | null;
   createdAt: string;
 }
 
@@ -35,7 +36,7 @@ type AssignableRole = "admin" | "viewer" | "finance" | "member_manager" | "cell_
 const ROLE_META: Record<AssignableRole, { label: string; description: string; color: string }> = {
   admin: {
     label: "Admin",
-    description: "Full access to all modules. Can invite other users.",
+    description: "Full access to all modules and church settings. Only the owner can manage the team.",
     color: "bg-purple-50 text-purple-700 border border-purple-200",
   },
   viewer: {
@@ -105,6 +106,8 @@ export default function TeamPage() {
   // Role-change state
   const [editingUid, setEditingUid] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<AssignableRole>("viewer");
+  const [editCellRegion, setEditCellRegion] = useState("");
+  const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
   // Remove state
@@ -156,6 +159,7 @@ export default function TeamPage() {
           role: d.data().role || "viewer",
           status: d.data().status || "active",
           branchId: d.data().branchId || null,
+          assignedCellRegion: d.data().assignedCellRegion || null,
           createdAt: d.data().createdAt || "",
         }))
     );
@@ -200,15 +204,22 @@ export default function TeamPage() {
   }
 
   async function handleRoleChange(targetUid: string) {
+    if (editRole === "cell_leader" && !editCellRegion.trim()) {
+      setEditError("Select a cell region for this leader.");
+      return;
+    }
     setEditLoading(true);
+    setEditError("");
+    const newRegion = editRole === "cell_leader" ? editCellRegion.trim() : null;
     try {
-      await updateDoc(doc(db, "users", targetUid), { role: editRole });
+      await updateDoc(doc(db, "users", targetUid), { role: editRole, assignedCellRegion: newRegion });
       setMembers((prev) =>
-        prev.map((m) => (m.uid === targetUid ? { ...m, role: editRole } : m))
+        prev.map((m) => (m.uid === targetUid ? { ...m, role: editRole, assignedCellRegion: newRegion } : m))
       );
       setEditingUid(null);
     } catch (err) {
       console.error(err);
+      setEditError("Could not save. Please try again.");
     } finally {
       setEditLoading(false);
     }
@@ -454,21 +465,51 @@ export default function TeamPage() {
                     </td>
                     <td className="px-6 py-4">
                       {editingUid === m.uid ? (
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={editRole}
-                            onChange={(e) => setEditRole(e.target.value as AssignableRole)}
-                            className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          >
-                            {(Object.keys(ROLE_META) as AssignableRole[]).map((key) => (
-                              <option key={key} value={key}>{ROLE_META[key].label}</option>
-                            ))}
-                          </select>
-                          <button onClick={() => handleRoleChange(m.uid)} disabled={editLoading}
-                            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50">
-                            {editLoading ? "..." : "Save"}
-                          </button>
-                          <button onClick={() => setEditingUid(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={editRole}
+                              onChange={(e) => {
+                                const next = e.target.value as AssignableRole;
+                                setEditRole(next);
+                                setEditError("");
+                                if (next !== "cell_leader") setEditCellRegion("");
+                              }}
+                              className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                              {(Object.keys(ROLE_META) as AssignableRole[]).map((key) => (
+                                <option key={key} value={key}>{ROLE_META[key].label}</option>
+                              ))}
+                            </select>
+                            <button onClick={() => handleRoleChange(m.uid)} disabled={editLoading}
+                              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50">
+                              {editLoading ? "..." : "Save"}
+                            </button>
+                            <button onClick={() => { setEditingUid(null); setEditError(""); }} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                          </div>
+                          {editRole === "cell_leader" && (
+                            cellRegions.length > 0 ? (
+                              <select
+                                value={editCellRegion}
+                                onChange={(e) => setEditCellRegion(e.target.value)}
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              >
+                                <option value="">Select a cell region</option>
+                                {cellRegions.map((r) => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={editCellRegion}
+                                onChange={(e) => setEditCellRegion(e.target.value)}
+                                placeholder="e.g. North Region"
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                            )
+                          )}
+                          {editError && <p className="text-xs text-red-600">{editError}</p>}
                         </div>
                       ) : (
                         roleBadge(m.role)
@@ -485,7 +526,7 @@ export default function TeamPage() {
                       <div className="flex items-center justify-end gap-2">
                         {editingUid !== m.uid && (
                           <button
-                            onClick={() => { setEditingUid(m.uid); setEditRole(m.role as AssignableRole); }}
+                            onClick={() => { setEditingUid(m.uid); setEditRole(m.role as AssignableRole); setEditCellRegion(m.assignedCellRegion || ""); setEditError(""); }}
                             className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition"
                           >
                             Change Role

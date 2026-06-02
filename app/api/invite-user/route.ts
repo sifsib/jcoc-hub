@@ -25,12 +25,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Only the church owner can invite users." }, { status: 403 });
   }
 
-  const { email, displayName, role, branchId } = await req.json();
+  const { email, displayName, role, branchId, assignedCellRegion } = await req.json();
 
   // 3. Validate role — only these assignable roles are allowed
-  const assignableRoles = ["admin", "viewer", "finance", "member_manager"];
+  const assignableRoles = ["admin", "viewer", "finance", "member_manager", "cell_leader"];
   if (!assignableRoles.includes(role)) {
     return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+  }
+
+  // Cell leaders must be scoped to a cell region
+  if (role === "cell_leader" && !assignedCellRegion?.trim()) {
+    return NextResponse.json({ error: "A cell region is required for cell leaders." }, { status: 400 });
   }
 
   const tenantId = callerData.tenantId;
@@ -64,6 +69,7 @@ export async function POST(req: NextRequest) {
     tenantId,
     status: "invited",
     branchId: branchId || null,
+    assignedCellRegion: role === "cell_leader" ? assignedCellRegion.trim() : null,
     createdAt: new Date().toISOString(),
     invitedBy: callerUid,
   });
