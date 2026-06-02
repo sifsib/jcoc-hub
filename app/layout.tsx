@@ -13,12 +13,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kereke Hub Portal",
+  title: "Kereke Hub",
   description: "Church administration portal powered by Kereke Hub.",
-  icons: {
-    icon: "/icon.jpg",
-    apple: "/icon.jpg",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Kereke Hub",
   },
+  icons: {
+    icon: "/icons/icon-192x192.png",
+    apple: "/icons/icon-192x192.png",
+  },
+  themeColor: "#1A5C38",
 };
 
 export default function RootLayout({
