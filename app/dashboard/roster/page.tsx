@@ -98,6 +98,30 @@ function isUnder16(dob?: string): boolean {
   return birth > cutoff;
 }
 
+function calcAge(dob: string): number | null {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+function assignMinistryGroup(dob: string, gender: string, maritalStatus: string): string {
+  const age = calcAge(dob);
+  if (age === null) return "";
+  const isMarried = maritalStatus.toLowerCase() === "married";
+  const isMale = gender.toLowerCase() === "male" || gender.toLowerCase() === "m";
+  if (age <= 12) return "Kingdom Kids";
+  if (age <= 17) return "Kingdom Arsenals";
+  // 18+: married always goes to gender group
+  if (isMarried) return isMale ? "Mighty Men" : "Women of Faith";
+  if (age <= 35) return "Youth";
+  return isMale ? "Mighty Men" : "Women of Faith";
+}
+
 function fmtPhone(raw: string): string {
   const c = raw.trim().replace(/\s+/g, "");
   return c.startsWith("0") ? "27" + c.substring(1) : c;
@@ -692,7 +716,7 @@ export default function ManageMembershipPage() {
           maritalStatus: s(row["Marital Status"] || row.maritalStatus),
           membershipType: s(row["Membership Type"] || row.membershipType),
           cellRegion: s(row["Cell Region / Branch"] || row["Cell Region"] || row.cellRegion),
-          ministryGroup: s(row["Ministry Group"] || row.ministryGroup),
+          ministryGroup: s(row["Ministry Group"] || row.ministryGroup) || assignMinistryGroup(normalizeDob(row["Date of Birth"] || row.dob || row["Date of birth"]), s(row["Gender"] || row.gender), s(row["Marital Status"] || row.maritalStatus)),
           address: {
             line1: s(row["Address Line 1"] || row["Line 1"] || row.address || ""),
             line2: s(row["Address Line 2"] || row["Line 2"] || ""),
@@ -728,6 +752,7 @@ export default function ManageMembershipPage() {
               dob: normalizeDob(row["Spouse DOB"]),
               gender: s(row["Spouse Gender"]),
               maritalStatus: "Married",
+              ministryGroup: assignMinistryGroup(normalizeDob(row["Spouse DOB"]), s(row["Spouse Gender"]), "Married"),
               membershipType: s(row["Spouse Membership Type"]),
               address: {
                 line1: s(row["Address Line 1"] || row["Line 1.1"] || row["Line 1"] || ""),
@@ -757,7 +782,9 @@ export default function ManageMembershipPage() {
             firstName: child.firstName, lastName: child.lastName,
             email: "", phone: "",
             dob: child.dob, gender: child.gender,
-            maritalStatus: "Single", role: "Member",
+            maritalStatus: "Single",
+            ministryGroup: assignMinistryGroup(child.dob, child.gender, "Single"),
+            role: "Member",
             address: {
               line1: s(row["Address Line 1"] || row["Line 1"] || ""),
               line2: s(row["Address Line 2"] || row["Line 2"] || ""),
