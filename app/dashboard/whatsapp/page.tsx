@@ -47,7 +47,8 @@ export default function WhatsAppPage() {
       });
       await createRes.json(); // proceed even if instance already exists
 
-      const qrRes = await fetch(`/api/whatsapp/qr-code?instanceName=${instanceName}`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+const qrRes = await fetch(`/api/whatsapp/qr-code?instanceName=${instanceName}`);
       const qrData = await qrRes.json();
       const base64 = qrData.qrcode?.base64 ?? qrData.base64;
       if (!base64) throw new Error("Could not load QR code. Please try again.");
