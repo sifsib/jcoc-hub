@@ -10,7 +10,7 @@ const withPWA = require("next-pwa")({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Add any existing Next.js config options here
+  turbopack: {},
 };
 
 module.exports = withPWA(nextConfig);
