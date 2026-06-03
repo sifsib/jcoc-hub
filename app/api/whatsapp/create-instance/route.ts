@@ -1,80 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-const BASE_URL = process.env.NEXT_PUBLIC_EVOLUTION_API_URL!;
-const API_KEY = process.env.EVOLUTION_API_KEY!;
+import {
+  cleanString,
+  evolutionError,
+  extractQrBase64,
+  getEvolutionConfig,
+  isAlreadyExistsResponse,
+  readEvolutionJson,
+} from "../_utils";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-async function fetchQR(instanceName: string): Promise<string | null> {
-  // Poll fetchInstances up to 10 times (10 seconds) waiting for QR
-  for (let i = 0; i < 10; i++) {
-    await sleep(1000);
-    try {
-      const r = await fetch(`${BASE_URL}/instance/fetchInstances`, {
-        headers: { apikey: API_KEY },
-      });
-      const list = await r.json() as Array<Record<string, unknown>>;
-      const instance = list.find((x) => x.name === instanceName);
-      console.log(`[fetchQR] attempt ${i + 1}:`, JSON.stringify(instance)?.slice(0, 300));
-      const qr = (instance as Record<string, unknown> & { qrcode?: { base64?: string } })?.qrcode?.base64;
-      if (qr) return qr;
-    } catch (e) {
-      console.error("[fetchQR] error:", e);
-    }
-  }
-  return null;
-}
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const { instanceName } = await req.json();
-
-  // Step 1: Delete any existing instance first (ensures a clean slate)
-  try {
-    await fetch(`${BASE_URL}/instance/delete/${encodeURIComponent(instanceName)}`, {
-      method: "DELETE",
-      headers: { apikey: API_KEY },
-    });
-    console.log("[create-instance] deleted existing instance (if any)");
-  } catch {
-    // Ignore — it may not exist
+  const config = getEvolutionConfig();
+  if (!config) {
+    return NextResponse.json({ error: "Evolution API credentials are not configured." }, { status: 500 });
   }
 
-  // Step 2: Create the instance fresh
-  const res = await fetch(`${BASE_URL}/instance/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: API_KEY },
-    body: JSON.stringify({ instanceName, qrcode: true, integration: "WHATSAPP-BAILEYS" }),
-  });
-  let data: Record<string, unknown> = {};
-  try { data = await res.json(); } catch { /* non-JSON response */ }
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
 
-  if (!res.ok) {
-    const msg = (String(data.message ?? "")).toLowerCase();
-    const alreadyExists = msg.includes("already") || msg.includes("exists") || res.status === 400;
-    if (!alreadyExists) {
-      console.error("[create-instance] Evolution API error:", res.status, data);
+  const instanceName = cleanString(body.instanceName);
+  if (!instanceName) {
+    return NextResponse.json({ error: "Instance name is required." }, { status: 400 });
+  }
+
+  try {
+    const res = await fetch(`${config.baseUrl}/instance/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: config.apiKey },
+      body: JSON.stringify({ instanceName, qrcode: true, integration: "WHATSAPP-BAILEYS" }),
+    });
+    const data = await readEvolutionJson(res);
+
+    if (!res.ok && !isAlreadyExistsResponse(data)) {
       return NextResponse.json(
-        { error: `Evolution API error (${res.status}): ${data.message ?? "Check server logs"}` },
-        { status: 400 }
+        { error: evolutionError(data, res.status) },
+        { status: res.status >= 500 ? 502 : 400 }
       );
     }
+
+    return NextResponse.json({ success: true, qrBase64: extractQrBase64(data) });
+  } catch (error) {
+    console.error("WhatsApp instance create error:", error);
+    return NextResponse.json({ error: "Could not reach Evolution API." }, { status: 502 });
   }
-  console.log("[create-instance] create response:", JSON.stringify(data).slice(0, 500));
-
-  // Step 3: Check if QR is in the create response already
-  let qrBase64 = (data as Record<string, unknown> & { qrcode?: { base64?: string } })?.qrcode?.base64 ?? null;
-
-  // Step 4: If not, trigger connect and poll for QR
-  if (!qrBase64) {
-    await fetch(`${BASE_URL}/instance/connect/${instanceName}`, {
-      headers: { apikey: API_KEY },
-    });
-    qrBase64 = await fetchQR(instanceName);
-  }
-
-  if (!qrBase64) {
-    console.error("[create-instance] QR not generated after 10s for", instanceName);
-    return NextResponse.json({ error: "QR code could not be generated. Check Evolution API logs." }, { status: 500 });
-  }
-
-  return NextResponse.json({ success: true, qrBase64 });
 }

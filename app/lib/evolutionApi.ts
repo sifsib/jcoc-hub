@@ -1,70 +1,28 @@
-// ─── Evolution API Helper ─────────────────────────────────────────────────────
-// All calls to the Evolution API server go through this file.
+import * as admin from "firebase-admin";
 
-const BASE_URL = process.env.NEXT_PUBLIC_EVOLUTION_API_URL!;
-const API_KEY = process.env.EVOLUTION_API_KEY!;
+// Prevent re-initializing on hot reloads
+if (!admin.apps.length) {
+  // Support both naming conventions used across deployments:
+  //   FIREBASE_ADMIN_* (kereke-hub Vercel project)
+  //   FIREBASE_*       (fallback / legacy)
+  const projectId =
+    process.env.FB_ADMIN_PROJECT_ID || process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
+  const clientEmail =
+    process.env.FB_ADMIN_CLIENT_EMAIL || process.env.FIREBASE_ADMIN_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = (
+    process.env.FB_ADMIN_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY
+  )?.replace(/\\n/g, "\n");
 
-const headers = {
-  "Content-Type": "application/json",
-  apikey: API_KEY,
-};
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error(
+      "Firebase Admin env vars missing. Need FB_ADMIN_PROJECT_ID, FB_ADMIN_CLIENT_EMAIL, FB_ADMIN_PRIVATE_KEY"
+    );
+  }
 
-// ── Create a new WhatsApp instance for a tenant ──
-export async function createInstance(instanceName: string) {
-  const res = await fetch(`${BASE_URL}/instance/create`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      instanceName,
-      qrcode: true,
-      integration: "WHATSAPP-BAILEYS",
-    }),
+  admin.initializeApp({
+    credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
   });
-  return res.json();
 }
 
-// ── Get QR code for a tenant instance ──
-export async function getQRCode(instanceName: string) {
-  const res = await fetch(`${BASE_URL}/instance/connect/${instanceName}`, {
-    method: "GET",
-    headers,
-  });
-  return res.json();
-}
-
-// ── Check connection status ──
-export async function getConnectionStatus(instanceName: string) {
-  const res = await fetch(
-    `${BASE_URL}/instance/connectionState/${instanceName}`,
-    { method: "GET", headers }
-  );
-  return res.json();
-}
-
-// ── Send a text message ──
-export async function sendTextMessage(
-  instanceName: string,
-  to: string,
-  message: string
-) {
-  // Ensure number is in international format e.g. 27821234567
-  const number = to.replace(/\D/g, "");
-  const res = await fetch(`${BASE_URL}/message/sendText/${instanceName}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      number,
-      text: message,
-    }),
-  });
-  return res.json();
-}
-
-// ── Delete / disconnect an instance ──
-export async function deleteInstance(instanceName: string) {
-  const res = await fetch(`${BASE_URL}/instance/delete/${instanceName}`, {
-    method: "DELETE",
-    headers,
-  });
-  return res.json();
-}
+export const adminAuth = admin.auth();
+export const adminDb = admin.firestore();

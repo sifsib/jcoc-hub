@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { db } from "../../../lib/firebase";
-import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 
 interface ChurchEvent {
   tenantId: string;
@@ -27,9 +27,9 @@ interface TenantInfo {
 type RsvpStatus = "attending" | "maybe" | "declined";
 
 const STATUS_OPTIONS: { value: RsvpStatus; label: string; emoji: string }[] = [
-  { value: "attending", label: "Yes, I'll be there", emoji: "✅" },
+  { value: "attending", label: "Yes, I’ll be there", emoji: "✅" },
   { value: "maybe", label: "Maybe", emoji: "🤔" },
-  { value: "declined", label: "Can't make it", emoji: "❌" },
+  { value: "declined", label: "Can’t make it", emoji: "❌" },
 ];
 
 function formatEventDate(dateStr: string) {
@@ -98,24 +98,31 @@ export default function PublicRsvpPage() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      // Duplicate check removed — unauthenticated users cannot read event_rsvps
-      await addDoc(collection(db, "event_rsvps"), {
-        eventId,
-        tenantId: event.tenantId,
-        memberId: "",
-        memberName: name.trim(),
-        phone: phone.trim(),
-        email: email.trim(),
-        status,
-        attended: false,
-        source: "public_link",
-        respondedAt: serverTimestamp(),
+      const res = await fetch("/api/rsvp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId,
+          name,
+          phone,
+          email,
+          status,
+        }),
       });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Something went wrong. Please try again.");
+      }
+
+      if (typeof data.rsvpCount === "number") {
+        setEvent({ ...event, rsvpCount: data.rsvpCount });
+      }
 
       setSubmitted(true);
     } catch (err) {
       console.error("RSVP submit error:", err);
-      setSubmitError("Something went wrong. Please try again.");
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }

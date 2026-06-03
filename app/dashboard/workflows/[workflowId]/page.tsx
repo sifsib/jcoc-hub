@@ -44,6 +44,7 @@ interface WorkflowStep {
   actionType: ActionType;
   title: string;
   message: string;
+  dependsOnStepIds: string[];
 }
 
 interface WorkflowInstance {
@@ -55,7 +56,7 @@ interface WorkflowInstance {
   subjectPhone?: string;
   subjectType: "visitor" | "member";
   status: InstanceStatus;
-  startedAt: any;
+  startedAt: Timestamp | null;
   completedSteps: number;
   totalSteps: number;
 }
@@ -68,9 +69,10 @@ interface InstanceStep {
   actionType: ActionType;
   title: string;
   message: string;
+  dependsOnStepIds: string[];
   dueDate: string;
   status: StepStatus;
-  completedAt?: any;
+  completedAt?: Timestamp | null;
 }
 
 interface RosterPerson {
@@ -108,6 +110,10 @@ function actionLabel(t: ActionType) {
 
 function generateId() {
   return Math.random().toString(36).substr(2, 9);
+}
+
+function asStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
 function addDays(days: number): string {
@@ -167,7 +173,10 @@ export default function WorkflowBuilderPage() {
     );
     return onSnapshot(q, (snap) => {
       const sorted = snap.docs
-        .map((d) => ({ id: d.id, ...(d.data() as Omit<WorkflowStep, "id">) }))
+        .map((d) => {
+          const data = d.data() as Omit<WorkflowStep, "id">;
+          return { id: d.id, ...data, dependsOnStepIds: asStringArray(data.dependsOnStepIds) };
+        })
         .sort((a, b) => a.order - b.order);
       setSteps(sorted);
     });
@@ -225,10 +234,13 @@ export default function WorkflowBuilderPage() {
     ).then((snap) => {
       setInstanceSteps((prev) => ({
         ...prev,
-        [expandedInstance]: snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<InstanceStep, "id">) })),
+        [expandedInstance]: snap.docs.map((d) => {
+          const data = d.data() as Omit<InstanceStep, "id">;
+          return { id: d.id, ...data, dependsOnStepIds: asStringArray(data.dependsOnStepIds) };
+        }),
       }));
     });
-  }, [expandedInstance]);
+  }, [expandedInstance, instanceSteps, tenantId]);
 
   function addStep() {
     const lastOrder = steps.length > 0 ? Math.max(...steps.map((s) => s.order)) : 0;
@@ -240,6 +252,7 @@ export default function WorkflowBuilderPage() {
       actionType: "task",
       title: "Follow up",
       message: "",
+      dependsOnStepIds: [],
     };
     setSteps([...steps, newStep]);
     setEditingStep(tempId);
@@ -250,7 +263,12 @@ export default function WorkflowBuilderPage() {
   }
 
   function removeStep(id: string) {
-    setSteps(steps.filter((s) => s.id !== id));
+    setSteps(steps
+      .filter((s) => s.id !== id)
+      .map((s) => ({
+        ...s,
+        dependsOnStepIds: s.dependsOnStepIds.filter((stepId) => stepId !== id),
+      })));
     if (editingStep === id) setEditingStep(null);
   }
 
@@ -270,19 +288,35 @@ export default function WorkflowBuilderPage() {
     setSavingSteps(true);
     try {
       // Delete existing steps then recreate
-      const existing = await getDocs(query(collection(db, "workflow_steps"), where("workflowId", "==", workflowId)));
+      const existing = await getDocs(query(
+        collection(db, "workflow_steps"),
+        where("tenantId", "==", tenantId),
+        where("workflowId", "==", workflowId)
+      ));
       const batch = writeBatch(db);
       existing.docs.forEach((d) => batch.delete(d.ref));
-      steps.forEach((step, i) => {
-        const ref = doc(collection(db, "workflow_steps"));
+
+      const orderedSteps = steps.map((step, i) => ({ ...step, order: i + 1 }));
+      const stepRefs = orderedSteps.map(() => doc(collection(db, "workflow_steps")));
+      const savedIdByLocalId = new Map(orderedSteps.map((step, i) => [step.id, stepRefs[i].id]));
+
+      orderedSteps.forEach((step, i) => {
+        const priorStepIds = new Set(orderedSteps.slice(0, i).map((s) => s.id));
+        const dependsOnStepIds = step.dependsOnStepIds
+          .filter((stepId) => priorStepIds.has(stepId))
+          .map((stepId) => savedIdByLocalId.get(stepId))
+          .filter((stepId): stepId is string => Boolean(stepId));
+
+        const ref = stepRefs[i];
         batch.set(ref, {
           workflowId,
           tenantId,
-          order: i + 1,
+          order: step.order,
           delayDays: step.delayDays,
           actionType: step.actionType,
           title: step.title,
           message: step.message,
+          dependsOnStepIds,
         });
       });
       await batch.commit();
@@ -319,8 +353,15 @@ export default function WorkflowBuilderPage() {
       });
 
       const batch = writeBatch(db);
-      steps.forEach((step) => {
-        const stepRef = doc(collection(db, "workflow_instance_steps"));
+      const instanceStepRefs = steps.map(() => doc(collection(db, "workflow_instance_steps")));
+      const instanceStepIdByTemplateId = new Map(steps.map((step, i) => [step.id, instanceStepRefs[i].id]));
+
+      steps.forEach((step, i) => {
+        const stepRef = instanceStepRefs[i];
+        const dependsOnStepIds = step.dependsOnStepIds
+          .map((stepId) => instanceStepIdByTemplateId.get(stepId))
+          .filter((stepId): stepId is string => Boolean(stepId));
+
         batch.set(stepRef, {
           instanceId: instanceRef.id,
           workflowId,
@@ -330,6 +371,7 @@ export default function WorkflowBuilderPage() {
           actionType: step.actionType,
           title: step.title,
           message: step.message,
+          dependsOnStepIds,
           dueDate: addDays(step.delayDays),
           status: "pending" as StepStatus,
         });
@@ -577,6 +619,40 @@ export default function WorkflowBuilderPage() {
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
                       />
                     </div>
+                    {idx > 0 && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-2">Depends on</label>
+                        <div className="flex flex-wrap gap-2">
+                          {steps.slice(0, idx).map((candidate, candidateIdx) => {
+                            const checked = step.dependsOnStepIds.includes(candidate.id);
+                            return (
+                              <label
+                                key={candidate.id}
+                                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors ${
+                                  checked
+                                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    const nextIds = e.target.checked
+                                      ? [...step.dependsOnStepIds, candidate.id]
+                                      : step.dependsOnStepIds.filter((stepId) => stepId !== candidate.id);
+                                    updateStep(step.id, { dependsOnStepIds: nextIds });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <span>{candidateIdx + 1}. {candidate.title || "Untitled step"}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1.5">Leave blank to let this step become available by date.</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -649,46 +725,62 @@ export default function WorkflowBuilderPage() {
                         {iSteps.length === 0 && (
                           <p className="text-xs text-gray-400">Loading steps...</p>
                         )}
-                        {iSteps.map((s) => (
-                          <div key={s.id} className="flex items-start gap-3">
-                            <button
-                              onClick={() => markStepDone(inst.id, s.id, s.status)}
-                              className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
-                                s.status === "done"
-                                  ? "bg-emerald-500 border-emerald-500"
-                                  : "border-gray-300 hover:border-emerald-400"
-                              }`}
-                            >
-                              {s.status === "done" && <span className="text-white text-xs">✓</span>}
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium ${s.status === "done" ? "line-through text-gray-400" : "text-gray-800"}`}>
-                                {s.title}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {s.actionType === "whatsapp" && inst.subjectPhone ? (
-                                  <a
-                                    href={`https://wa.me/${(inst.subjectPhone || "").replace(/\D/g, "")}?text=${encodeURIComponent(s.message)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-emerald-600 hover:underline"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    Open WhatsApp
-                                  </a>
-                                ) : (
-                                  s.message
+                        {iSteps.map((s) => {
+                          const blockedBy = s.dependsOnStepIds
+                            .map((stepId) => iSteps.find((step) => step.id === stepId))
+                            .filter((step): step is InstanceStep => step !== undefined && step.status !== "done" && step.status !== "skipped");
+                          const isBlocked = s.status === "pending" && blockedBy.length > 0;
+
+                          return (
+                            <div key={s.id} className="flex items-start gap-3">
+                              <button
+                                onClick={() => markStepDone(inst.id, s.id, s.status)}
+                                disabled={isBlocked}
+                                title={isBlocked ? `Waiting for ${blockedBy.map((step) => step.title).join(", ")}` : undefined}
+                                className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                                  s.status === "done"
+                                    ? "bg-emerald-500 border-emerald-500"
+                                    : isBlocked
+                                    ? "border-gray-200 bg-gray-100 cursor-not-allowed"
+                                    : "border-gray-300 hover:border-emerald-400"
+                                }`}
+                              >
+                                {s.status === "done" && <span className="text-white text-xs">✓</span>}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium ${s.status === "done" ? "line-through text-gray-400" : "text-gray-800"}`}>
+                                  {s.title}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  {s.actionType === "whatsapp" && inst.subjectPhone ? (
+                                    <a
+                                      href={`https://wa.me/${(inst.subjectPhone || "").replace(/\D/g, "")}?text=${encodeURIComponent(s.message)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-emerald-600 hover:underline"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      Open WhatsApp
+                                    </a>
+                                  ) : (
+                                    s.message
+                                  )}
+                                </p>
+                                {isBlocked && (
+                                  <p className="text-xs text-amber-600 mt-0.5">
+                                    Waiting for {blockedBy.map((step) => step.title).join(", ")}
+                                  </p>
                                 )}
-                              </p>
-                              <p className={`text-xs mt-0.5 ${s.dueDate < today && s.status === "pending" ? "text-red-500 font-medium" : "text-gray-300"}`}>
-                                Due {s.dueDate < today && s.status === "pending" ? "overdue · " : ""}{s.dueDate}
-                              </p>
+                                <p className={`text-xs mt-0.5 ${s.dueDate < today && s.status === "pending" ? "text-red-500 font-medium" : "text-gray-300"}`}>
+                                  Due {s.dueDate < today && s.status === "pending" ? "overdue · " : ""}{s.dueDate}
+                                </p>
+                              </div>
+                              <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded-full ${actionStyle(s.actionType)}`}>
+                                {actionIcon(s.actionType)}
+                              </span>
                             </div>
-                            <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded-full ${actionStyle(s.actionType)}`}>
-                              {actionIcon(s.actionType)}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                         <div className="pt-2 border-t border-gray-100 flex gap-2">
                           <button
                             onClick={() => completeInstance(inst.id)}
