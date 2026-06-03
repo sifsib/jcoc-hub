@@ -27,7 +27,18 @@ async function fetchQR(instanceName: string): Promise<string | null> {
 export async function POST(req: NextRequest) {
   const { instanceName } = await req.json();
 
-  // Step 1: Create the instance
+  // Step 1: Delete any existing instance first (ensures a clean slate)
+  try {
+    await fetch(`${BASE_URL}/instance/delete/${encodeURIComponent(instanceName)}`, {
+      method: "DELETE",
+      headers: { apikey: API_KEY },
+    });
+    console.log("[create-instance] deleted existing instance (if any)");
+  } catch {
+    // Ignore — it may not exist
+  }
+
+  // Step 2: Create the instance fresh
   const res = await fetch(`${BASE_URL}/instance/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: API_KEY },
@@ -49,10 +60,10 @@ export async function POST(req: NextRequest) {
   }
   console.log("[create-instance] create response:", JSON.stringify(data).slice(0, 500));
 
-  // Step 2: Check if QR is in the create response already
+  // Step 3: Check if QR is in the create response already
   let qrBase64 = (data as Record<string, unknown> & { qrcode?: { base64?: string } })?.qrcode?.base64 ?? null;
 
-  // Step 3: If not, trigger connect and poll for QR
+  // Step 4: If not, trigger connect and poll for QR
   if (!qrBase64) {
     await fetch(`${BASE_URL}/instance/connect/${instanceName}`, {
       headers: { apikey: API_KEY },

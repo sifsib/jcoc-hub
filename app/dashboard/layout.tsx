@@ -58,6 +58,7 @@ export default async function DashboardLayout({
     { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋", roles: ["owner", "admin", "member_manager"] },
     { name: "Financials", href: "/dashboard/finance", icon: "💰", roles: ["owner", "admin", "finance"] },
     { name: "Communications", href: "/dashboard/communications", icon: "💬", roles: ["owner", "admin", "member_manager"] },
+    { name: "WhatsApp", href: "/dashboard/whatsapp", icon: "📱", roles: ["owner", "admin"] },
     { name: "Forms", href: "/dashboard/forms", icon: "📋", roles: ["owner", "admin", "member_manager"] },
     { name: "Groups", href: "/dashboard/groups", icon: "🫂", roles: ["owner", "admin", "member_manager", "cell_leader"] },
     { name: "Events", href: "/dashboard/events", icon: "🗓️", roles: ["owner", "admin", "member_manager"] },
