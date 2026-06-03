@@ -53,6 +53,43 @@ interface TenantConfig {
   churchRoles: string[];
 }
 
+interface FormFieldConfig {
+  label: string;
+  enabled: boolean;
+  required: boolean;
+  type: string;
+  options?: string[];
+}
+
+interface CustomFieldDef {
+  id: string;
+  label: string;
+  enabled: boolean;
+  required: boolean;
+  type: string;
+  options?: string[];
+}
+
+interface MemberFormConfig {
+  fields: Record<string, FormFieldConfig>;
+  customFields: CustomFieldDef[];
+}
+
+const DEFAULT_FORM_CONFIG: MemberFormConfig = {
+  fields: {
+    role: { label: "Church Role", enabled: true, required: false, type: "dropdown", options: [] },
+    cellRegion: { label: "Cell Region / Branch", enabled: true, required: false, type: "dropdown", options: [] },
+    ministryGroup: { label: "Ministry Group", enabled: true, required: false, type: "dropdown", options: [] },
+    churchRole: { label: "Church Role / Office", enabled: true, required: false, type: "dropdown", options: [] },
+    membershipType: { label: "Type of Membership Sought", enabled: true, required: false, type: "dropdown", options: [] },
+    maritalStatus: { label: "Marital Status", enabled: true, required: false, type: "dropdown", options: [] },
+    bornAgain: { label: "Born Again?", enabled: true, required: false, type: "dropdown", options: [] },
+    waterBaptized: { label: "Water Baptized?", enabled: true, required: false, type: "dropdown", options: [] },
+    address: { label: "Residential Address", enabled: true, required: false, type: "text" },
+  },
+  customFields: [],
+};
+
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_MINISTRIES = [
@@ -206,14 +243,25 @@ function MinChecks({ list, sel: selected, on }: { list: string[]; sel: string[];
 // ─── Full member input block (reused for primary + spouse) ────────────────────
 
 function MemberBlock({
-  data, set, config, showFaith = true, ageRestricted = false,
+  data, set, config, formConfig, showFaith = true, ageRestricted = false,
+  customValues, setCustomValues,
 }: {
   data: ReturnType<typeof emptyPerson>;
   set: (k: string, v: any) => void;
   config: TenantConfig;
+  formConfig: MemberFormConfig;
   showFaith?: boolean;
   ageRestricted?: boolean;
+  customValues?: Record<string, string>;
+  setCustomValues?: (vals: Record<string, string>) => void;
 }) {
+  const fc = formConfig.fields;
+  const roleOpts = fc.role?.options?.length ? fc.role.options : config.roles;
+  const cellOpts = fc.cellRegion?.options?.length ? fc.cellRegion.options : config.cellRegions;
+  const mgOpts = fc.ministryGroup?.options?.length ? fc.ministryGroup.options : config.ministryGroups;
+  const crOpts = fc.churchRole?.options?.length ? fc.churchRole.options : config.churchRoles;
+  const mtOpts = fc.membershipType?.options?.length ? fc.membershipType.options : config.membershipTypes;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-4">
@@ -235,63 +283,75 @@ function MemberBlock({
       <F label="Contact Number" req={!ageRestricted}>
         <input type="tel" value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="e.g. 0812345678" className={inp} required={!ageRestricted} />
       </F>
-      <F label="Residential Address" req>
-        <AddrBlock v={data.address} on={(k, v) => set("address", { ...data.address, [k]: v })} />
-      </F>
-      <div className="grid grid-cols-2 gap-4">
-        <F label="Church Role" req>
+      {(fc.address?.enabled !== false) && (
+        <F label={fc.address?.label || "Residential Address"} req={fc.address?.required}>
+          <AddrBlock v={data.address} on={(k, v) => set("address", { ...data.address, [k]: v })} />
+        </F>
+      )}
+      {(fc.role?.enabled !== false) && (
+        <F label={fc.role?.label || "Church Role"} req={fc.role?.required}>
           <select value={data.role} onChange={e => set("role", e.target.value)} className={sel}>
-            {config.roles.map(r => <option key={r}>{r}</option>)}
+            {roleOpts.map(r => <option key={r}>{r}</option>)}
           </select>
         </F>
-        <F label="Cell Region / Branch">
+      )}
+      {(fc.cellRegion?.enabled !== false) && (
+        <F label={fc.cellRegion?.label || "Cell Region / Branch"} req={fc.cellRegion?.required}>
           <select value={data.cellRegion} onChange={e => set("cellRegion", e.target.value)} className={sel}>
             <option value="">Select</option>
-            {data.cellRegion && !config.cellRegions.includes(data.cellRegion) && (
+            {data.cellRegion && !cellOpts.includes(data.cellRegion) && (
               <option value={data.cellRegion}>{data.cellRegion}</option>
             )}
-            {config.cellRegions.map(r => <option key={r}>{r}</option>)}
+            {cellOpts.map(r => <option key={r}>{r}</option>)}
           </select>
         </F>
-      </div>
-      <F label="Ministry Group">
-        <select value={data.ministryGroup} onChange={e => set("ministryGroup", e.target.value)} className={sel}>
-          <option value="">Select</option>
-          {data.ministryGroup && !config.ministryGroups.includes(data.ministryGroup) && (
-            <option value={data.ministryGroup}>{data.ministryGroup}</option>
-          )}
-          {config.ministryGroups.map(g => <option key={g}>{g}</option>)}
-        </select>
-      </F>
-      <F label="Church Role / Office">
-        <select value={data.churchRole} onChange={e => set("churchRole", e.target.value)} className={sel}>
-          <option value="">None / General Member</option>
-          {data.churchRole && !config.churchRoles.includes(data.churchRole) && (
-            <option value={data.churchRole}>{data.churchRole}</option>
-          )}
-          {config.churchRoles.map(r => <option key={r}>{r}</option>)}
-        </select>
-      </F>
+      )}
+      {(fc.ministryGroup?.enabled !== false) && (
+        <F label={fc.ministryGroup?.label || "Ministry Group"} req={fc.ministryGroup?.required}>
+          <select value={data.ministryGroup} onChange={e => set("ministryGroup", e.target.value)} className={sel}>
+            <option value="">Select</option>
+            {data.ministryGroup && !mgOpts.includes(data.ministryGroup) && (
+              <option value={data.ministryGroup}>{data.ministryGroup}</option>
+            )}
+            {mgOpts.map(g => <option key={g}>{g}</option>)}
+          </select>
+        </F>
+      )}
+      {(fc.churchRole?.enabled !== false) && (
+        <F label={fc.churchRole?.label || "Church Role / Office"} req={fc.churchRole?.required}>
+          <select value={data.churchRole} onChange={e => set("churchRole", e.target.value)} className={sel}>
+            <option value="">None / General Member</option>
+            {data.churchRole && !crOpts.includes(data.churchRole) && (
+              <option value={data.churchRole}>{data.churchRole}</option>
+            )}
+            {crOpts.map(r => <option key={r}>{r}</option>)}
+          </select>
+        </F>
+      )}
       {showFaith && (
         <>
-          <div className="grid grid-cols-2 gap-4">
-            <F label="Born Again?" req>
-              <select value={data.bornAgain} onChange={e => set("bornAgain", e.target.value)} className={sel} required>
+          {(fc.bornAgain?.enabled !== false) && (
+            <F label={fc.bornAgain?.label || "Born Again?"} req={fc.bornAgain?.required}>
+              <select value={data.bornAgain} onChange={e => set("bornAgain", e.target.value)} className={sel} required={fc.bornAgain?.required}>
                 <option value="">Select</option><option>Yes</option><option>No</option>
               </select>
             </F>
-            <F label="Water Baptized?" req>
-              <select value={data.waterBaptized} onChange={e => set("waterBaptized", e.target.value)} className={sel} required>
+          )}
+          {(fc.waterBaptized?.enabled !== false) && (
+            <F label={fc.waterBaptized?.label || "Water Baptized?"} req={fc.waterBaptized?.required}>
+              <select value={data.waterBaptized} onChange={e => set("waterBaptized", e.target.value)} className={sel} required={fc.waterBaptized?.required}>
                 <option value="">Select</option><option>Yes</option><option>No</option>
               </select>
             </F>
-          </div>
-          <F label="Type of Membership Sought" req>
-            <select value={data.membershipType} onChange={e => set("membershipType", e.target.value)} className={sel} required>
-              <option value="">Select</option>
-              {config.membershipTypes.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </F>
+          )}
+          {(fc.membershipType?.enabled !== false) && (
+            <F label={fc.membershipType?.label || "Type of Membership Sought"} req={fc.membershipType?.required}>
+              <select value={data.membershipType} onChange={e => set("membershipType", e.target.value)} className={sel} required={fc.membershipType?.required}>
+                <option value="">Select</option>
+                {mtOpts.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </F>
+          )}
           {config.ministries.length > 0 && (
             <F label="Ministries to Serve In">
               <MinChecks list={config.ministries} sel={data.ministries} on={v => set("ministries", v)} />
@@ -299,6 +359,30 @@ function MemberBlock({
           )}
         </>
       )}
+
+      {/* Custom fields */}
+      {formConfig.customFields.filter(f => f.enabled).map(cf => (
+        <F key={cf.id} label={cf.label} req={cf.required}>
+          {cf.type === "dropdown" ? (
+            <select
+              value={customValues?.[cf.id] || ""}
+              onChange={e => setCustomValues?.({ ...customValues, [cf.id]: e.target.value })}
+              className={sel}
+              required={cf.required}
+            >
+              <option value="">Select</option>
+              {(cf.options || []).map(o => <option key={o}>{o}</option>)}
+            </select>
+          ) : (
+            <input
+              value={customValues?.[cf.id] || ""}
+              onChange={e => setCustomValues?.({ ...customValues, [cf.id]: e.target.value })}
+              className={inp}
+              required={cf.required}
+            />
+          )}
+        </F>
+      ))}
     </div>
   );
 }
@@ -319,6 +403,8 @@ export default function ManageMembershipPage() {
     ministryGroups: DEFAULT_MINISTRY_GROUPS,
     churchRoles: DEFAULT_CHURCH_ROLES,
   });
+  const [formConfig, setFormConfig] = useState<MemberFormConfig>(DEFAULT_FORM_CONFIG);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
@@ -380,6 +466,19 @@ export default function ManageMembershipPage() {
             churchRoles: td.churchRoles?.length ? td.churchRoles : DEFAULT_CHURCH_ROLES,
           });
         }
+        // Load form config from Church Settings
+        try {
+          const fcSnap = await getDoc(doc(db, "tenants", appUser.tenantId, "settings", "formConfig"));
+          if (fcSnap.exists()) {
+            const fcData = fcSnap.data() as { member?: MemberFormConfig };
+            if (fcData.member) {
+              setFormConfig({
+                fields: { ...DEFAULT_FORM_CONFIG.fields, ...fcData.member.fields },
+                customFields: fcData.member.customFields || [],
+              });
+            }
+          }
+        } catch (e) { console.warn("formConfig load failed:", e); }
         // Cell leaders only see their assigned cell
         const isCellLeader = appUser.role === "cell_leader";
         const q = isCellLeader && appUser.assignedCellRegion
@@ -405,6 +504,7 @@ export default function ManageMembershipPage() {
     setChildren([]); setParents({ mother: emptyParent(), father: emptyParent() });
     setInLaws({ motherInLaw: emptyParent(), fatherInLaw: emptyParent() });
     setConsent({ privacy: false, special: false, truth: false });
+    setCustomFieldValues({});
     setFeedback(null);
   };
 
@@ -465,6 +565,7 @@ export default function ManageMembershipPage() {
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
         householdId: hid, householdRole: "primary",
         isMember: true, status: "active", source: "manual",
+        customFields: customFieldValues,
         ...baseConsent, createdAt: serverTimestamp(), capturedBy: appUser.email,
       });
 
@@ -592,6 +693,7 @@ export default function ManageMembershipPage() {
       ministries: m.ministries || [],
       role: m.role || "Member",
     });
+    setCustomFieldValues((m as any).customFields || {});
     setFeedback(null);
     setView("form");
   };
@@ -618,6 +720,7 @@ export default function ManageMembershipPage() {
         membershipType: primary.membershipType,
         ministries: primary.ministries,
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
+        customFields: customFieldValues,
         updatedAt: serverTimestamp(),
         updatedBy: appUser.email,
       });
@@ -876,7 +979,7 @@ export default function ManageMembershipPage() {
           {/* ── SECTION 1: Member Details ── */}
           <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
             <SecHead n={next()} title="Member Details" sub="Primary member's personal information" />
-            <MemberBlock data={primary} set={setP} config={config} showFaith={false} ageRestricted={isUnder16(primary.dob)} />
+            <MemberBlock data={primary} set={setP} config={config} formConfig={formConfig} showFaith={false} ageRestricted={isUnder16(primary.dob)} customValues={customFieldValues} setCustomValues={setCustomFieldValues} />
             <F label="Marital Status" req>
               <select value={primary.maritalStatus} onChange={e => setP("maritalStatus", e.target.value)} className={sel} required>
                 <option value="">Select</option>
@@ -957,7 +1060,7 @@ export default function ManageMembershipPage() {
                   <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg">
                     This will create a second member record linked to the same household.
                   </p>
-                  <MemberBlock data={spouse} set={setSp} config={config} showFaith={true} />
+                  <MemberBlock data={spouse} set={setSp} config={config} formConfig={formConfig} showFaith={true} />
                 </div>
               )}
             </div>
@@ -1099,6 +1202,11 @@ export default function ManageMembershipPage() {
         <button onClick={() => setView("list")} className="text-sm text-blue-600 hover:text-blue-800 font-medium self-start">
           ← Back to register
         </button>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800">
+          <strong>Tip:</strong> For full form customisation — toggle fields, rename labels, add custom fields — go to{" "}
+          <a href="/dashboard/church-settings" className="underline font-semibold">Church Settings</a>.
+          The lists below configure the ministry dropdown options saved on the tenant profile.
+        </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-800 mb-1">Configure Lists</h1>
           <p className="text-sm text-gray-500">Customise the ministries and membership types available on your member registration form.</p>
