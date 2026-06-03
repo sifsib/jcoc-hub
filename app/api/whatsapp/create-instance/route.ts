@@ -28,6 +28,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Instance name is required." }, { status: 400 });
   }
 
+  // Delete any existing instance first to avoid stuck state
+  try {
+    await fetch(`${config.baseUrl}/instance/delete/${encodeURIComponent(instanceName)}`, {
+      method: "DELETE",
+      headers: { apikey: config.apiKey },
+    });
+  } catch { /* ignore — instance may not exist */ }
+
   try {
     const res = await fetch(`${config.baseUrl}/instance/create`, {
       method: "POST",
