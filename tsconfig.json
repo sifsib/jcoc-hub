@@ -40,6 +40,7 @@
     "functions",
     ".next",
     "out",
-    "build"
+    "build",
+    "_marketing-site-files"
   ]
 }
