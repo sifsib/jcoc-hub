@@ -10,9 +10,12 @@ import {
   where,
   onSnapshot,
   addDoc,
+  getDocs,
   doc,
+  updateDoc,
   serverTimestamp,
   orderBy,
+  writeBatch,
 } from "firebase/firestore";
 
 type GroupType = "small_group" | "bible_study" | "ministry_team" | "youth" | "womens" | "mens" | "other";
@@ -73,6 +76,16 @@ export default function GroupsPage() {
   const [filterType, setFilterType] = useState<GroupType | "all">("all");
   const [nameSearch, setNameSearch] = useState("");
 
+  // Create from filter
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [allMembers, setAllMembers] = useState<any[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [filterField, setFilterField] = useState("");
+  const [filterValue, setFilterValue] = useState("");
+  const [filterGroupName, setFilterGroupName] = useState("");
+  const [filterGroupType, setFilterGroupType] = useState<GroupType>("small_group");
+  const [filterCreating, setFilterCreating] = useState(false);
+
   useEffect(() => {
     if (!tenantId) return;
     const q = query(
@@ -110,6 +123,102 @@ export default function GroupsPage() {
     }
   }
 
+  async function openFilterModal() {
+    setShowFilterModal(true);
+    setFilterField("");
+    setFilterValue("");
+    setFilterGroupName("");
+    if (!tenantId || allMembers.length > 0) return;
+    setMembersLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, "members"), where("tenantId", "==", tenantId)));
+      setAllMembers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } finally {
+      setMembersLoading(false);
+    }
+  }
+
+  // Get unique values for a given member field
+  function uniqueValues(field: string): string[] {
+    const vals = new Set<string>();
+    allMembers.forEach((m) => {
+      const v = field.startsWith("customFields.")
+        ? m.customFields?.[field.replace("customFields.", "")]
+        : m[field];
+      if (v && typeof v === "string" && v.trim()) vals.add(v.trim());
+    });
+    return Array.from(vals).sort();
+  }
+
+  // Members matching the current filter
+  const filteredMembers = filterField && filterValue
+    ? allMembers.filter((m) => {
+        const v = filterField.startsWith("customFields.")
+          ? m.customFields?.[filterField.replace("customFields.", "")]
+          : m[filterField];
+        return v === filterValue;
+      })
+    : [];
+
+  async function createGroupFromFilter() {
+    if (!tenantId || !filterGroupName.trim() || filteredMembers.length === 0) return;
+    setFilterCreating(true);
+    try {
+      const groupRef = await addDoc(collection(db, "groups"), {
+        tenantId,
+        name: filterGroupName.trim(),
+        type: filterGroupType,
+        description: `Created from filter: ${FILTER_FIELDS.find(f => f.value === filterField)?.label} = ${filterValue}`,
+        leaderName: "",
+        meetingDay: "",
+        meetingTime: "",
+        location: "",
+        active: true,
+        memberCount: filteredMembers.length,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Add all matching members to the group in batches of 500
+      const batch = writeBatch(db);
+      filteredMembers.forEach((m) => {
+        const ref = doc(collection(db, "group_members"));
+        batch.set(ref, {
+          groupId: groupRef.id,
+          tenantId,
+          memberId: m.id,
+          memberName: m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim(),
+          role: "member",
+          joinedAt: serverTimestamp(),
+        });
+      });
+      await batch.commit();
+
+      setShowFilterModal(false);
+      router.push(`/dashboard/groups/${groupRef.id}`);
+    } catch (e) {
+      console.error("Create from filter error:", e);
+    } finally {
+      setFilterCreating(false);
+    }
+  }
+
+  // Available filter fields (standard + detected custom)
+  const customFieldKeys = Array.from(new Set(
+    allMembers.flatMap((m) => Object.keys(m.customFields || {}))
+  ));
+
+  const FILTER_FIELDS = [
+    { value: "ministryGroup", label: "Ministry Group" },
+    { value: "role", label: "Church Role" },
+    { value: "cellRegion", label: "Cell Region / Branch" },
+    { value: "churchRole", label: "Church Role / Office" },
+    { value: "gender", label: "Gender" },
+    { value: "maritalStatus", label: "Marital Status" },
+    { value: "membershipType", label: "Membership Type" },
+    ...customFieldKeys.map((k) => ({ value: `customFields.${k}`, label: k })),
+  ];
+
   const filtered = groups
     .filter((g) => filterType === "all" || g.type === filterType)
     .filter((g) => !nameSearch.trim() || g.name.toLowerCase().includes(nameSearch.toLowerCase()));
@@ -132,12 +241,20 @@ export default function GroupsPage() {
             Manage small groups, Bible studies, and ministry teams.
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          <span className="text-lg leading-none">+</span> New Group
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={openFilterModal}
+            className="flex items-center gap-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            🔍 Create from Members
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            <span className="text-lg leading-none">+</span> New Group
+          </button>
+        </div>
       </div>
 
       {/* Name search */}
@@ -256,6 +373,135 @@ export default function GroupsPage() {
 
       {filtered.length === 0 && groups.length > 0 && (
         <p className="text-sm text-gray-400 text-center py-10">No groups match this filter.</p>
+      )}
+
+      {/* Create from Members Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-gray-900">Create Group from Members</h2>
+              <button onClick={() => setShowFilterModal(false)} className="text-gray-400 hover:text-gray-700">✕</button>
+            </div>
+
+            {membersLoading ? (
+              <div className="flex items-center justify-center py-10 gap-2">
+                <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-gray-500">Loading members...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Step 1: Pick field */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Filter by field</label>
+                  <select
+                    value={filterField}
+                    onChange={(e) => { setFilterField(e.target.value); setFilterValue(""); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Select a field...</option>
+                    {FILTER_FIELDS.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Step 2: Pick value */}
+                {filterField && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {FILTER_FIELDS.find((f) => f.value === filterField)?.label} value
+                    </label>
+                    <select
+                      value={filterValue}
+                      onChange={(e) => setFilterValue(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">Select a value...</option>
+                      {uniqueValues(filterField).map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Preview */}
+                {filterField && filterValue && (
+                  <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
+                    filteredMembers.length > 0
+                      ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                      : "bg-amber-50 border border-amber-200 text-amber-800"
+                  }`}>
+                    {filteredMembers.length > 0
+                      ? `${filteredMembers.length} member${filteredMembers.length !== 1 ? "s" : ""} match this filter`
+                      : "No members match this filter"}
+                  </div>
+                )}
+
+                {/* Member preview list */}
+                {filteredMembers.length > 0 && (
+                  <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
+                    {filteredMembers.slice(0, 20).map((m) => (
+                      <div key={m.id} className="px-3 py-2 text-sm text-gray-700">
+                        {m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim()}
+                      </div>
+                    ))}
+                    {filteredMembers.length > 20 && (
+                      <div className="px-3 py-2 text-xs text-gray-400 italic">
+                        ...and {filteredMembers.length - 20} more
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 3: Name the group */}
+                {filteredMembers.length > 0 && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Group Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={filterGroupName}
+                        onChange={(e) => setFilterGroupName(e.target.value)}
+                        placeholder={`e.g. ${filterValue} Group`}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Group Type</label>
+                      <select
+                        value={filterGroupType}
+                        onChange={(e) => setFilterGroupType(e.target.value as GroupType)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        {GROUP_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setShowFilterModal(false)}
+                    className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createGroupFromFilter}
+                    disabled={!filterGroupName.trim() || filteredMembers.length === 0 || filterCreating}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors"
+                  >
+                    {filterCreating ? "Creating..." : `Create Group (${filteredMembers.length})`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* New Group Modal */}
