@@ -62,7 +62,8 @@ export async function POST(req: NextRequest) {
         throw new Error("EVENT_CLOSED");
       }
 
-      const currentCount = Number(event.rsvpCount ?? 0);
+      const storedCount = Number(event.rsvpCount ?? 0);
+      const currentCount = Number.isFinite(storedCount) ? storedCount : 0;
       rsvpCount = currentCount + (status === "attending" ? 1 : 0);
 
       transaction.set(rsvpRef, {
