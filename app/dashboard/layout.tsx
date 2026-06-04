@@ -45,6 +45,7 @@ export default async function DashboardLayout({
 
   const userRole = userDocData?.role || "user";
   const userName = userDocData?.displayName || userDocData?.name || "Member";
+  const tenantId = userDocData?.tenantId || "";
 
   const churchName = tenantData?.name || "KerekeHub";
   const primaryColor = tenantData?.primaryColor || "#059669";
