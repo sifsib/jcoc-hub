@@ -5,7 +5,7 @@ import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import {
   collection, query, where, getDocs, addDoc,
-  updateDoc, deleteDoc, doc, getDoc, serverTimestamp,
+  updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot,
 } from "firebase/firestore";
 import ExportCSVButton from "../../components/ExportCSVButton";
 
@@ -405,6 +405,7 @@ export default function ManageMembershipPage() {
   });
   const [formConfig, setFormConfig] = useState<MemberFormConfig>(DEFAULT_FORM_CONFIG);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [memberWorkflows, setMemberWorkflows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
@@ -526,6 +527,73 @@ export default function ManageMembershipPage() {
     setMembers(list);
   };
 
+  // ─── Trigger member_added workflows ─────────────────────────────────────────
+
+  const triggerMemberWorkflows = async (memberId: string, memberName: string, memberPhone: string) => {
+    if (!appUser) return;
+    try {
+      const wfSnap = await getDocs(query(
+        collection(db, "workflows"),
+        where("tenantId", "==", appUser.tenantId),
+        where("trigger", "==", "member_added"),
+        where("active", "==", true),
+      ));
+      for (const wfDoc of wfSnap.docs) {
+        const wf = wfDoc.data();
+        const stepsSnap = await getDocs(query(
+          collection(db, "workflow_steps"),
+          where("tenantId", "==", appUser.tenantId),
+          where("workflowId", "==", wfDoc.id),
+        ));
+        const steps = stepsSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as any))
+          .sort((a: any, b: any) => a.order - b.order);
+        if (steps.length === 0) continue;
+
+        const addDays = (days: number) => {
+          const d = new Date();
+          d.setDate(d.getDate() + days);
+          return d.toISOString().split("T")[0];
+        };
+
+        const instanceRef = await addDoc(collection(db, "workflow_instances"), {
+          workflowId: wfDoc.id,
+          workflowName: wf.name || "",
+          tenantId: appUser.tenantId,
+          subjectId: memberId,
+          subjectName: memberName,
+          subjectPhone: memberPhone,
+          subjectType: "member",
+          status: "active",
+          completedSteps: 0,
+          totalSteps: steps.length,
+          startedAt: serverTimestamp(),
+        });
+
+        for (const step of steps) {
+          await addDoc(collection(db, "workflow_instance_steps"), {
+            instanceId: instanceRef.id,
+            workflowId: wfDoc.id,
+            tenantId: appUser.tenantId,
+            stepId: step.id,
+            stepOrder: step.order,
+            actionType: step.actionType,
+            title: step.title,
+            message: step.message,
+            dependsOnStepIds: step.dependsOnStepIds || [],
+            dueDate: addDays(step.delayDays || 0),
+            status: "pending",
+          });
+        }
+        await updateDoc(doc(db, "workflows", wfDoc.id), {
+          instanceCount: (wf.instanceCount || 0) + 1,
+        });
+      }
+    } catch (err) {
+      console.error("Member workflow trigger error:", err);
+    }
+  };
+
   // ─── Submit form ─────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -571,6 +639,13 @@ export default function ManageMembershipPage() {
 
       // Update household with primary member ID
       await updateDoc(doc(db, "households", hid), { primaryMemberId: primaryRef.id });
+
+      // Trigger member_added workflows for the new primary member
+      triggerMemberWorkflows(
+        primaryRef.id,
+        `${primary.firstName.trim()} ${primary.lastName.trim()}`,
+        fmtPhone(primary.phone),
+      );
 
       // 3. Spouse as member — second member document
       let spouseDocRef: any = null;
@@ -694,8 +769,16 @@ export default function ManageMembershipPage() {
       role: m.role || "Member",
     });
     setCustomFieldValues((m as any).customFields || {});
+    setMemberWorkflows([]);
     setFeedback(null);
     setView("form");
+    // Load workflow instances for this member
+    getDocs(query(
+      collection(db, "workflow_instances"),
+      where("subjectId", "==", m.id),
+    )).then((snap) => {
+      setMemberWorkflows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -1175,6 +1258,49 @@ export default function ManageMembershipPage() {
             </button>
           </div>
         </form>
+
+        {/* Workflow instances — only shown when editing an existing member */}
+        {editingMemberId && (
+          <div className="mt-6 bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-800">Active Workflows</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Workflows currently running for this member.</p>
+              </div>
+            </div>
+
+            {memberWorkflows.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No workflows linked to this member.</p>
+            ) : (
+              <div className="space-y-3">
+                {memberWorkflows.map((wf) => {
+                  const pct = wf.totalSteps > 0 ? Math.round((wf.completedSteps / wf.totalSteps) * 100) : 0;
+                  const statusColor = wf.status === "completed"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : wf.status === "active"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-gray-100 text-gray-500";
+                  return (
+                    <div key={wf.id} className="flex items-center gap-4 p-3 bg-gray-50 border border-gray-100 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{wf.workflowName}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden max-w-[100px]">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs text-gray-400">{wf.completedSteps}/{wf.totalSteps} steps</span>
+                        </div>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${statusColor}`}>
+                        {wf.status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
