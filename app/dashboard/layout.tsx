@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import LogoutButton from "./LogoutButton";
 import MobileSidebar from "./MobileSidebar";
+import OverdueBadge from "../components/OverdueBadge";
 
 export default async function DashboardLayout({
   children,
@@ -97,6 +98,9 @@ export default async function DashboardLayout({
                 >
                   <span className="text-base opacity-60">{item.icon}</span>
                   {item.name}
+                  {item.name === "Workflows" && (
+                    <OverdueBadge tenantId={tenantId} />
+                  )}
                 </Link>
               </li>
             ))}
