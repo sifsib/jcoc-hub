@@ -126,8 +126,29 @@ export default function FaqsPage() {
 
   const toggle = (key: string) => setOpenKey(openKey === key ? null : key);
 
+  // Build FAQPage schema from FAQ_CATEGORIES
+  const faqPageSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": FAQ_CATEGORIES.flatMap(cat =>
+      cat.faqs.map(faq => ({
+        "@type": "Question",
+        "name": faq.q,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": faq.a
+        }
+      }))
+    )
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 py-20 px-6">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageSchema) }}
+      />
+      <div className="min-h-screen bg-slate-950 py-20 px-6">
       <div className="max-w-3xl mx-auto">
 
         {/* Header */}
@@ -202,6 +223,6 @@ export default function FaqsPage() {
         </div>
 
       </div>
-    </div>
+    </>
   );
 }

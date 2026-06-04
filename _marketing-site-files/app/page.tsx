@@ -12,8 +12,8 @@ export default function Home() {
             Built for growing Churches
           </span>
           <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white mb-5 leading-[1.1]">
-            Ministry management,<br />
-            <span className="text-emerald-400">done properly.</span>
+            Church Management Software<br />
+            <span className="text-emerald-400">Built for South Africa</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-400 font-medium max-w-2xl mx-auto mb-10 leading-relaxed">
             Kereke Hub replaces the spreadsheets, WhatsApp threads, and paper registers that slow your leadership team down. One platform for your full congregation.
@@ -264,6 +264,56 @@ export default function Home() {
             <Link href="/features" className="inline-block text-sm font-bold text-emerald-400 hover:text-emerald-300 transition">
               View full feature breakdown →
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── WHY CHOOSE KEREKE HUB ── */}
+      <section className="py-20 px-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-14">
+            <span className="inline-block mb-4 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Why Kereke Hub
+            </span>
+            <h2 className="text-3xl md:text-4xl font-black text-white mb-3">Built differently. Built for you.</h2>
+            <p className="text-slate-400 font-medium max-w-2xl mx-auto">We're not a global platform that pretends to fit churches. We're built from the ground up for South African congregations.</p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-6">
+            {[
+              {
+                title: 'South African focus',
+                desc: 'Built for how churches in SA actually work. Currency in ZAR, POPIA-compliant by default, and personal support from people who understand your context.',
+              },
+              {
+                title: 'No per-seat pricing',
+                desc: 'One flat monthly fee, no matter how many members you have. Add 50 people or 500, the price stays the same.',
+              },
+              {
+                title: 'Included personal setup',
+                desc: 'Your first month is free and dedicated to getting your data clean and your team trained. No DIY onboarding.',
+              },
+              {
+                title: 'Made for non-tech people',
+                desc: 'Your church admin team doesn\'t need an IT degree. The dashboard is intuitive, and our support team speaks plainly.',
+              },
+              {
+                title: 'Affordable entry',
+                desc: 'Start at R159 per month after your free evaluation period. That\'s less than a weekly coffee run.',
+              },
+              {
+                title: 'Cancel anytime',
+                desc: 'No contracts, no early-exit penalties. Your data is always yours. If Kereke Hub isn\'t working, you\'re free to leave.',
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="bg-slate-900/60 border border-slate-800 rounded-2xl p-7 hover:border-slate-700 transition-colors"
+              >
+                <h3 className="text-base font-bold text-white mb-2">{item.title}</h3>
+                <p className="text-sm text-slate-400 leading-relaxed font-medium">{item.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
