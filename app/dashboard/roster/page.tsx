@@ -168,12 +168,31 @@ function fmtPhone(raw: string): string {
   return c.startsWith("0") ? "27" + c.substring(1) : c;
 }
 
+function parseDobParts(dob: string): { mm: number; dd: number } | null {
+  // Handle YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+    const [, mm, dd] = dob.split("-").map(Number);
+    return { mm, dd };
+  }
+  // Handle DD/MM/YYYY
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dob)) {
+    const [dd, mm] = dob.split("/").map(Number);
+    return { mm, dd };
+  }
+  // Handle D/M/YYYY or D/MM/YYYY variants
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dob)) {
+    const [dd, mm] = dob.split("/").map(Number);
+    return { mm, dd };
+  }
+  return null;
+}
+
 function daysUntilBirthday(dob?: string): number | null {
   if (!dob) return null;
-  const p = dob.split("-");
-  if (p.length !== 3) return null;
-  const [, mm, dd] = p.map(Number);
-  if (isNaN(mm) || isNaN(dd)) return null;
+  const parts = parseDobParts(dob);
+  if (!parts) return null;
+  const { mm, dd } = parts;
+  if (isNaN(mm) || isNaN(dd) || mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let next = new Date(today.getFullYear(), mm - 1, dd);
   if (next < today) next = new Date(today.getFullYear() + 1, mm - 1, dd);
@@ -1689,7 +1708,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-gray-900">{m.fullName}</p>
-                          {days !== null && days <= 14 && (
+                          {days !== null && days <= 10 && (
                             <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">
                               {days === 0 ? "🎂 Today!" : `🎂 ${days}d`}
                             </span>
