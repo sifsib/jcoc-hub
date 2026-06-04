@@ -7,6 +7,7 @@ import {
   collection, query, where, getDocs, addDoc,
   updateDoc, doc, serverTimestamp, getDoc,
 } from "firebase/firestore";
+import NotesPanel from "../../components/NotesPanel";
 
 interface Visitor {
   id: string;
@@ -399,21 +400,43 @@ export default function VisitorsPage() {
 
       {isModalOpen && selectedVisitor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Visitor: {selectedVisitor.fullName}</h3>
+                <p className="text-gray-500 text-sm mt-0.5">{selectedVisitor.reason} · {selectedVisitor.serviceDate}</p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-lg">✕</button>
+            </div>
+
+            {/* Notes section */}
             <div>
-              <h3 className="text-lg font-bold text-gray-800">Log Pastoral Follow-Up</h3>
-              <p className="text-gray-500 text-sm mt-1">Recording contact notes for <strong>{selectedVisitor.fullName}</strong>.</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Notes</p>
+              <NotesPanel
+                parentPath={`visitors/${selectedVisitor.id}`}
+                authorName={appUser?.displayName || appUser?.email || "Admin"}
+                authorEmail={appUser?.email || ""}
+              />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact Notes</label>
-              <textarea value={followUpNotes} onChange={(e) => setFollowUpNotes(e.target.value)} placeholder="e.g. Called them on Tuesday. They enjoyed the service..." className="border p-2 rounded text-sm text-gray-700 focus:outline-blue-500 min-h-[120px] resize-none" autoFocus />
-            </div>
-            <div className="flex justify-end gap-3 mt-2">
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-700 font-medium py-2 px-4 rounded text-sm">Cancel</button>
-              <button onClick={handleSaveFollowUp} disabled={modalLoading || !followUpNotes.trim()} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2 px-5 rounded transition-colors text-sm">
-                {modalLoading ? "Saving..." : "Mark as Completed"}
-              </button>
-            </div>
+
+            {/* Follow-up completion */}
+            {selectedVisitor.followUpStatus !== "done" && (
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Mark as Followed Up</p>
+                <textarea value={followUpNotes} onChange={(e) => setFollowUpNotes(e.target.value)} placeholder="Summary of contact made..." className="border p-2 rounded text-sm text-gray-700 focus:outline-blue-500 min-h-[80px] resize-none w-full" />
+                <div className="flex justify-end gap-3 mt-3">
+                  <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-700 font-medium py-2 px-4 rounded text-sm">Close</button>
+                  <button onClick={handleSaveFollowUp} disabled={modalLoading || !followUpNotes.trim()} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2 px-5 rounded transition-colors text-sm">
+                    {modalLoading ? "Saving..." : "Mark as Completed"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {selectedVisitor.followUpStatus === "done" && (
+              <div className="flex justify-end pt-2 border-t border-gray-100">
+                <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-700 font-medium py-2 px-4 rounded text-sm">Close</button>
+              </div>
+            )}
           </div>
         </div>
       )}

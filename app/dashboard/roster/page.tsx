@@ -8,6 +8,7 @@ import {
   updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot,
 } from "firebase/firestore";
 import ExportCSVButton from "../../components/ExportCSVButton";
+import NotesPanel from "../../components/NotesPanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1258,6 +1259,19 @@ export default function ManageMembershipPage() {
             </button>
           </div>
         </form>
+
+        {/* Notes — only shown when editing an existing member */}
+        {editingMemberId && (
+          <div className="mt-6 bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <h2 className="text-base font-bold text-gray-800 mb-1">Notes</h2>
+            <p className="text-xs text-gray-400 mb-4">Timestamped notes about this member. Each entry is permanent.</p>
+            <NotesPanel
+              parentPath={`members/${editingMemberId}`}
+              authorName={appUser?.displayName || appUser?.name || appUser?.email || "Admin"}
+              authorEmail={appUser?.email || ""}
+            />
+          </div>
+        )}
 
         {/* Workflow instances — only shown when editing an existing member */}
         {editingMemberId && (

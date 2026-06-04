@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "../../../../lib/firebase";
 import { useAppUser } from "../../../../lib/useAppUser";
+import NotesPanel from "../../../components/NotesPanel";
 import {
   doc,
   getDoc,
@@ -124,7 +125,7 @@ function addDays(days: number): string {
 
 export default function WorkflowBuilderPage() {
   const { workflowId } = useParams<{ workflowId: string }>();
-  const { tenantId } = useAppUser();
+  const { tenantId, appUser } = useAppUser();
   const router = useRouter();
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -781,10 +782,16 @@ export default function WorkflowBuilderPage() {
                             </div>
                           );
                         })}
-                        <div className="pt-2 border-t border-gray-100 flex gap-2">
+                        <div className="pt-3 border-t border-gray-100">
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
+                          <NotesPanel
+                            parentPath={`workflow_instances/${inst.id}`}
+                            authorName={appUser?.displayName || appUser?.email || "Admin"}
+                            authorEmail={appUser?.email || ""}
+                          />
                           <button
                             onClick={() => completeInstance(inst.id)}
-                            className="text-xs text-gray-500 hover:text-gray-800 font-medium"
+                            className="text-xs text-gray-500 hover:text-gray-800 font-medium mt-3"
                           >
                             Mark Complete
                           </button>
