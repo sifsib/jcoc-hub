@@ -304,7 +304,7 @@ export default function VisitorsPage() {
       )).sort().reverse()
     : [];
   const datesForMonth = selectedYear && selectedMonth
-    ? Array.from(yearMonthDateMap.get(`${selectedYear}-${selectedMonth}`) || new Set()).sort().reverse()
+    ? (Array.from(yearMonthDateMap.get(`${selectedYear}-${selectedMonth}`) || new Set()) as string[]).sort().reverse()
     : [];
 
   const filteredArchiveVisitors = selectedDate
@@ -510,7 +510,7 @@ export default function VisitorsPage() {
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Service Date</label>
             <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} disabled={!selectedMonth} className={`${sel} ${!selectedMonth ? "opacity-50 cursor-not-allowed" : ""}`}>
               <option value="">Select date</option>
-              {datesForMonth.map((d: string) => (
+              {datesForMonth.map(d => (
                 <option key={d} value={d}>{formatDisplayDate(d)}</option>
               ))}
             </select>
