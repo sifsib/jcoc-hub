@@ -31,13 +31,11 @@ interface Category {
 
 const DEFAULT_GIVING = ["Tithe", "Offering", "Building Fund", "Missions", "Special Offering"];
 
-const DEFAULT_INCOME = ["Tithes", "Offerings", "Building Fund", "Other"];
+const DEFAULT_INCOME = ["Tithes", "Offerings", "Building Fund", "Missions", "Other"];
 
 const DEFAULT_EXPENSE = [
-  "Allowance", "Electricity", "Petrol", "Catering", "Welfare",
-  "Land Purchase Payment", "Bank Charges", "Evangelism", "Pastor's Travel",
-  "Bereavement", "Donations/Offering", "Church Maintenance", "Conferences",
-  "Debt Repayment", "Stock Purchases", "Memberships/Subscriptions", "Miscellaneous",
+  "Allowances", "Salaries", "Conferences", "Welfare", "Evangelism",
+  "Bank Charges", "Catering", "Bank Fees", "Miscellaneous"
 ];
 
 export default function FinanceCategorySettings() {
@@ -66,12 +64,11 @@ export default function FinanceCategorySettings() {
     loadCategories(appUser.tenantId);
   }, [appUser, userLoading, activeTab]);
 
-  // Auto-seed defaults when tab changes
+  // Only seed defaults if categories are empty (first load only)
   useEffect(() => {
-    if (userLoading || !appUser) return;
-    // Always try to seed - seedDefaults will skip duplicates
+    if (userLoading || !appUser || categories.length > 0) return;
     seedDefaults();
-  }, [appUser, userLoading, activeTab]);
+  }, [appUser, userLoading, activeTab, categories.length]);
 
   async function loadCategories(tenantId: string) {
     setLoadingCats(true);
