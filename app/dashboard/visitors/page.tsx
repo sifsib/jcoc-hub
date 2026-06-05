@@ -86,6 +86,11 @@ export default function VisitorsPage() {
   const [followUpNotes, setFollowUpNotes] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
 
+  // Archive/browse filters
+  const [selectedYear, setSelectedYear] = useState<string>("");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>("");
+
   const formatDisplayDate = (dateString: string) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -256,8 +261,55 @@ export default function VisitorsPage() {
   const reasonOptions = fc.reasonForVisiting?.options?.length ? fc.reasonForVisiting.options : ["Just visiting", "Would like to know more about the church"];
 
   const pendingVisitors = visitors.filter((v) => v.followUpStatus === "pending");
-  const doneVisitors = visitors.filter((v) => v.followUpStatus === "done");
-  const noActionVisitors = visitors.filter((v) => v.followUpStatus === "none");
+
+  // Last 14 days filter
+  const last14Days = new Date();
+  last14Days.setDate(last14Days.getDate() - 14);
+  const recentlyFollowedUp = visitors.filter((v) => v.followUpStatus === "done" && new Date(v.serviceDate) >= last14Days);
+  const justVisitingRecent = visitors.filter((v) => v.followUpStatus === "none" && new Date(v.serviceDate) >= last14Days);
+
+  // KPI calculations
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+  const mtdStart = new Date(currentYear, currentMonth, 1);
+  const qtdStart = new Date(currentYear, Math.floor(currentMonth / 3) * 3, 1);
+  const ytdStart = new Date(currentYear, 0, 1);
+
+  const visitorsMTD = visitors.filter(v => new Date(v.serviceDate) >= mtdStart).length;
+  const visitorsQTD = visitors.filter(v => new Date(v.serviceDate) >= qtdStart).length;
+  const visitorsYTD = visitors.filter(v => new Date(v.serviceDate) >= ytdStart).length;
+
+  // Archive browse: get unique years, months, dates
+  const yearMonthDateMap = new Map<string, Set<string>>();
+  const yearSet = new Set<string>();
+
+  visitors.forEach(v => {
+    const d = new Date(v.serviceDate);
+    const year = d.getFullYear().toString();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const yearMonth = `${year}-${month}`;
+
+    yearSet.add(year);
+    if (!yearMonthDateMap.has(yearMonth)) yearMonthDateMap.set(yearMonth, new Set());
+    yearMonthDateMap.get(yearMonth)?.add(v.serviceDate);
+  });
+
+  const years = Array.from(yearSet).sort().reverse();
+  const monthsForYear = selectedYear
+    ? Array.from(new Set(
+        Array.from(yearMonthDateMap.keys())
+          .filter(ym => ym.startsWith(selectedYear))
+          .map(ym => ym.split("-")[1])
+      )).sort().reverse()
+    : [];
+  const datesForMonth = selectedYear && selectedMonth
+    ? Array.from(yearMonthDateMap.get(`${selectedYear}-${selectedMonth}`) || new Set()).sort().reverse()
+    : [];
+
+  const filteredArchiveVisitors = selectedDate
+    ? visitors.filter(v => v.serviceDate === selectedDate)
+    : [];
 
   const inp = "border p-2 rounded text-sm text-gray-700 focus:outline-blue-500 w-full";
   const sel = "border p-2 rounded text-sm text-gray-700 bg-white focus:outline-blue-500 w-full";
@@ -377,15 +429,30 @@ export default function VisitorsPage() {
             </div>
           </div>
 
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+              <p className="text-xs font-bold text-blue-600 uppercase tracking-wide">Visitors MTD</p>
+              <p className="text-2xl font-bold text-blue-900 mt-1">{visitorsMTD}</p>
+            </div>
+            <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
+              <p className="text-xs font-bold text-purple-600 uppercase tracking-wide">Visitors QTD</p>
+              <p className="text-2xl font-bold text-purple-900 mt-1">{visitorsQTD}</p>
+            </div>
+            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+              <p className="text-xs font-bold text-indigo-600 uppercase tracking-wide">Visitors YTD</p>
+              <p className="text-2xl font-bold text-indigo-900 mt-1">{visitorsYTD}</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
               <div className="bg-green-50 p-3 border-b border-green-100">
-                <h3 className="text-sm font-bold text-green-800">Recently Followed Up</h3>
+                <h3 className="text-sm font-bold text-green-800">Recently Followed Up (Last 14 Days)</h3>
               </div>
               <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                {doneVisitors.length === 0 ? (
-                  <p className="p-4 text-center text-gray-400 text-xs">No completed follow-ups yet.</p>
-                ) : doneVisitors.map((v) => (
+                {recentlyFollowedUp.length === 0 ? (
+                  <p className="p-4 text-center text-gray-400 text-xs">No completed follow-ups in the last 14 days.</p>
+                ) : recentlyFollowedUp.map((v) => (
                   <div key={v.id} className="p-3">
                     <p className="font-medium text-sm text-gray-800">{v.fullName}</p>
                     <p className="text-xs text-gray-500 mt-1 italic leading-relaxed">"{v.followUpNotes}"</p>
@@ -396,12 +463,12 @@ export default function VisitorsPage() {
             </div>
             <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
               <div className="bg-gray-50 p-3 border-b border-gray-200">
-                <h3 className="text-sm font-bold text-gray-700">Just Visiting (No Action)</h3>
+                <h3 className="text-sm font-bold text-gray-700">Just Visiting (Last 14 Days)</h3>
               </div>
               <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                {noActionVisitors.length === 0 ? (
-                  <p className="p-4 text-center text-gray-400 text-xs">No casual visitors logged.</p>
-                ) : noActionVisitors.map((v) => (
+                {justVisitingRecent.length === 0 ? (
+                  <p className="p-4 text-center text-gray-400 text-xs">No casual visitors in the last 14 days.</p>
+                ) : justVisitingRecent.map((v) => (
                   <div key={v.id} className="p-3">
                     <p className="font-medium text-sm text-gray-800">{v.fullName}</p>
                     <p className="text-xs text-gray-500 mt-1">Visited: {formatDisplayDate(v.serviceDate)}</p>
@@ -411,6 +478,81 @@ export default function VisitorsPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white border rounded-lg p-6 shadow-sm flex flex-col gap-6">
+        <div>
+          <h2 className="text-lg font-bold text-gray-700">Browse Visitor Archive</h2>
+          <p className="text-sm text-gray-500 mt-1">Filter by year, month, and service date to view historical visitor records.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Year</label>
+            <select value={selectedYear} onChange={(e) => { setSelectedYear(e.target.value); setSelectedMonth(""); setSelectedDate(""); }} className={sel}>
+              <option value="">Select year</option>
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Month</label>
+            <select value={selectedMonth} onChange={(e) => { setSelectedMonth(e.target.value); setSelectedDate(""); }} disabled={!selectedYear} className={`${sel} ${!selectedYear ? "opacity-50 cursor-not-allowed" : ""}`}>
+              <option value="">Select month</option>
+              {monthsForYear.map(m => {
+                const monthName = new Date(parseInt(selectedYear), parseInt(m) - 1).toLocaleDateString("en-US", { month: "long" });
+                return <option key={m} value={m}>{monthName}</option>;
+              })}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Service Date</label>
+            <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} disabled={!selectedMonth} className={`${sel} ${!selectedMonth ? "opacity-50 cursor-not-allowed" : ""}`}>
+              <option value="">Select date</option>
+              {datesForMonth.map(d => (
+                <option key={d} value={d}>{formatDisplayDate(d)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {selectedDate && (
+          <div className="border-t pt-6">
+            <h3 className="text-base font-bold text-gray-800 mb-4">Visitors on {formatDisplayDate(selectedDate)} ({filteredArchiveVisitors.length})</h3>
+            <div className="divide-y divide-gray-100">
+              {filteredArchiveVisitors.length === 0 ? (
+                <p className="text-center text-gray-500 text-sm py-4">No visitors recorded for this date.</p>
+              ) : (
+                filteredArchiveVisitors.map((v) => (
+                  <div key={v.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <p className="font-bold text-gray-900">{v.fullName} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
+                        {v.email && <p className="text-xs text-gray-500 mt-1">{v.email}</p>}
+                        <p className="text-sm text-gray-600 mt-1">{v.reason}</p>
+                        <div className="flex gap-3 text-xs text-gray-500 mt-2">
+                          {v.gender && <span>Gender: {v.gender}</span>}
+                          {v.ageGroup && <span>Age: {v.ageGroup}</span>}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${v.followUpStatus === "pending" ? "bg-red-50 text-red-700" : v.followUpStatus === "done" ? "bg-green-50 text-green-700" : "bg-gray-50 text-gray-700"}`}>
+                          {v.followUpStatus === "pending" ? "Follow-Up Pending" : v.followUpStatus === "done" ? "Followed Up" : "No Action"}
+                        </span>
+                        {v.followUpStatus !== "done" && (
+                          <button onClick={() => openFollowUpModal(v)} className="text-xs px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded font-medium transition-colors">
+                            Log Contact
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {isModalOpen && selectedVisitor && (
