@@ -120,6 +120,7 @@ export default function FinancePage() {
   // Custom categories from Firestore
   const [incomeCategories, setIncomeCategories] = useState<string[]>(DEFAULT_INCOME_CATEGORIES);
   const [expenseCategories, setExpenseCategories] = useState<string[]>(DEFAULT_EXPENSE_CATEGORIES);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Online giving state
   const [givingRecords, setGivingRecords] = useState<GivingRecord[]>([]);
@@ -211,7 +212,9 @@ export default function FinancePage() {
 
   // Load custom categories from Firestore
   const fetchCustomCategories = async (tenantId: string) => {
+    setRefreshing(true);
     try {
+      console.log('Fetching income categories for tenant:', tenantId);
       const incomeSnap = await getDocs(
         query(
           collection(db, 'finance_categories'),
@@ -220,6 +223,10 @@ export default function FinancePage() {
           orderBy('order', 'asc'),
         ),
       );
+      console.log('Income categories found:', incomeSnap.docs.length);
+      incomeSnap.docs.forEach(d => console.log('  -', d.data()));
+
+      console.log('Fetching expense categories for tenant:', tenantId);
       const expenseSnap = await getDocs(
         query(
           collection(db, 'finance_categories'),
@@ -228,15 +235,22 @@ export default function FinancePage() {
           orderBy('order', 'asc'),
         ),
       );
+      console.log('Expense categories found:', expenseSnap.docs.length);
+      expenseSnap.docs.forEach(d => console.log('  -', d.data()));
 
       const income = incomeSnap.docs.map(d => d.data().name);
       const expense = expenseSnap.docs.map(d => d.data().name);
 
-      // Always update, use empty array if none exist (don't fall back to defaults here)
+      console.log('Setting income categories:', income);
+      console.log('Setting expense categories:', expense);
+
       setIncomeCategories(income.length > 0 ? income : DEFAULT_INCOME_CATEGORIES);
       setExpenseCategories(expense.length > 0 ? expense : DEFAULT_EXPENSE_CATEGORIES);
     } catch (err) {
       console.error('Failed to load custom categories:', err);
+      alert('Error loading categories: ' + err);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -736,11 +750,13 @@ export default function FinancePage() {
               </button>
             ))}
             <button
+              type="button"
               onClick={() => appUser && fetchCustomCategories(appUser.tenantId)}
-              className="px-3 py-2.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 transition"
+              disabled={refreshing}
+              className="px-3 py-2.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 transition disabled:opacity-50"
               title="Refresh categories from settings"
             >
-              ⟳
+              {refreshing ? '...' : '⟳'}
             </button>
           </div>
 
