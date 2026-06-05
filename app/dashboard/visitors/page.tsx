@@ -15,6 +15,7 @@ interface Visitor {
   phone: string;
   email?: string;
   serviceDate: string;
+  gender?: string;
   ageGroup?: string;
   reason: string;
   followUpStatus: "pending" | "done" | "none";
@@ -49,6 +50,7 @@ interface VisitorFormConfig {
 const DEFAULT_VISITOR_CONFIG: VisitorFormConfig = {
   fields: {
     email: { label: "Email Address", enabled: true, required: false, type: "text" },
+    gender: { label: "Gender", enabled: true, required: false, type: "dropdown", options: ["Male", "Female"] },
     ageGroup: {
       label: "Age Group", enabled: true, required: false, type: "dropdown",
       options: ["Under 13", "13-19", "20-29", "30-39", "40-49", "50-59", "60+"],
@@ -74,6 +76,7 @@ export default function VisitorsPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [serviceDate, setServiceDate] = useState("");
+  const [gender, setGender] = useState("");
   const [ageGroup, setAgeGroup] = useState("");
   const [reason, setReason] = useState("");
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -192,6 +195,7 @@ export default function VisitorsPage() {
         followUpStatus: initialStatus, capturedBy: appUser.email, createdAt: serverTimestamp(),
       };
       if (fc.email?.enabled && email.trim()) newVisitorData.email = email.trim().toLowerCase();
+      if (fc.gender?.enabled && gender) newVisitorData.gender = gender;
       if (fc.ageGroup?.enabled && ageGroup) newVisitorData.ageGroup = ageGroup;
       if (Object.keys(customValues).length > 0) newVisitorData.customFields = customValues;
 
@@ -199,7 +203,7 @@ export default function VisitorsPage() {
       if (shouldTriggerWorkflow) await triggerWorkflowsForVisitor(docRef.id, fullName.trim(), formattedPhone);
 
       setVisitors((prev) => [{ id: docRef.id, ...newVisitorData } as Visitor, ...prev]);
-      setFullName(""); setPhone(""); setEmail(""); setAgeGroup(""); setReason(""); setCustomValues({});
+      setFullName(""); setPhone(""); setEmail(""); setGender(""); setAgeGroup(""); setReason(""); setCustomValues({});
     } catch (err) {
       console.error("Error saving visitor:", err);
       alert("Failed to capture visitor details.");
@@ -289,6 +293,17 @@ export default function VisitorsPage() {
                   {fc.email.label || "Email Address"}{fc.email.required && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. jane@example.com" className={inp} required={fc.email.required} />
+              </div>
+            )}
+            {fc.gender?.enabled && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {fc.gender.label || "Gender"}{fc.gender.required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                <select value={gender} onChange={(e) => setGender(e.target.value)} className={sel} required={fc.gender.required}>
+                  <option value="">Select gender</option>
+                  {(fc.gender.options || ["Male", "Female"]).map((g) => <option key={g} value={g}>{g}</option>)}
+                </select>
               </div>
             )}
             {fc.ageGroup?.enabled && (
