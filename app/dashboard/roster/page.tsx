@@ -230,16 +230,17 @@ function SecHead({ n, title, sub }: { n: string; title: string; sub?: string }) 
 }
 
 function AddrBlock({
-  v, on,
-}: { v: ReturnType<typeof emptyPerson>["address"]; on: (k: string, val: string) => void }) {
+  v, on, disabled = false,
+}: { v: ReturnType<typeof emptyPerson>["address"]; on: (k: string, val: string) => void; disabled?: boolean }) {
+  const disabledClass = disabled ? "bg-gray-100 cursor-not-allowed" : "";
   return (
     <div className="flex flex-col gap-2">
-      <input value={v.line1} onChange={e => on("line1", e.target.value)} placeholder="Street address" className={inp} required />
-      <input value={v.line2} onChange={e => on("line2", e.target.value)} placeholder="Line 2 (optional)" className={inp} />
+      <input disabled={disabled} value={v.line1} onChange={e => on("line1", e.target.value)} placeholder="Street address" className={`${inp} ${disabledClass}`} required />
+      <input disabled={disabled} value={v.line2} onChange={e => on("line2", e.target.value)} placeholder="Line 2 (optional)" className={`${inp} ${disabledClass}`} />
       <div className="grid grid-cols-3 gap-2">
-        <input value={v.suburb} onChange={e => on("suburb", e.target.value)} placeholder="Suburb" className={inp} required />
-        <input value={v.town} onChange={e => on("town", e.target.value)} placeholder="Town / City" className={inp} required />
-        <input value={v.postalCode} onChange={e => on("postalCode", e.target.value)} placeholder="Postal code" className={inp} required />
+        <input disabled={disabled} value={v.suburb} onChange={e => on("suburb", e.target.value)} placeholder="Suburb" className={`${inp} ${disabledClass}`} required />
+        <input disabled={disabled} value={v.town} onChange={e => on("town", e.target.value)} placeholder="Town / City" className={`${inp} ${disabledClass}`} required />
+        <input disabled={disabled} value={v.postalCode} onChange={e => on("postalCode", e.target.value)} placeholder="Postal code" className={`${inp} ${disabledClass}`} required />
       </div>
     </div>
   );
@@ -264,7 +265,7 @@ function MinChecks({ list, sel: selected, on }: { list: string[]; sel: string[];
 
 function MemberBlock({
   data, set, config, formConfig, showFaith = true, ageRestricted = false,
-  customValues, setCustomValues,
+  customValues, setCustomValues, addressDisabled = false,
 }: {
   data: ReturnType<typeof emptyPerson>;
   set: (k: string, v: any) => void;
@@ -274,6 +275,7 @@ function MemberBlock({
   ageRestricted?: boolean;
   customValues?: Record<string, string>;
   setCustomValues?: (vals: Record<string, string>) => void;
+  addressDisabled?: boolean;
 }) {
   const fc = formConfig.fields;
   const roleOpts = fc.role?.options?.length ? fc.role.options : config.roles;
@@ -305,7 +307,7 @@ function MemberBlock({
       </F>
       {(fc.address?.enabled !== false) && (
         <F label={fc.address?.label || "Residential Address"} req={fc.address?.required}>
-          <AddrBlock v={data.address} on={(k, v) => set("address", { ...data.address, [k]: v })} />
+          <AddrBlock v={data.address} on={(k, v) => set("address", { ...data.address, [k]: v })} disabled={addressDisabled} />
         </F>
       )}
       {(fc.role?.enabled !== false) && (
@@ -452,6 +454,7 @@ export default function ManageMembershipPage() {
   const [spouse, setSpouse] = useState(emptyPerson());
   const setSp = (k: string, v: any) => setSpouse(p => ({ ...p, [k]: v }));
   const [spouseBasic, setSpouseBasic] = useState({ firstName: "", lastName: "", dob: "", gender: "", phone: "" });
+  const [spouseSameAddress, setSpouseSameAddress] = useState(false);
 
   // Children
   const [children, setChildren] = useState<ChildInput[]>([]);
@@ -1163,7 +1166,17 @@ export default function ManageMembershipPage() {
                   <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg">
                     This will create a second member record linked to the same household.
                   </p>
-                  <MemberBlock data={spouse} set={setSp} config={config} formConfig={formConfig} showFaith={true} />
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                    <input type="checkbox" checked={spouseSameAddress} onChange={(e) => {
+                      setSpouseSameAddress(e.target.checked);
+                      if (e.target.checked) {
+                        setSp("address", JSON.parse(JSON.stringify(primary.address)));
+                      }
+                    }}
+                      className="h-4 w-4 rounded text-blue-600 border-gray-300" />
+                    Same residential address as main member
+                  </label>
+                  <MemberBlock data={spouse} set={setSp} config={config} formConfig={formConfig} showFaith={true} addressDisabled={spouseSameAddress} />
                 </div>
               )}
             </div>
