@@ -232,8 +232,9 @@ export default function FinancePage() {
       const income = incomeSnap.docs.map(d => d.data().name);
       const expense = expenseSnap.docs.map(d => d.data().name);
 
-      if (income.length > 0) setIncomeCategories(income);
-      if (expense.length > 0) setExpenseCategories(expense);
+      // Always update, use empty array if none exist (don't fall back to defaults here)
+      setIncomeCategories(income.length > 0 ? income : DEFAULT_INCOME_CATEGORIES);
+      setExpenseCategories(expense.length > 0 ? expense : DEFAULT_EXPENSE_CATEGORIES);
     } catch (err) {
       console.error('Failed to load custom categories:', err);
     }
@@ -244,6 +245,13 @@ export default function FinancePage() {
     fetchTransactions(appUser.tenantId);
     fetchCustomCategories(appUser.tenantId);
   }, [appUser, userLoading]);
+
+  // Refresh categories when Add tab is opened
+  useEffect(() => {
+    if (tab === 'add' && appUser) {
+      fetchCustomCategories(appUser.tenantId);
+    }
+  }, [tab, appUser]);
 
   // Load giving records when Online tab is first opened
   useEffect(() => {

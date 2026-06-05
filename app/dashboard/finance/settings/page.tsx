@@ -66,6 +66,12 @@ export default function FinanceCategorySettings() {
     loadCategories(appUser.tenantId);
   }, [appUser, userLoading, activeTab]);
 
+  // Auto-seed defaults on first load
+  useEffect(() => {
+    if (userLoading || !appUser || categories.length > 0) return;
+    seedDefaults();
+  }, [appUser, userLoading, activeTab]);
+
   async function loadCategories(tenantId: string) {
     setLoadingCats(true);
     try {
