@@ -5,13 +5,13 @@
 
 'use client';
 
-import { useOnlineStatus, useSyncState, useSyncTrigger } from '@/lib/hooks/useOfflineSync';
-import { useAuth } from '@/context/AuthContext';
+import { useOnlineStatus, useSyncState, useSyncTrigger } from '@/lib/offline/hooks';
+import { useAppUser } from '@/lib/useAppUser';
 
 export function OfflineIndicator() {
   const isOnline = useOnlineStatus();
-  const { user } = useAuth();
-  const tenantId = user?.tenantId;
+  const { appUser } = useAppUser();
+  const tenantId = appUser?.tenantId;
 
   if (!tenantId) return null;
 
@@ -73,8 +73,8 @@ export function OfflineIndicator() {
 
 export function SyncStatusBadge() {
   const isOnline = useOnlineStatus();
-  const { user } = useAuth();
-  const tenantId = user?.tenantId;
+  const { appUser } = useAppUser();
+  const tenantId = appUser?.tenantId;
 
   if (!tenantId) return null;
 

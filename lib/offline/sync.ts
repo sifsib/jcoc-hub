@@ -19,7 +19,7 @@ import {
   where,
   Firestore
 } from 'firebase/firestore';
-import { offlineStorage, OfflineOperation, SyncState } from './offline-storage';
+import { offlineStorage, OfflineOperation, SyncState } from './storage';
 
 export interface SyncResult {
   successful: number;

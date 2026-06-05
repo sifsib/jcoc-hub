@@ -6,9 +6,9 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { offlineStorage, SyncState } from '@/lib/offline/offline-storage';
-import { offlineSync } from '@/lib/offline/offline-sync';
+import { useAppUser } from '@/lib/useAppUser';
+import { offlineStorage, SyncState } from '@/lib/offline/storage';
+import { offlineSync } from '@/lib/offline/sync';
 
 /**
  * Hook to monitor online/offline status
