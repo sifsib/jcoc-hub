@@ -26,14 +26,18 @@ interface Category {
   id: string;
   name: string;
   order: number;
+  type: "giving" | "income" | "expense";
 }
 
-const DEFAULT_CATEGORIES = [
-  "Tithe",
-  "Offering",
-  "Building Fund",
-  "Missions",
-  "Special Offering",
+const DEFAULT_GIVING = ["Tithe", "Offering", "Building Fund", "Missions", "Special Offering"];
+
+const DEFAULT_INCOME = ["Tithes", "Offerings", "Building Fund", "Other"];
+
+const DEFAULT_EXPENSE = [
+  "Allowance", "Electricity", "Petrol", "Catering", "Welfare",
+  "Land Purchase Payment", "Bank Charges", "Evangelism", "Pastor's Travel",
+  "Bereavement", "Donations/Offering", "Church Maintenance", "Conferences",
+  "Debt Repayment", "Stock Purchases", "Memberships/Subscriptions", "Miscellaneous",
 ];
 
 export default function FinanceCategorySettings() {
@@ -41,6 +45,7 @@ export default function FinanceCategorySettings() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCats, setLoadingCats] = useState(true);
+  const [activeTab, setActiveTab] = useState<"giving" | "income" | "expense">("giving");
 
   const [newName, setNewName] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
@@ -59,7 +64,7 @@ export default function FinanceCategorySettings() {
   useEffect(() => {
     if (userLoading || !appUser) return;
     loadCategories(appUser.tenantId);
-  }, [appUser, userLoading]);
+  }, [appUser, userLoading, activeTab]);
 
   async function loadCategories(tenantId: string) {
     setLoadingCats(true);
@@ -68,6 +73,7 @@ export default function FinanceCategorySettings() {
         query(
           collection(db, "finance_categories"),
           where("tenantId", "==", tenantId),
+          where("type", "==", activeTab),
           orderBy("order", "asc")
         )
       );
@@ -76,6 +82,7 @@ export default function FinanceCategorySettings() {
           id: d.id,
           name: d.data().name || "",
           order: d.data().order ?? 0,
+          type: d.data().type,
         }))
       );
     } catch (err) {
@@ -99,11 +106,12 @@ export default function FinanceCategorySettings() {
         categories.length > 0 ? Math.max(...categories.map((c) => c.order)) + 1 : 0;
       const docRef = await addDoc(collection(db, "finance_categories"), {
         tenantId: appUser.tenantId,
+        type: activeTab,
         name,
         order: nextOrder,
         createdAt: new Date().toISOString(),
       });
-      setCategories((prev) => [...prev, { id: docRef.id, name, order: nextOrder }]);
+      setCategories((prev) => [...prev, { id: docRef.id, name, order: nextOrder, type: activeTab }]);
       setNewName("");
       flash("Category added.");
     } catch (err) {
@@ -164,7 +172,8 @@ export default function FinanceCategorySettings() {
     setError("");
     try {
       const existing = categories.map((c) => c.name.toLowerCase());
-      const toAdd = DEFAULT_CATEGORIES.filter(
+      const defaults = activeTab === "giving" ? DEFAULT_GIVING : activeTab === "income" ? DEFAULT_INCOME : DEFAULT_EXPENSE;
+      const toAdd = defaults.filter(
         (n) => !existing.includes(n.toLowerCase())
       );
       let nextOrder =
@@ -176,11 +185,12 @@ export default function FinanceCategorySettings() {
       for (const name of toAdd) {
         const docRef = await addDoc(collection(db, "finance_categories"), {
           tenantId: appUser.tenantId,
+          type: activeTab,
           name,
           order: nextOrder++,
           createdAt: new Date().toISOString(),
         });
-        newCats.push({ id: docRef.id, name, order: nextOrder - 1 });
+        newCats.push({ id: docRef.id, name, order: nextOrder - 1, type: activeTab });
       }
       setCategories((prev) => [...prev, ...newCats]);
       flash(`${newCats.length} default categories added.`);
@@ -235,10 +245,44 @@ export default function FinanceCategorySettings() {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-emerald-100 border border-emerald-200 flex items-center justify-center text-sm">🏷️</div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Giving Categories</h1>
-            <p className="text-gray-500 text-sm">These appear in the online giving form at kerekehub.co.za/give/{appUser?.tenantId}</p>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Finance Categories</h1>
+            <p className="text-gray-500 text-sm">Customize the categories used in your financial management.</p>
           </div>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200 flex gap-0">
+        <button
+          onClick={() => setActiveTab("giving")}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "giving"
+              ? "border-emerald-600 text-emerald-600"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Giving Categories
+        </button>
+        <button
+          onClick={() => setActiveTab("income")}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "income"
+              ? "border-emerald-600 text-emerald-600"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Income Categories
+        </button>
+        <button
+          onClick={() => setActiveTab("expense")}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "expense"
+              ? "border-emerald-600 text-emerald-600"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Expense Categories
+        </button>
       </div>
 
       {/* Feedback */}

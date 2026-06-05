@@ -29,9 +29,9 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-const INCOME_CATEGORIES = ['Tithes', 'Offerings', 'Building Fund', 'Other'] as const;
+const DEFAULT_INCOME_CATEGORIES = ['Tithes', 'Offerings', 'Building Fund', 'Other'];
 
-const EXPENSE_CATEGORIES = [
+const DEFAULT_EXPENSE_CATEGORIES = [
   'Allowance',
   'Electricity',
   'Petrol',
@@ -49,7 +49,7 @@ const EXPENSE_CATEGORIES = [
   'Stock Purchases',
   'Memberships/Subscriptions',
   'Miscellaneous',
-] as const;
+];
 
 // --- Types ---
 
@@ -116,6 +116,10 @@ export default function FinancePage() {
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Custom categories from Firestore
+  const [incomeCategories, setIncomeCategories] = useState<string[]>(DEFAULT_INCOME_CATEGORIES);
+  const [expenseCategories, setExpenseCategories] = useState<string[]>(DEFAULT_EXPENSE_CATEGORIES);
 
   // Online giving state
   const [givingRecords, setGivingRecords] = useState<GivingRecord[]>([]);
@@ -205,9 +209,40 @@ export default function FinancePage() {
     }
   };
 
+  // Load custom categories from Firestore
+  const fetchCustomCategories = async (tenantId: string) => {
+    try {
+      const incomeSnap = await getDocs(
+        query(
+          collection(db, 'finance_categories'),
+          where('tenantId', '==', tenantId),
+          where('type', '==', 'income'),
+          orderBy('order', 'asc'),
+        ),
+      );
+      const expenseSnap = await getDocs(
+        query(
+          collection(db, 'finance_categories'),
+          where('tenantId', '==', tenantId),
+          where('type', '==', 'expense'),
+          orderBy('order', 'asc'),
+        ),
+      );
+
+      const income = incomeSnap.docs.map(d => d.data().name);
+      const expense = expenseSnap.docs.map(d => d.data().name);
+
+      if (income.length > 0) setIncomeCategories(income);
+      if (expense.length > 0) setExpenseCategories(expense);
+    } catch (err) {
+      console.error('Failed to load custom categories:', err);
+    }
+  };
+
   useEffect(() => {
     if (userLoading || !appUser) return;
     fetchTransactions(appUser.tenantId);
+    fetchCustomCategories(appUser.tenantId);
   }, [appUser, userLoading]);
 
   // Load giving records when Online tab is first opened
@@ -439,7 +474,7 @@ export default function FinancePage() {
         ];
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(incomeData), `${monthName} - Incomes`);
 
-        const expCats = [...EXPENSE_CATEGORIES];
+        const expCats = [...expenseCategories];
         const expenseHeader = ['Date', 'Payee', 'Amount', ...expCats];
         const expenseRows = expenseTx.map((tx) => {
           const payee = tx.category === 'Miscellaneous' && tx.miscDescription
@@ -484,7 +519,7 @@ export default function FinancePage() {
           ...Array.from({ length: 12 }, (_, m) => getTotal('expense', m)),
           Array.from({ length: 12 }, (_, m) => getTotal('expense', m)).reduce((a, b) => a + b, 0),
         ],
-        ...EXPENSE_CATEGORIES.map((cat) => [
+        ...expenseCategories.map((cat) => [
           `  ${cat}`,
           ...Array.from({ length: 12 }, (_, m) => getTotal('expense', m, cat)),
           Array.from({ length: 12 }, (_, m) => getTotal('expense', m, cat)).reduce((a, b) => a + b, 0),
@@ -711,7 +746,7 @@ export default function FinancePage() {
               <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
               <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
                 <option value="">Select a category</option>
-                {(txType === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
+                {(txType === 'income' ? incomeCategories : expenseCategories).map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
