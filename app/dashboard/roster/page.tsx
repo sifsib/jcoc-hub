@@ -7,7 +7,7 @@ import {
   collection, query, where, getDocs, addDoc,
   updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot,
 } from "firebase/firestore";
-import ExportCSVButton from "../../components/ExportCSVButton";
+import ExportMemberButton from "../../components/ExportMemberButton";
 import NotesPanel from "../../components/NotesPanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -852,18 +852,35 @@ export default function ManageMembershipPage() {
     } catch { alert("Could not remove. Try again."); }
   };
 
-  // ─── XLSX parse ─────────────────────────────────────────────────────────────
+  // ─── Import (CSV/XLSX) parse ─────────────────────────────────────────────────
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     setImportParsing(true); setImportRows([]);
     try {
-      const XLSX = await import("xlsx");
+      const isCSV = file.name.endsWith(".csv");
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array", cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      setImportRows(XLSX.utils.sheet_to_json(ws, { defval: "" }) as any[]);
-    } catch { alert("Could not read file. Make sure it is a valid .xlsx file."); }
+
+      if (isCSV) {
+        const text = new TextDecoder().decode(buf);
+        const lines = text.trim().split("\n");
+        if (lines.length === 0) { alert("CSV file is empty."); return; }
+
+        const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+        const rows = lines.slice(1).map(line => {
+          const values = line.match(/("([^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, "").replace(/""/g, '"')) || [];
+          const row: Record<string, string> = {};
+          headers.forEach((h, i) => { row[h] = values[i]?.trim() || ""; });
+          return row;
+        });
+        setImportRows(rows);
+      } else {
+        const XLSX = await import("xlsx");
+        const wb = XLSX.read(buf, { type: "array", cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        setImportRows(XLSX.utils.sheet_to_json(ws, { defval: "" }) as any[]);
+      }
+    } catch { alert("Could not read file. Make sure it is a valid CSV or XLSX file."); }
     finally { setImportParsing(false); }
   };
 
@@ -1521,8 +1538,8 @@ export default function ManageMembershipPage() {
       <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
         <button onClick={() => setView("list")} className="text-sm text-blue-600 hover:text-blue-800 font-medium self-start">← Back to register</button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-1">Import from XLSX</h1>
-          <p className="text-sm text-gray-500">Upload a spreadsheet from your website or any source. Common column names are mapped automatically.</p>
+          <h1 className="text-2xl font-bold text-gray-800 mb-1">Import Members</h1>
+          <p className="text-sm text-gray-500">Upload a CSV or XLSX file from your website or any source. Common column names are mapped automatically.</p>
         </div>
 
         {/* Export guide */}
@@ -1569,8 +1586,8 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
         {/* File upload */}
         <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-3">
-          <p className="text-sm font-bold text-gray-700">Upload your XLSX file</p>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile}
+          <p className="text-sm font-bold text-gray-700">Upload your CSV or XLSX file</p>
+          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile}
             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
           {importParsing && (
             <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -1641,11 +1658,11 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
           </button>
           <button onClick={() => setView("import")}
             className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-            Import XLSX
+            Import Members
           </button>
 
-          {/* ── CSV Export button ── */}
-          <ExportCSVButton
+          {/* ── Export button (CSV/XLSX) ── */}
+          <ExportMemberButton
             data={members.map(m => {
               const a = (m as any).address || {};
               const addrParts = [a.line1, a.line2, a.suburb, a.town, a.postalCode].filter(Boolean);
@@ -1699,7 +1716,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
         </div>
         {members.length === 0 ? (
           <div className="p-10 text-center text-gray-400 text-sm">
-            No members yet. Use <strong>+ Add Member</strong> to register your first member, or <strong>Import XLSX</strong> to import from your website.
+            No members yet. Use <strong>+ Add Member</strong> to register your first member, or <strong>Import Members</strong> to import from your website.
           </div>
         ) : (
           <div className="overflow-x-auto">
