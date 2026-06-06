@@ -60,8 +60,8 @@ export default function SignupPage() {
         return;
       }
 
-      // 4. Go to dashboard
-      router.push("/dashboard");
+      // 4. Go to email verification screen (hard block)
+      router.push("/verify-email");
       router.refresh();
     } catch (err: any) {
       console.error("Error signing up:", err);
