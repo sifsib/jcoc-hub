@@ -1,23 +1,7 @@
 /**
- * Example: Attendance Marking with Offline Support
- * Shows how to integrate offline functionality into an existing component
- *
- * Key changes:
- * 1. Use useOfflineAttendance hook instead of direct Firestore queries
- * 2. All writes go through markAttendance (queued for sync)
- * 3. UI shows sync status and pending operations
- * 4. Works seamlessly online and offline
+ * NOTE: This is an example/reference file and should not be imported.
+ * Offline attendance functionality is not yet implemented.
  */
-
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { useOfflineAttendance, useOnlineStatus } from '@/lib/hooks/useOfflineSync';
-
-interface AttendanceRecord {
-  id: string;
-  memberId: string;
   memberName: string;
   status: 'present' | 'absent' | 'late';
   date: string;
