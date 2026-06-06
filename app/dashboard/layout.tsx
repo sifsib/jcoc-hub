@@ -5,7 +5,6 @@ import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import LogoutButton from "./LogoutButton";
 import MobileSidebar from "./MobileSidebar";
 import OverdueBadge from "../components/OverdueBadge";
-import { OfflineIndicator } from '../components/OfflineIndicator';
 
 export default async function DashboardLayout({
   children,
@@ -158,7 +157,6 @@ export default async function DashboardLayout({
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 md:p-10">
-           <OfflineIndicator />
           <div className="max-w-7xl mx-auto pb-12">{children}</div>
         </div>
       </main>
