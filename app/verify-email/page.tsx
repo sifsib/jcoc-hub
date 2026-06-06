@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signOut } from "firebase/auth";
+import { signOut, sendEmailVerification } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { useAppUser } from "../../lib/useAppUser";
 
@@ -47,31 +47,15 @@ export default function VerifyEmailPage() {
     setMessage("");
 
     try {
-      // Refresh the ID token
-      const idToken = await user.getIdToken(true);
-
-      const res = await fetch("/api/send-verification-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Failed to send verification email");
-        setSending(false);
-        return;
-      }
+      // Send verification email using Firebase's built-in function
+      await sendEmailVerification(user);
 
       setMessage("Verification email sent! Please check your inbox.");
       setResendDisabled(true);
       setCountdown(60); // 60 second cooldown
     } catch (err: any) {
       console.error("Error sending verification email:", err);
-      setError("An error occurred. Please try again.");
+      setError(err.message || "Failed to send verification email. Please try again.");
     } finally {
       setSending(false);
     }
