@@ -10,6 +10,7 @@ export interface AppUser {
   uid: string;
   email: string | null;
   displayName: string | null;
+  emailVerified: boolean;
   tenantId: string;
   churchName: string;
   name: string;
@@ -48,6 +49,7 @@ export function useAppUser(): UseAppUserReturn {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
+          emailVerified: firebaseUser.emailVerified,
           tenantId: data.tenantId ?? "",
           churchName: data.churchName ?? "",
           name: data.churchName ?? data.name ?? "",
@@ -60,6 +62,7 @@ export function useAppUser(): UseAppUserReturn {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
+          emailVerified: firebaseUser.emailVerified,
           tenantId: "",
           churchName: "",
           name: "",

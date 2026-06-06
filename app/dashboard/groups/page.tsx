@@ -18,7 +18,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
-type GroupType = "small_group" | "bible_study" | "ministry_team" | "youth" | "womens" | "mens" | "other";
+type GroupType = "small_group" | "bible_study" | "ministry_team" | "youth" | "womens" | "mens" | "prayer" | "worship" | "other";
 
 interface Group {
   id: string;
@@ -34,6 +34,11 @@ interface Group {
   createdAt: any;
 }
 
+interface FilterCriteria {
+  field: string;
+  values: string[];
+}
+
 const GROUP_TYPES: { value: GroupType; label: string; color: string }[] = [
   { value: "small_group", label: "Small Group", color: "bg-emerald-100 text-emerald-700" },
   { value: "bible_study", label: "Bible Study", color: "bg-blue-100 text-blue-700" },
@@ -41,6 +46,8 @@ const GROUP_TYPES: { value: GroupType; label: string; color: string }[] = [
   { value: "youth", label: "Youth", color: "bg-yellow-100 text-yellow-700" },
   { value: "womens", label: "Women's", color: "bg-pink-100 text-pink-700" },
   { value: "mens", label: "Men's", color: "bg-slate-100 text-slate-700" },
+  { value: "prayer", label: "Prayer Group", color: "bg-indigo-100 text-indigo-700" },
+  { value: "worship", label: "Worship Team", color: "bg-rose-100 text-rose-700" },
   { value: "other", label: "Other", color: "bg-gray-100 text-gray-600" },
 ];
 
@@ -76,15 +83,14 @@ export default function GroupsPage() {
   const [filterType, setFilterType] = useState<GroupType | "all">("all");
   const [nameSearch, setNameSearch] = useState("");
 
-  // Create from filter
-  const [showFilterModal, setShowFilterModal] = useState(false);
+  // Dynamic group creation
+  const [showDynamicModal, setShowDynamicModal] = useState(false);
+  const [dynamicGroupName, setDynamicGroupName] = useState("");
+  const [dynamicGroupType, setDynamicGroupType] = useState<GroupType>("small_group");
   const [allMembers, setAllMembers] = useState<any[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
-  const [filterField, setFilterField] = useState("");
-  const [filterValue, setFilterValue] = useState("");
-  const [filterGroupName, setFilterGroupName] = useState("");
-  const [filterGroupType, setFilterGroupType] = useState<GroupType>("small_group");
-  const [filterCreating, setFilterCreating] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState<FilterCriteria[]>([]);
+  const [dynamicCreating, setDynamicCreating] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -123,11 +129,11 @@ export default function GroupsPage() {
     }
   }
 
-  async function openFilterModal() {
-    setShowFilterModal(true);
-    setFilterField("");
-    setFilterValue("");
-    setFilterGroupName("");
+  async function openDynamicModal() {
+    setShowDynamicModal(true);
+    setDynamicGroupName("");
+    setDynamicGroupType("small_group");
+    setSelectedFilters([]);
     if (!tenantId || allMembers.length > 0) return;
     setMembersLoading(true);
     try {
@@ -138,8 +144,21 @@ export default function GroupsPage() {
     }
   }
 
-  // Get unique values for a given member field
-  function uniqueValues(field: string): string[] {
+  // Get all available fields from members
+  const getAvailableFields = () => {
+    if (allMembers.length === 0) return [];
+    const fieldSet = new Set<string>();
+    const standardFields = ["gender", "maritalStatus", "membershipType", "role"];
+    standardFields.forEach(f => fieldSet.add(f));
+    const customFieldKeys = Array.from(new Set(
+      allMembers.flatMap((m) => Object.keys(m.customFields || {}))
+    ));
+    customFieldKeys.forEach(f => fieldSet.add(`customFields.${f}`));
+    return Array.from(fieldSet);
+  };
+
+  // Get unique values for a field
+  const getFieldValues = (field: string): string[] => {
     const vals = new Set<string>();
     allMembers.forEach((m) => {
       const v = field.startsWith("customFields.")
@@ -148,76 +167,92 @@ export default function GroupsPage() {
       if (v && typeof v === "string" && v.trim()) vals.add(v.trim());
     });
     return Array.from(vals).sort();
-  }
+  };
 
-  // Members matching the current filter
-  const filteredMembers = filterField && filterValue
-    ? allMembers.filter((m) => {
-        const v = filterField.startsWith("customFields.")
-          ? m.customFields?.[filterField.replace("customFields.", "")]
-          : m[filterField];
-        return v === filterValue;
-      })
-    : [];
+  // Get field label
+  const getFieldLabel = (field: string) => {
+    if (field === "customFields.students") return "Students";
+    const labels: Record<string, string> = {
+      "gender": "Gender",
+      "maritalStatus": "Marital Status",
+      "membershipType": "Membership Type",
+      "role": "Church Role",
+    };
+    if (field.startsWith("customFields.")) {
+      return field.replace("customFields.", "");
+    }
+    return labels[field] || field;
+  };
 
-  async function createGroupFromFilter() {
-    if (!tenantId || !filterGroupName.trim() || filteredMembers.length === 0) return;
-    setFilterCreating(true);
+  // Count members matching current filters
+  const getMemberCount = (): number => {
+    if (selectedFilters.length === 0) return 0;
+    return allMembers.filter((m) => {
+      return selectedFilters.every((filter) => {
+        const values = filter.values.map(v => v.toLowerCase());
+        const v = filter.field.startsWith("customFields.")
+          ? m.customFields?.[filter.field.replace("customFields.", "")]?.toLowerCase()
+          : m[filter.field]?.toLowerCase?.();
+        return v && values.includes(v);
+      });
+    }).length;
+  };
+
+  // Create dynamic group
+  async function createDynamicGroup() {
+    if (!tenantId || !dynamicGroupName.trim() || selectedFilters.length === 0) return;
+    setDynamicCreating(true);
     try {
+      const matchingMembers = allMembers.filter((m) => {
+        return selectedFilters.every((filter) => {
+          const values = filter.values.map(v => v.toLowerCase());
+          const v = filter.field.startsWith("customFields.")
+            ? m.customFields?.[filter.field.replace("customFields.", "")]?.toLowerCase()
+            : m[filter.field]?.toLowerCase?.();
+          return v && values.includes(v);
+        });
+      });
+
       const groupRef = await addDoc(collection(db, "groups"), {
         tenantId,
-        name: filterGroupName.trim(),
-        type: filterGroupType,
-        description: `Created from filter: ${FILTER_FIELDS.find(f => f.value === filterField)?.label} = ${filterValue}`,
+        name: dynamicGroupName.trim(),
+        type: dynamicGroupType,
+        description: `Created with: ${selectedFilters.map(f => `${getFieldLabel(f.field)}: ${f.values.join(", ")}`).join(" + ")}`,
         leaderName: "",
         meetingDay: "",
         meetingTime: "",
         location: "",
         active: true,
-        memberCount: filteredMembers.length,
+        memberCount: matchingMembers.length,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      // Add all matching members to the group in batches of 500
-      const batch = writeBatch(db);
-      filteredMembers.forEach((m) => {
-        const ref = doc(collection(db, "group_members"));
-        batch.set(ref, {
-          groupId: groupRef.id,
-          tenantId,
-          memberId: m.id,
-          memberName: m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim(),
-          role: "member",
-          joinedAt: serverTimestamp(),
+      // Add members to group in batches
+      if (matchingMembers.length > 0) {
+        const batch = writeBatch(db);
+        matchingMembers.forEach((m) => {
+          const ref = doc(collection(db, "group_members"));
+          batch.set(ref, {
+            groupId: groupRef.id,
+            tenantId,
+            memberId: m.id,
+            memberName: m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim(),
+            role: "member",
+            joinedAt: serverTimestamp(),
+          });
         });
-      });
-      await batch.commit();
+        await batch.commit();
+      }
 
-      setShowFilterModal(false);
+      setShowDynamicModal(false);
       router.push(`/dashboard/groups/${groupRef.id}`);
     } catch (e) {
-      console.error("Create from filter error:", e);
+      console.error("Create dynamic group error:", e);
     } finally {
-      setFilterCreating(false);
+      setDynamicCreating(false);
     }
   }
-
-  // Available filter fields (standard + detected custom)
-  const customFieldKeys = Array.from(new Set(
-    allMembers.flatMap((m) => Object.keys(m.customFields || {}))
-  ));
-
-  const FILTER_FIELDS = [
-    { value: "ministryGroup", label: "Ministry Group" },
-    { value: "role", label: "Church Role" },
-    { value: "cellRegion", label: "Cell Region / Branch" },
-    { value: "churchRole", label: "Church Role / Office" },
-    { value: "gender", label: "Gender" },
-    { value: "maritalStatus", label: "Marital Status" },
-    { value: "membershipType", label: "Membership Type" },
-    ...customFieldKeys.map((k) => ({ value: `customFields.${k}`, label: k })),
-  ];
 
   const filtered = groups
     .filter((g) => filterType === "all" || g.type === filterType)
@@ -233,28 +268,20 @@ export default function GroupsPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Header and Action Button */}
+      <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Groups</h1>
           <p className="text-sm text-gray-500 mt-1">
             Manage small groups, Bible studies, and ministry teams.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={openFilterModal}
-            className="flex items-center gap-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            🔍 Create from Members
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            <span className="text-lg leading-none">+</span> New Group
-          </button>
-        </div>
+        <button
+          onClick={openDynamicModal}
+          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+        >
+          <span className="text-lg leading-none">+</span> Create Group
+        </button>
       </div>
 
       {/* Name search */}
@@ -301,15 +328,15 @@ export default function GroupsPage() {
       {groups.length === 0 && (
         <div className="border-2 border-dashed border-gray-200 rounded-xl p-16 text-center">
           <div className="text-5xl mb-4">🫂</div>
-          <h3 className="text-lg font-semibold text-gray-700 mb-1">No groups yet</h3>
-          <p className="text-sm text-gray-400 mb-6">
-            Create your first group to manage members and track attendance separately from Sunday services.
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">Create your first group</h3>
+          <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+            Groups help organize members by ministry, membership type, age, interests, and more. Build them based on your member data.
           </p>
           <button
-            onClick={() => setShowModal(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors"
+            onClick={openDynamicModal}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-6 py-2 rounded-lg transition-colors inline-flex items-center gap-2"
           >
-            Create a Group
+            <span className="text-lg leading-none">+</span> Create Your First Group
           </button>
         </div>
       )}
@@ -375,127 +402,123 @@ export default function GroupsPage() {
         <p className="text-sm text-gray-400 text-center py-10">No groups match this filter.</p>
       )}
 
-      {/* Create from Members Modal */}
-      {showFilterModal && (
+      {/* Create Group Modal - Dynamic Configuration */}
+      {showDynamicModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900">Create Group from Members</h2>
-              <button onClick={() => setShowFilterModal(false)} className="text-gray-400 hover:text-gray-700">✕</button>
+              <h2 className="text-lg font-bold text-gray-900">Create New Group</h2>
+              <button onClick={() => setShowDynamicModal(false)} className="text-gray-400 hover:text-gray-700">✕</button>
             </div>
 
             {membersLoading ? (
               <div className="flex items-center justify-center py-10 gap-2">
                 <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-gray-500">Loading members...</p>
+                <p className="text-sm text-gray-500">Loading your members...</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* Step 1: Pick field */}
+              <div className="space-y-5">
+                {/* Group Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Filter by field</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Group Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={dynamicGroupName}
+                    onChange={(e) => setDynamicGroupName(e.target.value)}
+                    placeholder="e.g. Women's Ministry, Youth Group, etc."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Group Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Group Type</label>
                   <select
-                    value={filterField}
-                    onChange={(e) => { setFilterField(e.target.value); setFilterValue(""); }}
+                    value={dynamicGroupType}
+                    onChange={(e) => setDynamicGroupType(e.target.value as GroupType)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="">Select a field...</option>
-                    {FILTER_FIELDS.map((f) => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
-                    ))}
+                    {GROUP_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
 
-                {/* Step 2: Pick value */}
-                {filterField && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {FILTER_FIELDS.find((f) => f.value === filterField)?.label} value
-                    </label>
-                    <select
-                      value={filterValue}
-                      onChange={(e) => setFilterValue(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="">Select a value...</option>
-                      {uniqueValues(filterField).map((v) => (
-                        <option key={v} value={v}>{v}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                {/* Select Fields and Values */}
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Who should be in this group?</h3>
+                  <p className="text-xs text-gray-500 mb-4">Select one or more fields and values. Members matching any of these criteria will be added.</p>
 
-                {/* Preview */}
-                {filterField && filterValue && (
-                  <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
-                    filteredMembers.length > 0
-                      ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                      : "bg-amber-50 border border-amber-200 text-amber-800"
-                  }`}>
-                    {filteredMembers.length > 0
-                      ? `${filteredMembers.length} member${filteredMembers.length !== 1 ? "s" : ""} match this filter`
-                      : "No members match this filter"}
-                  </div>
-                )}
-
-                {/* Member preview list */}
-                {filteredMembers.length > 0 && (
-                  <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
-                    {filteredMembers.slice(0, 20).map((m) => (
-                      <div key={m.id} className="px-3 py-2 text-sm text-gray-700">
-                        {m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim()}
+                  <div className="space-y-4">
+                    {getAvailableFields().map((field) => (
+                      <div key={field} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm font-medium text-gray-900">{getFieldLabel(field)}</label>
+                          <span className="text-xs text-gray-500">
+                            {selectedFilters.find(f => f.field === field)?.values.length || 0} selected
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {getFieldValues(field).map((value) => (
+                            <label key={value} className="flex items-center gap-2 cursor-pointer text-sm">
+                              <input
+                                type="checkbox"
+                                checked={selectedFilters.find(f => f.field === field)?.values.includes(value) || false}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    const existingFilter = selectedFilters.find(f => f.field === field);
+                                    if (existingFilter) {
+                                      existingFilter.values.push(value);
+                                      setSelectedFilters([...selectedFilters]);
+                                    } else {
+                                      setSelectedFilters([...selectedFilters, { field, values: [value] }]);
+                                    }
+                                  } else {
+                                    const filter = selectedFilters.find(f => f.field === field);
+                                    if (filter) {
+                                      filter.values = filter.values.filter(v => v !== value);
+                                      setSelectedFilters(filter.values.length > 0 ? [...selectedFilters] : selectedFilters.filter(f => f.field !== field));
+                                    }
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span className="text-gray-700">{value}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     ))}
-                    {filteredMembers.length > 20 && (
-                      <div className="px-3 py-2 text-xs text-gray-400 italic">
-                        ...and {filteredMembers.length - 20} more
-                      </div>
-                    )}
+                  </div>
+                </div>
+
+                {/* Member Preview */}
+                {selectedFilters.length > 0 && (
+                  <div className={`rounded-lg px-4 py-3 text-sm font-medium border ${
+                    getMemberCount() > 0
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                      : "bg-amber-50 border-amber-200 text-amber-800"
+                  }`}>
+                    {getMemberCount() > 0
+                      ? `${getMemberCount()} member${getMemberCount() !== 1 ? "s" : ""} will be added to this group`
+                      : "No members match these criteria"}
                   </div>
                 )}
 
-                {/* Step 3: Name the group */}
-                {filteredMembers.length > 0 && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Group Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={filterGroupName}
-                        onChange={(e) => setFilterGroupName(e.target.value)}
-                        placeholder={`e.g. ${filterValue} Group`}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        autoFocus
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Group Type</label>
-                      <select
-                        value={filterGroupType}
-                        onChange={(e) => setFilterGroupType(e.target.value as GroupType)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      >
-                        {GROUP_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </div>
-                  </>
-                )}
-
-                <div className="flex gap-3 pt-2">
+                <div className="flex gap-3 pt-4 border-t">
                   <button
-                    onClick={() => setShowFilterModal(false)}
+                    onClick={() => setShowDynamicModal(false)}
                     className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={createGroupFromFilter}
-                    disabled={!filterGroupName.trim() || filteredMembers.length === 0 || filterCreating}
+                    onClick={createDynamicGroup}
+                    disabled={!dynamicGroupName.trim() || selectedFilters.length === 0 || getMemberCount() === 0 || dynamicCreating}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors"
                   >
-                    {filterCreating ? "Creating..." : `Create Group (${filteredMembers.length})`}
+                    {dynamicCreating ? "Creating..." : `Create Group (${getMemberCount()})`}
                   </button>
                 </div>
               </div>

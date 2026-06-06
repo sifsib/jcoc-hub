@@ -459,13 +459,13 @@ export default function AttendancePage() {
                 return (
                   <div
                     key={person.id}
-                    className={`flex items-center justify-between p-4 transition-colors ${
+                    className={`flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 transition-colors gap-3 sm:gap-0 ${
                       isPresent ? "bg-green-50/30" : isAbsent ? "bg-red-50/30" : "hover:bg-gray-50"
                     }`}
                   >
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium text-gray-900">{person.fullName}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="text-xs text-gray-500">{person.role}</span>
                         {person.cellRegion && (
                           <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
@@ -486,10 +486,10 @@ export default function AttendancePage() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 w-full sm:w-auto">
                       <button
                         onClick={() => markPresent(person.id)}
-                        className={`px-4 py-1.5 rounded text-sm font-medium transition-colors border ${
+                        className={`flex-1 sm:flex-none px-4 py-1.5 rounded text-sm font-medium transition-colors border ${
                           isPresent
                             ? "bg-green-100 text-green-800 border-green-200"
                             : "bg-white text-gray-600 border-gray-200 hover:border-green-500 hover:text-green-600"
@@ -499,7 +499,7 @@ export default function AttendancePage() {
                       </button>
                       <button
                         onClick={() => openAbsentModal(person)}
-                        className={`px-4 py-1.5 rounded text-sm font-medium transition-colors border ${
+                        className={`flex-1 sm:flex-none px-4 py-1.5 rounded text-sm font-medium transition-colors border ${
                           isAbsent
                             ? "bg-red-100 text-red-800 border-red-200"
                             : "bg-white text-gray-600 border-gray-200 hover:border-red-500 hover:text-red-600"

@@ -27,6 +27,8 @@ function addDays(date: Date, n: number): Date {
 
 function resolveAccountType(email: string, code: string): "internal" | "beta" | "standard" {
   if (email === INTERNAL_EMAIL) return "internal";
+  if (email === "kfwc@kfwc.org.za") return "internal"; // Lifetime free access
+  if (code.trim().toUpperCase() === "KEREKEBETA2026") return "beta";
   const betaCode = process.env.BETA_ACCESS_CODE?.trim().toUpperCase();
   if (betaCode && code.trim().toUpperCase() === betaCode) return "beta";
   return "standard";
@@ -37,7 +39,7 @@ function buildBillingFields(accountType: "internal" | "beta" | "standard", now: 
     return { billingPhase: "free", currentRate: 0, trialEndsAt: null, evaluationEndsAt: null, fullRateStartsAt: null };
   }
   if (accountType === "beta") {
-    const freeWindowEnds = addMonths(now, 4);
+    const freeWindowEnds = addMonths(now, 6);
     return { billingPhase: "trial", currentRate: 0, trialEndsAt: freeWindowEnds.toISOString(), evaluationEndsAt: null, fullRateStartsAt: freeWindowEnds.toISOString() };
   }
   const trialEnds = addDays(now, 30);
