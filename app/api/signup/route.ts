@@ -33,7 +33,6 @@ function resolveAccountType(email: string, code: string): "internal" | "beta" | 
   if (betaCode && code.trim().toUpperCase() === betaCode) return "beta";
   return "standard";
 }
-}
 
 function buildBillingFields(accountType: "internal" | "beta" | "standard", now: Date) {
   if (accountType === "internal") {

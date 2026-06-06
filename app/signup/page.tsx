@@ -61,7 +61,7 @@ export default function SignupPage() {
       }
 
       // 4. Go to email verification screen (hard block)
-      router.push("/verify-email");
+      router.push("/dashboard");
       router.refresh();
     } catch (err: any) {
       console.error("Error signing up:", err);
