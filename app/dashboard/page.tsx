@@ -52,13 +52,6 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<QuickStats>({ totalMembers: 0, activeWorkflows: 0, pendingFollowUps: 0, overdueSteps: 0 });
   const [loading, setLoading] = useState(true);
 
-  // Redirect to email verification if email is not verified (hard block)
-  useEffect(() => {
-    if (!userLoading && appUser && !appUser.emailVerified) {
-      router.push("/verify-email");
-    }
-  }, [appUser, userLoading, router]);
-
   useEffect(() => {
     if (userLoading || !appUser) { if (!userLoading) setLoading(false); return; }
     const today = new Date().toISOString().split("T")[0];
