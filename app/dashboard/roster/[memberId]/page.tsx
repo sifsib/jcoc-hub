@@ -94,7 +94,7 @@ export default function MemberDetailPage() {
     if (!memberId) return;
     getDoc(doc(db, "members", memberId)).then((snap) => {
       if (snap.exists()) {
-        const data = snap.data() as Member;
+        const data = snap.data() as Omit<Member, "id">;
         setMember({ id: snap.id, ...data });
       }
       setLoading(false);
