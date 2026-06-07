@@ -42,6 +42,7 @@
     "out",
     "build",
     "_marketing-site-files",
-    "kereke-whatsapp"
+    "kereke-whatsapp",
+    "lib/offline"
   ]
 }
