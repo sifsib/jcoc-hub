@@ -144,17 +144,28 @@ export default function GroupsPage() {
     }
   }
 
-  // Get all available fields from members
+  // Get all available fields from members - completely dynamic
   const getAvailableFields = () => {
     if (allMembers.length === 0) return [];
     const fieldSet = new Set<string>();
-    const standardFields = ["gender", "maritalStatus", "membershipType", "role"];
-    standardFields.forEach(f => fieldSet.add(f));
+
+    // Get all top-level fields from member documents
+    allMembers.forEach((m) => {
+      Object.keys(m).forEach((key) => {
+        // Skip system fields
+        if (!["id", "tenantId", "createdAt", "updatedAt", "joinDate", "customFields"].includes(key)) {
+          fieldSet.add(key);
+        }
+      });
+    });
+
+    // Get all custom fields
     const customFieldKeys = Array.from(new Set(
       allMembers.flatMap((m) => Object.keys(m.customFields || {}))
     ));
     customFieldKeys.forEach(f => fieldSet.add(`customFields.${f}`));
-    return Array.from(fieldSet);
+
+    return Array.from(fieldSet).sort();
   };
 
   // Get unique values for a field
@@ -184,11 +195,11 @@ export default function GroupsPage() {
     return labels[field] || field;
   };
 
-  // Count members matching current filters (OR logic - match ANY filter)
+  // Count members matching current filters (AND logic - match ALL filters)
   const getMemberCount = (): number => {
     if (selectedFilters.length === 0) return 0;
     return allMembers.filter((m) => {
-      return selectedFilters.some((filter) => {
+      return selectedFilters.every((filter) => {
         const values = filter.values.map(v => v.toLowerCase());
         const v = filter.field.startsWith("customFields.")
           ? m.customFields?.[filter.field.replace("customFields.", "")]?.toLowerCase()
@@ -204,7 +215,7 @@ export default function GroupsPage() {
     setDynamicCreating(true);
     try {
       const matchingMembers = allMembers.filter((m) => {
-        return selectedFilters.some((filter) => {
+        return selectedFilters.every((filter) => {
           const values = filter.values.map(v => v.toLowerCase());
           const v = filter.field.startsWith("customFields.")
             ? m.customFields?.[filter.field.replace("customFields.", "")]?.toLowerCase()
@@ -461,7 +472,7 @@ export default function GroupsPage() {
                       + Add Filter
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mb-4">Members matching ANY filter will be added (OR logic).</p>
+                  <p className="text-xs text-gray-500 mb-4">Members must match ALL filters selected below.</p>
 
                   <div className="space-y-3">
                     {selectedFilters.map((filter, idx) => (
