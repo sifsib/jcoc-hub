@@ -184,11 +184,11 @@ export default function GroupsPage() {
     return labels[field] || field;
   };
 
-  // Count members matching current filters
+  // Count members matching current filters (OR logic - match ANY filter)
   const getMemberCount = (): number => {
     if (selectedFilters.length === 0) return 0;
     return allMembers.filter((m) => {
-      return selectedFilters.every((filter) => {
+      return selectedFilters.some((filter) => {
         const values = filter.values.map(v => v.toLowerCase());
         const v = filter.field.startsWith("customFields.")
           ? m.customFields?.[filter.field.replace("customFields.", "")]?.toLowerCase()
@@ -204,7 +204,7 @@ export default function GroupsPage() {
     setDynamicCreating(true);
     try {
       const matchingMembers = allMembers.filter((m) => {
-        return selectedFilters.every((filter) => {
+        return selectedFilters.some((filter) => {
           const values = filter.values.map(v => v.toLowerCase());
           const v = filter.field.startsWith("customFields.")
             ? m.customFields?.[filter.field.replace("customFields.", "")]?.toLowerCase()
@@ -445,42 +445,64 @@ export default function GroupsPage() {
                   </select>
                 </div>
 
-                {/* Select Fields and Values */}
+                {/* Filters with "Add Filter" button */}
                 <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Who should be in this group?</h3>
-                  <p className="text-xs text-gray-500 mb-4">Select one or more fields and values. Members matching any of these criteria will be added.</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Who should be in this group?</h3>
+                    <button
+                      onClick={() => {
+                        const availableFields = getAvailableFields().filter(f => !selectedFilters.some(sf => sf.field === f));
+                        if (availableFields.length > 0) {
+                          setSelectedFilters([...selectedFilters, { field: availableFields[0], values: [] }]);
+                        }
+                      }}
+                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-1 rounded transition-colors"
+                    >
+                      + Add Filter
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-4">Members matching ANY filter will be added (OR logic).</p>
 
-                  <div className="space-y-4">
-                    {getAvailableFields().map((field) => (
-                      <div key={field} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm font-medium text-gray-900">{getFieldLabel(field)}</label>
-                          <span className="text-xs text-gray-500">
-                            {selectedFilters.find(f => f.field === field)?.values.length || 0} selected
-                          </span>
+                  <div className="space-y-3">
+                    {selectedFilters.map((filter, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <select
+                            value={filter.field}
+                            onChange={(e) => {
+                              const newFilters = [...selectedFilters];
+                              newFilters[idx] = { field: e.target.value, values: [] };
+                              setSelectedFilters(newFilters);
+                            }}
+                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            {getAvailableFields().map((field) => (
+                              <option key={field} value={field}>
+                                {getFieldLabel(field)}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => setSelectedFilters(selectedFilters.filter((_, i) => i !== idx))}
+                            className="ml-2 text-gray-400 hover:text-red-600 text-lg leading-none"
+                          >
+                            ✕
+                          </button>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          {getFieldValues(field).map((value) => (
+                          {getFieldValues(filter.field).map((value) => (
                             <label key={value} className="flex items-center gap-2 cursor-pointer text-sm">
                               <input
                                 type="checkbox"
-                                checked={selectedFilters.find(f => f.field === field)?.values.includes(value) || false}
+                                checked={filter.values.includes(value)}
                                 onChange={(e) => {
+                                  const newFilters = [...selectedFilters];
                                   if (e.target.checked) {
-                                    const existingFilter = selectedFilters.find(f => f.field === field);
-                                    if (existingFilter) {
-                                      existingFilter.values.push(value);
-                                      setSelectedFilters([...selectedFilters]);
-                                    } else {
-                                      setSelectedFilters([...selectedFilters, { field, values: [value] }]);
-                                    }
+                                    newFilters[idx].values.push(value);
                                   } else {
-                                    const filter = selectedFilters.find(f => f.field === field);
-                                    if (filter) {
-                                      filter.values = filter.values.filter(v => v !== value);
-                                      setSelectedFilters(filter.values.length > 0 ? [...selectedFilters] : selectedFilters.filter(f => f.field !== field));
-                                    }
+                                    newFilters[idx].values = newFilters[idx].values.filter(v => v !== value);
                                   }
+                                  setSelectedFilters(newFilters);
                                 }}
                                 className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                               />
@@ -491,6 +513,10 @@ export default function GroupsPage() {
                       </div>
                     ))}
                   </div>
+
+                  {selectedFilters.length === 0 && (
+                    <p className="text-sm text-gray-400 py-4 text-center">No filters added yet. Click "Add Filter" to get started.</p>
+                  )}
                 </div>
 
                 {/* Member Preview */}
