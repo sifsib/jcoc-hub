@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import {
@@ -1737,7 +1738,9 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                     <tr key={m.id} className="hover:bg-gray-50/70 transition-colors">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-gray-900">{m.fullName}</p>
+                          <Link href={`/dashboard/roster/${m.id}`} className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
+                            {m.fullName}
+                          </Link>
                           {days !== null && days <= 10 && (
                             <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">
                               {days === 0 ? "🎂 Today!" : `🎂 ${days}d`}

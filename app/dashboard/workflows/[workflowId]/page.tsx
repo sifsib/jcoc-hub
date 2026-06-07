@@ -462,9 +462,15 @@ export default function WorkflowBuilderPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <button onClick={() => router.push("/dashboard/workflows")} className="text-sm text-gray-500 hover:text-gray-800 mb-1 block">
-            ← Back to Workflows
-          </button>
+          <div className="flex gap-3 mb-1">
+            <button onClick={() => router.push("/dashboard")} className="text-sm text-gray-500 hover:text-gray-800 block">
+              ← Dashboard
+            </button>
+            <span className="text-gray-300">/</span>
+            <button onClick={() => router.push("/dashboard/workflows")} className="text-sm text-gray-500 hover:text-gray-800 block">
+              Workflows
+            </button>
+          </div>
           <h1 className="text-2xl font-bold text-gray-900">{workflow.name}</h1>
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
             <span>Trigger: {TRIGGER_LABELS[workflow.trigger]}</span>
