@@ -181,11 +181,19 @@ export default function MemberDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Navigation */}
+      <div className="flex gap-3 text-sm mb-4">
+        <button onClick={() => router.push("/dashboard")} className="text-gray-500 hover:text-gray-800 block">
+          ← Dashboard
+        </button>
+        <span className="text-gray-300">/</span>
+        <button onClick={() => router.push("/dashboard/roster")} className="text-gray-500 hover:text-gray-800 block">
+          Roster
+        </button>
+      </div>
+
       {/* Header */}
       <div className="mb-6">
-        <button onClick={() => router.push("/dashboard/roster")} className="text-sm text-gray-500 hover:text-gray-800 mb-3 block">
-          ← Back to Roster
-        </button>
         <div className="bg-white border border-gray-200 rounded-xl p-6">
           <h1 className="text-3xl font-bold text-gray-900">{displayName}</h1>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm">
