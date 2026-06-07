@@ -19,6 +19,7 @@ type FieldType =
   | "number"
   | "dropdown"
   | "checkbox"
+  | "checkboxes"
   | "date";
 
 interface FormField {
@@ -47,6 +48,7 @@ const FIELD_TYPES: { value: FieldType; label: string; icon: string }[] = [
   { value: "number", label: "Number", icon: "#" },
   { value: "dropdown", label: "Dropdown", icon: "▾" },
   { value: "checkbox", label: "Checkbox", icon: "☑" },
+  { value: "checkboxes", label: "Multi-Checkbox", icon: "☑☑" },
   { value: "date", label: "Date", icon: "📅" },
 ];
 
@@ -87,7 +89,7 @@ export default function FormEditorPage() {
           required: f.required,
         };
         if (f.placeholder !== undefined) clean.placeholder = f.placeholder;
-        if (f.type === "dropdown") clean.options = f.options || [];
+        if (f.type === "dropdown" || f.type === "checkboxes") clean.options = f.options || [];
         return clean;
       });
 
@@ -113,7 +115,7 @@ export default function FormEditorPage() {
       type,
       label: FIELD_TYPES.find((f) => f.value === type)?.label || "Field",
       required: false,
-      options: type === "dropdown" ? ["Option 1", "Option 2"] : undefined,
+      options: (type === "dropdown" || type === "checkboxes") ? ["Option 1", "Option 2"] : undefined,
     };
     const updated = { ...form, fields: [...form.fields, newField] };
     setForm(updated);
@@ -318,7 +320,7 @@ export default function FormEditorPage() {
                         updateField(field.id, {
                           type: e.target.value as FieldType,
                           options:
-                            e.target.value === "dropdown"
+                            (e.target.value === "dropdown" || e.target.value === "checkboxes")
                               ? field.options || ["Option 1", "Option 2"]
                               : undefined,
                         })
@@ -332,7 +334,7 @@ export default function FormEditorPage() {
                   </div>
                 </div>
 
-                {field.type !== "checkbox" && field.type !== "date" && field.type !== "dropdown" && (
+                {field.type !== "checkbox" && field.type !== "checkboxes" && field.type !== "date" && field.type !== "dropdown" && (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Placeholder</label>
                     <input
@@ -345,7 +347,7 @@ export default function FormEditorPage() {
                   </div>
                 )}
 
-                {field.type === "dropdown" && (
+                {(field.type === "dropdown" || field.type === "checkboxes") && (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-2">Options</label>
                     <div className="space-y-1.5">
