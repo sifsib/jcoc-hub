@@ -91,6 +91,15 @@ export default async function DashboardLayout({
 
         <nav className="flex-1 overflow-y-auto">
           <ul className="flex flex-col space-y-1">
+            <li>
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent"
+              >
+                <span className="text-base opacity-60">🏠</span>
+                <span>Dashboard</span>
+              </Link>
+            </li>
             {navigation.map((item) => (
               <li key={item.name}>
                 <Link
