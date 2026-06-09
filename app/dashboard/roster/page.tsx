@@ -217,6 +217,45 @@ function F({ label, req, children }: { label: string; req?: boolean; children: R
         {label}{req && <span className="text-red-500 ml-1">*</span>}
       </label>
       {children}
+      {/* Join Link Modal */}
+      {showJoinLink && appUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Share Membership Form</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Send this link to prospective members so they can fill in their own form.</p>
+              </div>
+              <button onClick={() => setShowJoinLink(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            {(() => {
+              const joinUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/join/${appUser.tenantId}`;
+              return (
+                <>
+                  <p className="text-xs text-gray-600 break-all bg-gray-50 border rounded p-3 select-all">{joinUrl}</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(joinUrl)}
+                      className="flex-1 text-sm font-medium py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Copy Link
+                    </button>
+                    <button
+                      onClick={() => setShowJoinLink(false)}
+                      className="flex-1 text-sm font-medium py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center">
+                    Submissions appear under Pending Approvals for you to review before adding to the register.
+                  </p>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -420,8 +459,11 @@ function MemberBlock({
 export default function ManageMembershipPage() {
   const { appUser, loading: userLoading } = useAppUser();
 
-  const [view, setView] = useState<"list" | "form" | "import" | "configure">("list");
+  const [view, setView] = useState<"list" | "form" | "import" | "configure" | "pending">("list");
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [showJoinLink, setShowJoinLink] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [config, setConfig] = useState<TenantConfig>({
     ministries: DEFAULT_MINISTRIES,
@@ -524,6 +566,51 @@ export default function ManageMembershipPage() {
     };
     load();
   }, [appUser, userLoading]);
+
+  // ─── Pending membership requests ─────────────────────────────────────────────
+
+  const loadPending = async () => {
+    if (!appUser) return;
+    setPendingLoading(true);
+    try {
+      const q = query(
+        collection(db, "memberRequests"),
+        where("tenantId", "==", appUser.tenantId),
+        where("status", "==", "pending")
+      );
+      const snap = await getDocs(q);
+      const list: any[] = [];
+      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (a.submittedAt?.seconds || 0) - (b.submittedAt?.seconds || 0));
+      setPendingRequests(list);
+    } catch (e) { console.error(e); }
+    finally { setPendingLoading(false); }
+  };
+
+  const approvePending = async (req: any) => {
+    if (!appUser) return;
+    try {
+      const { id, status, submittedAt, source, tenantId: _t, ...memberData } = req;
+      await addDoc(collection(db, "members"), {
+        ...memberData,
+        tenantId: appUser.tenantId,
+        role: memberData.role || "Member",
+        consentedToPrivacyPolicy: false,
+        source: "self-join",
+        createdAt: serverTimestamp(),
+      });
+      await updateDoc(doc(db, "memberRequests", req.id), { status: "approved" });
+      setPendingRequests((p) => p.filter((r) => r.id !== req.id));
+    } catch (e) { console.error(e); alert("Failed to approve. Please try again."); }
+  };
+
+  const rejectPending = async (reqId: string) => {
+    if (!appUser) return;
+    try {
+      await updateDoc(doc(db, "memberRequests", reqId), { status: "rejected" });
+      setPendingRequests((p) => p.filter((r) => r.id !== reqId));
+    } catch (e) { console.error(e); alert("Failed to reject. Please try again."); }
+  };
 
   // ─── Reset ──────────────────────────────────────────────────────────────────
 
@@ -1642,6 +1729,70 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // PENDING APPROVALS VIEW
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (view === "pending") {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Pending Membership Requests</h1>
+            <p className="text-sm text-gray-500 mt-1">Review and approve self-submitted membership forms.</p>
+          </div>
+          <button onClick={() => setView("list")} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+            Back to Register
+          </button>
+        </div>
+
+        {pendingLoading ? (
+          <div className="flex items-center gap-2 text-gray-500 text-sm">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            Loading requests...
+          </div>
+        ) : pendingRequests.length === 0 ? (
+          <div className="bg-white border rounded-xl p-10 text-center text-gray-400 text-sm">
+            No pending requests at the moment.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {pendingRequests.map((req) => (
+              <div key={req.id} className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {Object.entries(req)
+                    .filter(([k]) => !["id","status","submittedAt","source","tenantId"].includes(k))
+                    .map(([k, v]) => (
+                      <div key={k}>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider capitalize">
+                          {k.replace(/([A-Z])/g, " $1")}
+                        </p>
+                        <p className="text-sm text-gray-800">{String(v || "")}</p>
+                      </div>
+                    ))}
+                </div>
+                <div className="flex gap-3 pt-2 border-t">
+                  <button
+                    onClick={() => approvePending(req)}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Approve and Add Member
+                  </button>
+                  <button
+                    onClick={() => rejectPending(req.id)}
+                    className="px-4 py-2 text-sm font-semibold text-red-600 border border-red-200 bg-white rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // LIST VIEW (default)
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1702,6 +1853,21 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
             ]}
           />
 
+          <button
+            onClick={() => { setView("pending"); loadPending(); }}
+            className="px-4 py-2 text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+          >
+            Pending Approvals
+            {pendingRequests.length > 0 && (
+              <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{pendingRequests.length}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setShowJoinLink(true)}
+            className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Share Join Link
+          </button>
           <button onClick={() => { reset(); setView("form"); }}
             className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
             + Add Member

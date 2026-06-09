@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import {
@@ -65,6 +65,9 @@ export default function AttendancePage() {
   const [filterValue, setFilterValue] = useState("");
   const [configCellRegions, setConfigCellRegions] = useState<string[]>([]);
   const [configMinistryGroups, setConfigMinistryGroups] = useState<string[]>([]);
+
+  // QR modal state
+  const [showQR, setShowQR] = useState(false);
 
   // Absence modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -361,10 +364,16 @@ export default function AttendancePage() {
         {activeSession && !dateError && (
           <div className="flex items-center gap-3 bg-blue-50 px-4 py-3 rounded-lg border border-blue-100">
             <span className="w-3 h-3 rounded-full bg-blue-600"></span>
-            <div>
+            <div className="flex-1">
               <p className="text-sm font-bold text-blue-900">{activeSession.name}</p>
               <p className="text-xs text-blue-700">{formatDisplayDate(selectedDate)}</p>
             </div>
+            <button
+              onClick={() => setShowQR(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <span>&#x2317;</span> QR Check-in
+            </button>
           </div>
         )}
       </div>
@@ -512,6 +521,58 @@ export default function AttendancePage() {
                 );
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* QR Check-in Modal */}
+      {showQR && activeSession && appUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">QR Code Check-in</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {activeSession.name} &bull; {formatDisplayDate(selectedDate)}
+                </p>
+              </div>
+              <button onClick={() => setShowQR(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+
+            {/* QR Code image via qrserver.com — no package needed */}
+            {(() => {
+              const checkInUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/checkin/${appUser.tenantId}/${selectedDate}_${activeSession.id}`;
+              const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(checkInUrl)}`;
+              return (
+                <>
+                  <div className="flex justify-center">
+                    <img src={qrSrc} alt="Check-in QR Code" className="rounded-lg border p-2 bg-white" width={220} height={220} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Check-in link</p>
+                    <p className="text-xs text-gray-600 break-all bg-gray-50 border rounded p-2 select-all">{checkInUrl}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(checkInUrl); }}
+                      className="flex-1 text-sm font-medium py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Copy Link
+                    </button>
+                    <a
+                      href={qrSrc}
+                      download={`checkin-qr-${selectedDate}.png`}
+                      className="flex-1 text-sm font-medium py-2 rounded-lg bg-blue-600 text-white text-center hover:bg-blue-700 transition-colors"
+                    >
+                      Download QR
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center">
+                    Members scan this with their phone camera to check themselves in.
+                  </p>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
