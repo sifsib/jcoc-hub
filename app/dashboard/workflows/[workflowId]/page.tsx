@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "../../../../lib/firebase";
 import { useAppUser } from "../../../../lib/useAppUser";
+import { useTeamMembers } from "../../../../lib/useTeamMembers";
 import NotesPanel from "../../../components/NotesPanel";
 import {
   doc,
@@ -60,6 +61,8 @@ interface WorkflowInstance {
   startedAt: Timestamp | null;
   completedSteps: number;
   totalSteps: number;
+  assignedToUid?: string;   // DRI: team member accountable for this instance
+  assignedToName?: string;
 }
 
 interface InstanceStep {
@@ -126,6 +129,9 @@ function addDays(days: number): string {
 export default function WorkflowBuilderPage() {
   const { workflowId } = useParams<{ workflowId: string }>();
   const { tenantId, appUser } = useAppUser();
+  const { team } = useTeamMembers(tenantId);
+  // Only owner/admin/managers may assign a DRI.
+  const canAssign = ["owner", "admin", "member_manager"].includes(appUser?.role || "");
   const router = useRouter();
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -418,6 +424,15 @@ export default function WorkflowBuilderPage() {
 
   async function completeInstance(instanceId: string) {
     await updateDoc(doc(db, "workflow_instances", instanceId), { status: "completed" });
+  }
+
+  // Assign (or change) the DRI for a running workflow. onSnapshot refreshes the list.
+  async function assignInstance(instanceId: string, uid: string) {
+    const assignedToName = team.find((t) => t.uid === uid)?.name || "";
+    await updateDoc(doc(db, "workflow_instances", instanceId), {
+      assignedToUid: uid,
+      assignedToName,
+    });
   }
 
   async function saveSettings() {
@@ -724,11 +739,33 @@ export default function WorkflowBuilderPage() {
                           <span className="text-xs text-gray-400">{inst.completedSteps}/{inst.totalSteps} done</span>
                         </div>
                       </div>
+                      <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${inst.assignedToName ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
+                        {inst.assignedToName ? inst.assignedToName : "No DRI"}
+                      </span>
                       <span className="text-gray-400 text-xs">{isExpanded ? "▲" : "▼"}</span>
                     </div>
 
                     {isExpanded && (
                       <div className="border-t border-gray-100 px-4 py-3 space-y-2 bg-gray-50/50">
+                        {/* DRI: who is accountable for this workflow */}
+                        <div className="flex items-center gap-2 pb-2 mb-1 border-b border-gray-100">
+                          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Responsible (DRI)</span>
+                          {canAssign ? (
+                            <select
+                              value={inst.assignedToUid || ""}
+                              onChange={(e) => assignInstance(inst.id, e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                              <option value="">Unassigned</option>
+                              {team.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                            </select>
+                          ) : (
+                            <span className={`text-xs font-medium ${inst.assignedToName ? "text-gray-700" : "text-red-500"}`}>
+                              {inst.assignedToName || "Unassigned"}
+                            </span>
+                          )}
+                        </div>
                         {iSteps.length === 0 && (
                           <p className="text-xs text-gray-400">Loading steps...</p>
                         )}

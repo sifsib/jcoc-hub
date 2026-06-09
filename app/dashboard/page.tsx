@@ -25,6 +25,12 @@ interface PendingFollowUp {
   serviceDate: string;
 }
 
+interface UnassignedWorkflow {
+  id: string;
+  subjectName: string;
+  workflowName: string;
+}
+
 interface QuickStats {
   totalMembers: number;
   activeWorkflows: number;
@@ -49,6 +55,7 @@ export default function DashboardPage() {
 
   const [overdueSteps, setOverdueSteps] = useState<OverdueStep[]>([]);
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
+  const [unassignedWorkflows, setUnassignedWorkflows] = useState<UnassignedWorkflow[]>([]);
   const [stats, setStats] = useState<QuickStats>({ totalMembers: 0, activeWorkflows: 0, pendingFollowUps: 0, overdueSteps: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -77,6 +84,13 @@ export default function DashboardPage() {
         ));
         const instanceMap: Record<string, any> = {};
         instancesSnap.docs.forEach((d) => { instanceMap[d.id] = d.data(); });
+
+        // Active workflows with no responsible person (DRI) assigned.
+        const unassigned: UnassignedWorkflow[] = instancesSnap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .filter((i) => !i.assignedToUid)
+          .map((i) => ({ id: i.id, subjectName: i.subjectName || "Someone", workflowName: i.workflowName || "Workflow" }));
+        setUnassignedWorkflows(unassigned);
 
         const overdue: OverdueStep[] = overdueRaw
           .filter((s: any) => instanceMap[s.instanceId])
@@ -149,6 +163,47 @@ export default function DashboardPage() {
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">{appUser?.churchName || "KerekeHub"}</p>
       </div>
+
+      {/* Missing DRI warning — shown on every dashboard load, does not block workflows */}
+      {unassignedWorkflows.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-orange-100 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-bold text-orange-800">Workflows With No Responsible Person</h2>
+              <p className="text-xs text-orange-600 mt-0.5">
+                {unassignedWorkflows.length} active workflow{unassignedWorkflows.length !== 1 ? "s" : ""} {unassignedWorkflows.length !== 1 ? "have" : "has"} no one assigned. They are still running, but nobody is accountable yet.
+              </p>
+            </div>
+            <button
+              onClick={() => router.push("/dashboard/workflows")}
+              className="shrink-0 text-xs text-orange-700 hover:text-orange-900 font-semibold border border-orange-200 bg-white px-3 py-1.5 rounded-lg"
+            >
+              Assign Now
+            </button>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {unassignedWorkflows.slice(0, 5).map((w) => (
+              <div
+                key={w.id}
+                className="flex items-center gap-4 px-6 py-3 hover:bg-orange-50/40 cursor-pointer transition-colors"
+                onClick={() => router.push("/dashboard/workflows")}
+              >
+                <span className="text-lg shrink-0">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{w.subjectName}</p>
+                  <p className="text-xs text-gray-500 truncate">{w.workflowName}</p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full">No DRI</span>
+              </div>
+            ))}
+            {unassignedWorkflows.length > 5 && (
+              <div className="px-6 py-3 text-xs text-gray-400 text-center">
+                +{unassignedWorkflows.length - 5} more without a responsible person
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

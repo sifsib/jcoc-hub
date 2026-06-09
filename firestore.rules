@@ -111,10 +111,12 @@ service cloud.firestore {
       allow create: if isSignedIn()
                     && userId == request.auth.uid;
 
+      // Read widened to managers so they can see the team list for DRI pickers.
+      // Write stays restricted to the owner via canManageUsers() below.
       allow read: if isSignedIn()
                   && (userId == request.auth.uid
                       || isSuperAdmin()
-                      || (sameTenant(resource) && canManageUsers()));
+                      || (sameTenant(resource) && canManageMembers()));
 
       allow update: if isSignedIn()
                     && (

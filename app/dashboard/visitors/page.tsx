@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
+import { useTeamMembers } from "../../../lib/useTeamMembers";
 import {
   collection, query, where, getDocs, addDoc,
   updateDoc, doc, serverTimestamp, getDoc,
@@ -21,6 +22,8 @@ interface Visitor {
   followUpStatus: "pending" | "done" | "none";
   followUpNotes?: string;
   followedUpBy?: string;
+  assignedToUid?: string;   // DRI: team member responsible for following up
+  assignedToName?: string;
   customFields?: Record<string, string>;
 }
 
@@ -66,6 +69,9 @@ const DEFAULT_VISITOR_CONFIG: VisitorFormConfig = {
 
 export default function VisitorsPage() {
   const { appUser, loading: userLoading } = useAppUser();
+  const { team } = useTeamMembers(appUser?.tenantId);
+  // Only owner/admin/managers may hand out accountability.
+  const canAssign = ["owner", "admin", "member_manager"].includes(appUser?.role || "");
 
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +85,7 @@ export default function VisitorsPage() {
   const [gender, setGender] = useState("");
   const [ageGroup, setAgeGroup] = useState("");
   const [reason, setReason] = useState("");
+  const [assignedTo, setAssignedTo] = useState(""); // uid chosen at capture time
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -202,18 +209,42 @@ export default function VisitorsPage() {
       if (fc.email?.enabled && email.trim()) newVisitorData.email = email.trim().toLowerCase();
       if (fc.gender?.enabled && gender) newVisitorData.gender = gender;
       if (fc.ageGroup?.enabled && ageGroup) newVisitorData.ageGroup = ageGroup;
+      if (assignedTo) {
+        newVisitorData.assignedToUid = assignedTo;
+        newVisitorData.assignedToName = team.find((t) => t.uid === assignedTo)?.name || "";
+      }
       if (Object.keys(customValues).length > 0) newVisitorData.customFields = customValues;
 
       const docRef = await addDoc(collection(db, "visitors"), newVisitorData);
       if (shouldTriggerWorkflow) await triggerWorkflowsForVisitor(docRef.id, fullName.trim(), formattedPhone);
 
       setVisitors((prev) => [{ id: docRef.id, ...newVisitorData } as Visitor, ...prev]);
-      setFullName(""); setPhone(""); setEmail(""); setGender(""); setAgeGroup(""); setReason(""); setCustomValues({});
+      setFullName(""); setPhone(""); setEmail(""); setGender(""); setAgeGroup(""); setReason(""); setAssignedTo(""); setCustomValues({});
     } catch (err) {
       console.error("Error saving visitor:", err);
       alert("Failed to capture visitor details.");
     } finally {
       setSubmitLoading(false);
+    }
+  };
+
+  // Allocate (or change) the team member responsible for this visitor.
+  const assignVisitor = async (visitor: Visitor, uid: string) => {
+    if (!appUser) return;
+    const assignedToName = team.find((t) => t.uid === uid)?.name || "";
+    try {
+      await updateDoc(doc(db, "visitors", visitor.id), {
+        assignedToUid: uid,
+        assignedToName,
+        assignedAt: serverTimestamp(),
+        assignedBy: appUser.email,
+      });
+      setVisitors((prev) =>
+        prev.map((x) => (x.id === visitor.id ? { ...x, assignedToUid: uid, assignedToName } : x))
+      );
+    } catch (err) {
+      console.error("Error assigning visitor:", err);
+      alert("Could not assign this visitor. Please try again.");
     }
   };
 
@@ -398,6 +429,16 @@ export default function VisitorsPage() {
                 )}
               </div>
             ))}
+            {canAssign && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Assign Follow-Up To</label>
+                <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={sel}>
+                  <option value="">Unassigned (assign later)</option>
+                  {team.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                </select>
+                <p className="text-xs text-gray-400">This is the person accountable for reaching out.</p>
+              </div>
+            )}
             <button type="submit" disabled={submitLoading} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors text-sm flex justify-center items-center gap-2 mt-2 disabled:opacity-50">
               {submitLoading ? "Saving..." : "Save Visitor"}
             </button>
@@ -419,8 +460,25 @@ export default function VisitorsPage() {
                       <p className="font-bold text-gray-900">{v.fullName} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
                       <p className="text-sm text-gray-600 mt-1">{v.reason}</p>
                       <p className="text-xs text-gray-400 mt-1">Visited: {formatDisplayDate(v.serviceDate)}{v.ageGroup ? ` · ${v.ageGroup}` : ""}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-xs text-gray-400">Responsible:</span>
+                        {canAssign ? (
+                          <select
+                            value={v.assignedToUid || ""}
+                            onChange={(e) => assignVisitor(v, e.target.value)}
+                            className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-blue-500"
+                          >
+                            <option value="">Unassigned</option>
+                            {team.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                          </select>
+                        ) : (
+                          <span className={`text-xs font-medium ${v.assignedToName ? "text-gray-700" : "text-red-500"}`}>
+                            {v.assignedToName || "Unassigned"}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <button onClick={() => openFollowUpModal(v)} className="whitespace-nowrap px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded text-sm font-medium transition-colors">
+                    <button onClick={() => openFollowUpModal(v)} className="whitespace-nowrap px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded text-sm font-medium transition-colors self-start">
                       Log Contact
                     </button>
                   </div>
