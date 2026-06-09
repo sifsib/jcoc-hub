@@ -49,7 +49,13 @@ interface SpouseBasic {
   lastName: string;
   dob: string;
   gender: string;
+  email: string;
   phone: string;
+  address: Address;
+  bornAgain: string;
+  waterBaptized: string;
+  membershipType: string;
+  ministryGroup: string;
 }
 
 interface ChildInput {
@@ -81,7 +87,11 @@ function emptyPerson(): PersonFields {
 }
 
 function emptySpouse(): SpouseBasic {
-  return { firstName: "", lastName: "", dob: "", gender: "", phone: "" };
+  return {
+    firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
+    address: { street: "", suburb: "", city: "", province: "", postalCode: "" },
+    bornAgain: "", waterBaptized: "", membershipType: "", ministryGroup: "",
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -131,9 +141,8 @@ export default function JoinPage() {
   const setAddr = (k: keyof Address, v: string) => setPrimary(p => ({ ...p, address: { ...p.address, [k]: v } }));
 
   // Spouse
-  const [isSpouseMember, setIsSpouseMember] = useState<"" | "yes" | "no">("");
   const [spouseBasic, setSpouseBasic] = useState<SpouseBasic>(emptySpouse());
-  const setSb = (k: keyof SpouseBasic, v: string) => setSpouseBasic(p => ({ ...p, [k]: v }));
+  const setSb = (k: keyof SpouseBasic, v: any) => setSpouseBasic(p => ({ ...p, [k]: v }));
 
   // Children
   const [children, setChildren] = useState<ChildInput[]>([]);
@@ -213,8 +222,7 @@ export default function JoinPage() {
         cellRegion: primary.cellRegion,
         ministryGroup: primary.ministryGroup,
         // Spouse
-        isSpouseMember: primary.maritalStatus === "Married" ? isSpouseMember : null,
-        spouseDetails: primary.maritalStatus === "Married" && isSpouseMember === "no" ? spouseBasic : null,
+        spouseDetails: primary.maritalStatus === "Married" ? spouseBasic : null,
         // Children
         children: children.length > 0 ? children : [],
         // POPIA
@@ -385,14 +393,13 @@ export default function JoinPage() {
               </select>
             </F>
 
-            {config.cellRegions.length > 0 && (
-              <F label="Cell Region / Branch">
-                <select value={primary.cellRegion} onChange={e => setP("cellRegion", e.target.value)} className={sel}>
-                  <option value="">Select...</option>
-                  {config.cellRegions.map(r => <option key={r}>{r}</option>)}
-                </select>
-              </F>
-            )}
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-gray-400">Cell Region / Branch</label>
+              <div className="border border-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-400 bg-gray-50 cursor-not-allowed">
+                Assigned by administrator
+              </div>
+              <p className="text-xs text-gray-400">This will be allocated by your church admin after approval.</p>
+            </div>
 
             <F label="Ministry Group">
               <select value={primary.ministryGroup} onChange={e => setP("ministryGroup", e.target.value)} className={sel}>
@@ -407,40 +414,72 @@ export default function JoinPage() {
             <div className="bg-white rounded-xl shadow-sm border p-6 flex flex-col gap-4">
               <SectionHeader n={3} title="Spouse Details" />
 
-              <F label="Is your spouse a member of this church?">
-                <select value={isSpouseMember} onChange={e => setIsSpouseMember(e.target.value as any)} className={sel}>
-                  <option value="">Select...</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
+              {/* Personal Details */}
+              <div className="grid grid-cols-2 gap-3">
+                <F label="First Name"><input value={spouseBasic.firstName} onChange={e => setSb("firstName", e.target.value)} className={inp} /></F>
+                <F label="Last Name"><input value={spouseBasic.lastName} onChange={e => setSb("lastName", e.target.value)} className={inp} /></F>
+                <F label="Date of Birth"><input type="date" value={spouseBasic.dob} onChange={e => setSb("dob", e.target.value)} className={inp} /></F>
+                <F label="Gender">
+                  <select value={spouseBasic.gender} onChange={e => setSb("gender", e.target.value)} className={sel}>
+                    <option value="">Select...</option>
+                    <option>Male</option>
+                    <option>Female</option>
+                  </select>
+                </F>
+              </div>
+              <F label="Email Address">
+                <input type="email" value={spouseBasic.email} onChange={e => setSb("email", e.target.value)} placeholder="Optional" className={inp} />
+              </F>
+              <F label="Contact Number">
+                <input type="tel" value={spouseBasic.phone} onChange={e => setSb("phone", e.target.value)} className={inp} />
               </F>
 
-              {isSpouseMember === "no" && (
-                <div className="flex flex-col gap-3 pt-2 border-t border-gray-100">
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    These details will be saved for household records only.
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <F label="First Name"><input value={spouseBasic.firstName} onChange={e => setSb("firstName", e.target.value)} className={inp} /></F>
-                    <F label="Last Name"><input value={spouseBasic.lastName} onChange={e => setSb("lastName", e.target.value)} className={inp} /></F>
-                    <F label="Date of Birth"><input type="date" value={spouseBasic.dob} onChange={e => setSb("dob", e.target.value)} className={inp} /></F>
-                    <F label="Gender">
-                      <select value={spouseBasic.gender} onChange={e => setSb("gender", e.target.value)} className={sel}>
-                        <option value="">Select...</option>
-                        <option>Male</option>
-                        <option>Female</option>
-                      </select>
-                    </F>
+              {/* Spouse Address */}
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Residential Address</p>
+                <div className="flex flex-col gap-2">
+                  <input value={spouseBasic.address.street} onChange={e => setSb("address", { ...spouseBasic.address, street: e.target.value } as any)} placeholder="Street address" className={inp} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={spouseBasic.address.suburb} onChange={e => setSb("address", { ...spouseBasic.address, suburb: e.target.value } as any)} placeholder="Suburb" className={inp} />
+                    <input value={spouseBasic.address.city} onChange={e => setSb("address", { ...spouseBasic.address, city: e.target.value } as any)} placeholder="City" className={inp} />
                   </div>
-                  <F label="Contact Number"><input type="tel" value={spouseBasic.phone} onChange={e => setSb("phone", e.target.value)} className={inp} /></F>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={spouseBasic.address.province} onChange={e => setSb("address", { ...spouseBasic.address, province: e.target.value } as any)} placeholder="Province" className={inp} />
+                    <input value={spouseBasic.address.postalCode} onChange={e => setSb("address", { ...spouseBasic.address, postalCode: e.target.value } as any)} placeholder="Postal code" className={inp} />
+                  </div>
                 </div>
-              )}
+              </div>
 
-              {isSpouseMember === "yes" && (
-                <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                  Your spouse will need to submit their own membership form using the same link, or be added by the church administrator.
-                </p>
-              )}
+              {/* Spouse Faith & Membership */}
+              <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Faith & Membership</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <F label="Born Again?">
+                    <select value={spouseBasic.bornAgain} onChange={e => setSb("bornAgain", e.target.value)} className={sel}>
+                      <option value="">Select...</option>
+                      <option>Yes</option><option>No</option><option>Not Sure</option>
+                    </select>
+                  </F>
+                  <F label="Water Baptized?">
+                    <select value={spouseBasic.waterBaptized} onChange={e => setSb("waterBaptized", e.target.value)} className={sel}>
+                      <option value="">Select...</option>
+                      <option>Yes</option><option>No</option>
+                    </select>
+                  </F>
+                </div>
+                <F label="Type of Membership Sought">
+                  <select value={spouseBasic.membershipType} onChange={e => setSb("membershipType", e.target.value)} className={sel}>
+                    <option value="">Select...</option>
+                    {config.membershipTypes.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </F>
+                <F label="Ministry Group">
+                  <select value={spouseBasic.ministryGroup} onChange={e => setSb("ministryGroup", e.target.value)} className={sel}>
+                    <option value="">Select...</option>
+                    {config.ministryGroups.map(g => <option key={g}>{g}</option>)}
+                  </select>
+                </F>
+              </div>
             </div>
           )}
 
