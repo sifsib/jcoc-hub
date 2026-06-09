@@ -172,7 +172,8 @@ export default function ChurchSettingsPage() {
   const [optionInput, setOptionInput] = useState("");
 
   useEffect(() => {
-    if (!tenantId) return;
+    if (userLoading) return;
+    if (!tenantId) { setLoading(false); return; }
     getDoc(doc(db, "tenants", tenantId, "settings", "formConfig")).then((snap) => {
       if (snap.exists()) {
         const data = snap.data() as FormConfig;
@@ -182,8 +183,8 @@ export default function ChurchSettingsPage() {
         setVisitorCustomFields(data.visitor?.customFields || []);
       }
       setLoading(false);
-    });
-  }, [tenantId]);
+    }).catch(() => setLoading(false));
+  }, [tenantId, userLoading]);
 
   async function handleSave() {
     if (!tenantId) return;
