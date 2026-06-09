@@ -556,7 +556,6 @@ export default function ManageMembershipPage() {
         ...memberData,
         tenantId: appUser.tenantId,
         role: memberData.role || "Member",
-        consentedToPrivacyPolicy: false,
         source: "self-join",
         createdAt: serverTimestamp(),
       });
