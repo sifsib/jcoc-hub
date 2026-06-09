@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -152,7 +153,7 @@ export default function JoinPage() {
         {/* Header */}
         <div className="text-center">
           {tenant?.logoUrl && (
-            <img src={tenant.logoUrl} alt={tenant.name} className="h-12 mx-auto mb-3 object-contain" />
+            <Image src={tenant.logoUrl} alt={tenant.name} width={120} height={48} className="mx-auto mb-3 object-contain" unoptimized />
           )}
           <h1 className="text-2xl font-bold text-gray-900">{tenant?.name}</h1>
           <p className="text-gray-500 text-sm mt-1">Membership Application</p>

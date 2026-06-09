@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import {
@@ -546,7 +547,7 @@ export default function AttendancePage() {
               return (
                 <>
                   <div className="flex justify-center">
-                    <img src={qrSrc} alt="Check-in QR Code" className="rounded-lg border p-2 bg-white" width={220} height={220} />
+                    <Image src={qrSrc} alt="Check-in QR Code" width={220} height={220} className="rounded-lg border p-2 bg-white" unoptimized />
                   </div>
                   <div className="flex flex-col gap-1">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Check-in link</p>
