@@ -217,45 +217,6 @@ function F({ label, req, children }: { label: string; req?: boolean; children: R
         {label}{req && <span className="text-red-500 ml-1">*</span>}
       </label>
       {children}
-      {/* Join Link Modal */}
-      {showJoinLink && appUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-gray-800">Share Membership Form</h3>
-                <p className="text-sm text-gray-500 mt-0.5">Send this link to prospective members so they can fill in their own form.</p>
-              </div>
-              <button onClick={() => setShowJoinLink(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
-            {(() => {
-              const joinUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/join/${appUser.tenantId}`;
-              return (
-                <>
-                  <p className="text-xs text-gray-600 break-all bg-gray-50 border rounded p-3 select-all">{joinUrl}</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => navigator.clipboard.writeText(joinUrl)}
-                      className="flex-1 text-sm font-medium py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      Copy Link
-                    </button>
-                    <button
-                      onClick={() => setShowJoinLink(false)}
-                      className="flex-1 text-sm font-medium py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                    >
-                      Done
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 text-center">
-                    Submissions appear under Pending Approvals for you to review before adding to the register.
-                  </p>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1969,6 +1930,46 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
           </div>
         )}
       </div>
+
+      {/* Join Link Modal */}
+      {showJoinLink && appUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Share Membership Form</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Send this link to prospective members so they can fill in their own form.</p>
+              </div>
+              <button onClick={() => setShowJoinLink(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            {(() => {
+              const joinUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/join/${appUser.tenantId}`;
+              return (
+                <>
+                  <p className="text-xs text-gray-600 break-all bg-gray-50 border rounded p-3 select-all">{joinUrl}</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(joinUrl)}
+                      className="flex-1 text-sm font-medium py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Copy Link
+                    </button>
+                    <button
+                      onClick={() => setShowJoinLink(false)}
+                      className="flex-1 text-sm font-medium py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center">
+                    Submissions appear under Pending Approvals for you to review before adding to the register.
+                  </p>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
