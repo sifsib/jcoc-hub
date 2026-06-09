@@ -751,6 +751,20 @@ service cloud.firestore {
 
 
     // ============================================
+    // MEMBER REQUESTS (public self-join form submissions)
+    // Anyone can submit without auth. Admins review in dashboard.
+    // ============================================
+    match /memberRequests/{id} {
+      allow create: if true;
+      allow read, update, delete: if isSignedIn()
+                                  && (isSuperAdmin()
+                                      || (request.auth != null
+                                          && resource.data.tenantId == userTenantId()
+                                          && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
+    }
+
+
+    // ============================================
     // SELF-SERVICE SIGNUPS
     // Written by API route (admin SDK) on registration.
     // Super admin: full access for management dashboard.

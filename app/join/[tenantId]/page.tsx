@@ -21,10 +21,10 @@ interface TenantConfig {
 }
 
 interface Address {
-  street: string;
+  line1: string;
+  line2: string;
   suburb: string;
-  city: string;
-  province: string;
+  town: string;
   postalCode: string;
 }
 
@@ -80,7 +80,7 @@ const DEFAULT_MINISTRY_GROUPS = ["Youth", "Mens Fellowship", "Womens Ministry", 
 function emptyPerson(): PersonFields {
   return {
     firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
-    address: { street: "", suburb: "", city: "", province: "", postalCode: "" },
+    address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
     maritalStatus: "", bornAgain: "", waterBaptized: "", membershipType: "",
     cellRegion: "", ministryGroup: "",
   };
@@ -89,7 +89,7 @@ function emptyPerson(): PersonFields {
 function emptySpouse(): SpouseBasic {
   return {
     firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
-    address: { street: "", suburb: "", city: "", province: "", postalCode: "" },
+    address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
     bornAgain: "", waterBaptized: "", membershipType: "", ministryGroup: "",
   };
 }
@@ -139,10 +139,12 @@ export default function JoinPage() {
   const [primary, setPrimary] = useState<PersonFields>(emptyPerson());
   const setP = (k: keyof PersonFields, v: any) => setPrimary(p => ({ ...p, [k]: v }));
   const setAddr = (k: keyof Address, v: string) => setPrimary(p => ({ ...p, address: { ...p.address, [k]: v } }));
+  const spouseAddrField = (k: keyof Address, v: string) => setSb("address", { ...spouseBasic.address, [k]: v });
 
   // Spouse
   const [spouseBasic, setSpouseBasic] = useState<SpouseBasic>(emptySpouse());
   const setSb = (k: keyof SpouseBasic, v: any) => setSpouseBasic(p => ({ ...p, [k]: v }));
+  const [spouseSameAddress, setSpouseSameAddress] = useState(false);
 
   // Children
   const [children, setChildren] = useState<ChildInput[]>([]);
@@ -340,15 +342,13 @@ export default function JoinPage() {
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-2">Residential Address</p>
               <div className="flex flex-col gap-2">
-                <input value={primary.address.street} onChange={e => setAddr("street", e.target.value)} placeholder="Street address" className={inp} />
+                <input value={primary.address.line1} onChange={e => setAddr("line1", e.target.value)} placeholder="Line 1 (e.g. 12 Main Street)" className={inp} />
+                <input value={primary.address.line2} onChange={e => setAddr("line2", e.target.value)} placeholder="Line 2 (optional)" className={inp} />
                 <div className="grid grid-cols-2 gap-2">
                   <input value={primary.address.suburb} onChange={e => setAddr("suburb", e.target.value)} placeholder="Suburb" className={inp} />
-                  <input value={primary.address.city} onChange={e => setAddr("city", e.target.value)} placeholder="City" className={inp} />
+                  <input value={primary.address.town} onChange={e => setAddr("town", e.target.value)} placeholder="Town / City" className={inp} />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={primary.address.province} onChange={e => setAddr("province", e.target.value)} placeholder="Province" className={inp} />
-                  <input value={primary.address.postalCode} onChange={e => setAddr("postalCode", e.target.value)} placeholder="Postal code" className={inp} />
-                </div>
+                <input value={primary.address.postalCode} onChange={e => setAddr("postalCode", e.target.value)} placeholder="Postal code" className={inp} style={{ maxWidth: "50%" }} />
               </div>
             </div>
 
@@ -436,17 +436,29 @@ export default function JoinPage() {
 
               {/* Spouse Address */}
               <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">Residential Address</p>
-                <div className="flex flex-col gap-2">
-                  <input value={spouseBasic.address.street} onChange={e => setSb("address", { ...spouseBasic.address, street: e.target.value } as any)} placeholder="Street address" className={inp} />
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-gray-700">Residential Address</p>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-600 select-none">
+                    <input
+                      type="checkbox"
+                      checked={spouseSameAddress}
+                      onChange={e => {
+                        setSpouseSameAddress(e.target.checked);
+                        if (e.target.checked) setSb("address", { ...primary.address });
+                      }}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-green-600"
+                    />
+                    Same as main member
+                  </label>
+                </div>
+                <div className={`flex flex-col gap-2 ${spouseSameAddress ? "opacity-50 pointer-events-none" : ""}`}>
+                  <input value={spouseBasic.address.line1} onChange={e => spouseAddrField("line1", e.target.value)} placeholder="Line 1 (e.g. 12 Main Street)" className={inp} />
+                  <input value={spouseBasic.address.line2} onChange={e => spouseAddrField("line2", e.target.value)} placeholder="Line 2 (optional)" className={inp} />
                   <div className="grid grid-cols-2 gap-2">
-                    <input value={spouseBasic.address.suburb} onChange={e => setSb("address", { ...spouseBasic.address, suburb: e.target.value } as any)} placeholder="Suburb" className={inp} />
-                    <input value={spouseBasic.address.city} onChange={e => setSb("address", { ...spouseBasic.address, city: e.target.value } as any)} placeholder="City" className={inp} />
+                    <input value={spouseBasic.address.suburb} onChange={e => spouseAddrField("suburb", e.target.value)} placeholder="Suburb" className={inp} />
+                    <input value={spouseBasic.address.town} onChange={e => spouseAddrField("town", e.target.value)} placeholder="Town / City" className={inp} />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={spouseBasic.address.province} onChange={e => setSb("address", { ...spouseBasic.address, province: e.target.value } as any)} placeholder="Province" className={inp} />
-                    <input value={spouseBasic.address.postalCode} onChange={e => setSb("address", { ...spouseBasic.address, postalCode: e.target.value } as any)} placeholder="Postal code" className={inp} />
-                  </div>
+                  <input value={spouseBasic.address.postalCode} onChange={e => spouseAddrField("postalCode", e.target.value)} placeholder="Postal code" className={inp} style={{ maxWidth: "50%" }} />
                 </div>
               </div>
 
