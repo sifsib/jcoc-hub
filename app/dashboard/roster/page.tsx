@@ -128,6 +128,11 @@ function normalizeDob(val: any): string {
       return d.toISOString().slice(0, 10);
     }
   }
+  // Text dates: accept YYYY/MM/DD and DD/MM/YYYY (with / or - separators) -> ISO YYYY-MM-DD
+  let m = str.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/); // YYYY/MM/DD
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  m = str.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/); // DD/MM/YYYY
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   return str;
 }
 
@@ -907,7 +912,7 @@ export default function ManageMembershipPage() {
         const spouseIsMember = yn(row["Is Spouse a Member"] || row["Is Spouse a member"]) === "Yes";
 
         // ── Build children arrays ──────────────────────────────────────────────
-        const allChildren = [1, 2, 3].map(n => ({
+        const allChildren = [1, 2, 3, 4, 5].map(n => ({
           firstName: s(row[`Child ${n} First Name`]),
           lastName: s(row[`Child ${n} Last Name`]),
           dob: normalizeDob(row[`Child ${n} DOB`]),
@@ -980,7 +985,7 @@ export default function ManageMembershipPage() {
             bornAgain: yn(row["Born Again"] || row.bornAgain),
             waterBaptized: yn(row["Water Baptized"] || row.waterBaptized),
           },
-          ministries: s(row["Ministries"] || row.ministries).split(/[,;]/).map((x: string) => x.trim()).filter(Boolean),
+          ministries: s(row["Ministries to serve in"] || row["Ministries"] || row.ministries).split(/[,;]/).map((x: string) => x.trim()).filter(Boolean),
           role: s(row["Role"] || row.role) || "Member",
           householdId: hid, householdRole: "primary",
           isMember: true, status: "active", source: "xlsx_import",
