@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 
 interface DateInputProps {
   value: string;
@@ -25,7 +25,7 @@ export default function DateInput({
     setDisplay(toDisplay(value));
   }, [value]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     let raw = e.target.value.replace(/[^0-9/]/g, "");
 
     // Auto-insert slashes as user types
