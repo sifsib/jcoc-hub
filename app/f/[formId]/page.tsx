@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { db } from "../../../lib/firebase";
+import DateInput from "../../../components/ui/DateInput";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 type FieldType =
@@ -283,10 +284,9 @@ export default function PublicFormPage() {
                   )}
 
                   {field.type === "date" && (
-                    <input
-                      type="date"
+                    <DateInput
                       value={values[field.id] || ""}
-                      onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
+                      onChange={(val) => setValues({ ...values, [field.id]: val })}
                       className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
                         errors[field.id]
                           ? "border-red-400 focus:ring-red-400"

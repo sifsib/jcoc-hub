@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { db } from "../../../../lib/firebase";
+import DateInput from "../../../../components/ui/DateInput";
 import { useAppUser } from "../../../../lib/useAppUser";
 import {
   collection,
@@ -419,12 +420,12 @@ export default function AttendanceReportPage() {
           <div className="flex flex-wrap gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-500">Start</label>
-              <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+              <DateInput value={customStart} onChange={(val) => setCustomStart(val)}
                 className="border rounded p-1.5 text-sm text-gray-700 focus:outline-blue-500" />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-500">End</label>
-              <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+              <DateInput value={customEnd} onChange={(val) => setCustomEnd(val)}
                 className="border rounded p-1.5 text-sm text-gray-700 focus:outline-blue-500" />
             </div>
           </div>

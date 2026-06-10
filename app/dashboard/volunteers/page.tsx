@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
+import DateInput from "../../../components/ui/DateInput";
 import {
   collection,
   query,
@@ -343,10 +344,9 @@ export default function VolunteersPage() {
           {/* Date selector */}
           <div className="flex items-center gap-3 flex-wrap">
             <label className="text-sm font-medium text-gray-600">Service Date:</label>
-            <input
-              type="date"
+            <DateInput
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              onChange={(val) => setSelectedDate(val)}
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
             {rosterDates.length > 0 && (

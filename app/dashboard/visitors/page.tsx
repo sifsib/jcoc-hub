@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
+import DateInput from "../../../components/ui/DateInput";
 import { useTeamMembers } from "../../../lib/useTeamMembers";
 import {
   collection, query, where, getDocs, addDoc,
@@ -360,7 +361,7 @@ export default function VisitorsPage() {
           <form onSubmit={handleCaptureVisitor} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Service Date</label>
-              <input type="date" value={serviceDate} onChange={(e) => setServiceDate(e.target.value)} className={inp} required />
+              <DateInput value={serviceDate} onChange={(val) => setServiceDate(val)} className={inp} required />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Full Name <span className="text-red-500">*</span></label>

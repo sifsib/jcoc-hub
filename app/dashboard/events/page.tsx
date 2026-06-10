@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "../../../lib/firebase";
+import DateInput from "../../../components/ui/DateInput";
 import { useAppUser } from "../../../lib/useAppUser";
 import {
   collection,
@@ -310,10 +311,9 @@ export default function EventsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Date <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    onChange={(val) => setForm({ ...form, date: val })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>

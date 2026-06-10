@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { db } from "../../../lib/firebase";
+import DateInput from "../../../components/ui/DateInput";
 import { useAppUser } from "../../../lib/useAppUser";
 import {
   collection, query, where, getDocs, addDoc,
@@ -297,7 +298,7 @@ function MemberBlock({
         <F label="Last Name" req><input value={data.lastName} onChange={e => set("lastName", e.target.value)} placeholder="e.g. Doe" className={inp} required /></F>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <F label="Date of Birth" req><input type="date" value={data.dob} onChange={e => set("dob", e.target.value)} className={inp} required /></F>
+        <F label="Date of Birth" req><DateInput value={data.dob} onChange={val => set("dob", val)} className={inp} required /></F>
         <F label="Gender" req>
           <select value={data.gender} onChange={e => set("gender", e.target.value)} className={sel} required>
             <option value="">Select</option>
@@ -1220,7 +1221,7 @@ export default function ManageMembershipPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <F label="First Name"><input value={spouseBasic.firstName} onChange={e => setSpouseBasic(p => ({ ...p, firstName: e.target.value }))} className={inp} /></F>
                     <F label="Last Name"><input value={spouseBasic.lastName} onChange={e => setSpouseBasic(p => ({ ...p, lastName: e.target.value }))} className={inp} /></F>
-                    <F label="Date of Birth"><input type="date" value={spouseBasic.dob} onChange={e => setSpouseBasic(p => ({ ...p, dob: e.target.value }))} className={inp} /></F>
+                    <F label="Date of Birth"><DateInput value={spouseBasic.dob} onChange={val => setSpouseBasic(p => ({ ...p, dob: val }))} className={inp} /></F>
                     <F label="Gender">
                       <select value={spouseBasic.gender} onChange={e => setSpouseBasic(p => ({ ...p, gender: e.target.value }))} className={sel}>
                         <option value="">Select</option><option>Male</option><option>Female</option>
@@ -1271,7 +1272,7 @@ export default function ManageMembershipPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <F label="First Name" req><input value={child.firstName} onChange={e => updChild(i, "firstName", e.target.value)} className={inp} required /></F>
                   <F label="Last Name" req><input value={child.lastName} onChange={e => updChild(i, "lastName", e.target.value)} className={inp} required /></F>
-                  <F label="Date of Birth" req><input type="date" value={child.dob} onChange={e => updChild(i, "dob", e.target.value)} className={inp} required /></F>
+                  <F label="Date of Birth" req><DateInput value={child.dob} onChange={val => updChild(i, "dob", val)} className={inp} required /></F>
                   <F label="Gender" req>
                     <select value={child.gender} onChange={e => updChild(i, "gender", e.target.value)} className={sel} required>
                       <option value="">Select</option><option>Male</option><option>Female</option>
@@ -1296,7 +1297,7 @@ export default function ManageMembershipPage() {
                   <p className="text-sm font-bold text-gray-600 capitalize">{p}</p>
                   <F label="Name"><input value={parents[p].name} onChange={e => setParents(prev => ({ ...prev, [p]: { ...prev[p], name: e.target.value } }))} className={inp} /></F>
                   <F label="Surname"><input value={parents[p].surname} onChange={e => setParents(prev => ({ ...prev, [p]: { ...prev[p], surname: e.target.value } }))} className={inp} /></F>
-                  <F label="Date of Birth"><input type="date" value={parents[p].dob} onChange={e => setParents(prev => ({ ...prev, [p]: { ...prev[p], dob: e.target.value } }))} className={inp} /></F>
+                  <F label="Date of Birth"><DateInput value={parents[p].dob} onChange={val => setParents(prev => ({ ...prev, [p]: { ...prev[p], dob: val } }))} className={inp} /></F>
                 </div>
               ))}
             </div>
@@ -1312,7 +1313,7 @@ export default function ManageMembershipPage() {
                     <p className="text-sm font-bold text-gray-600">{label}</p>
                     <F label="Name"><input value={inLaws[key].name} onChange={e => setInLaws(prev => ({ ...prev, [key]: { ...prev[key], name: e.target.value } }))} className={inp} /></F>
                     <F label="Surname"><input value={inLaws[key].surname} onChange={e => setInLaws(prev => ({ ...prev, [key]: { ...prev[key], surname: e.target.value } }))} className={inp} /></F>
-                    <F label="Date of Birth"><input type="date" value={inLaws[key].dob} onChange={e => setInLaws(prev => ({ ...prev, [key]: { ...prev[key], dob: e.target.value } }))} className={inp} /></F>
+                    <F label="Date of Birth"><DateInput value={inLaws[key].dob} onChange={val => setInLaws(prev => ({ ...prev, [key]: { ...prev[key], dob: val } }))} className={inp} /></F>
                   </div>
                 ))}
               </div>

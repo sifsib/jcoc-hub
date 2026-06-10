@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { db } from "../../../lib/firebase";
+import DateInput from "../../../components/ui/DateInput";
 import { useAppUser } from "../../../lib/useAppUser";
 import {
   collection,
@@ -151,8 +152,7 @@ export default function AttendancePage() {
 
   // ─── Handle date change ─────────────────────────────────────────────────────
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = e.target.value;
+  const handleDateChange = (newDate: string) => {
     const match = getSessionForDate(newDate);
 
     if (!match) {
@@ -353,8 +353,7 @@ export default function AttendancePage() {
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Service Date
           </label>
-          <input
-            type="date"
+          <DateInput
             value={selectedDate}
             onChange={handleDateChange}
             className="border p-2 rounded text-sm text-gray-700 focus:outline-blue-500"

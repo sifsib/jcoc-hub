@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { db, storage } from '../../../lib/firebase';
+import DateInput from '../../../components/ui/DateInput';
 import { useAppUser } from '../../../lib/useAppUser';
 import {
   collection,
@@ -763,7 +764,7 @@ export default function FinancePage() {
           <form onSubmit={handleSubmit} className="space-y-4 bg-white border border-gray-200 rounded-xl p-6">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" required />
+              <DateInput value={date} onChange={(val) => setDate(val)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" required />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">{txType === 'income' ? 'Description' : 'Payee / Description'}</label>

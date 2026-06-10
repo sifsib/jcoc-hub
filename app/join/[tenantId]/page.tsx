@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useParams } from "next/navigation";
+import DateInput from "../../components/ui/DateInput";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
@@ -315,7 +316,7 @@ export default function JoinPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <F label="Date of Birth" req>
-                <input type="date" value={primary.dob} onChange={e => setP("dob", e.target.value)} className={`${inp} ${errors.dob ? "border-red-400" : ""}`} />
+                <DateInput value={primary.dob} onChange={val => setP("dob", val)} className={`${inp} ${errors.dob ? "border-red-400" : ""}`} />
                 {errors.dob && <p className="text-xs text-red-500" data-error>{errors.dob}</p>}
               </F>
               <F label="Gender" req>
@@ -418,7 +419,7 @@ export default function JoinPage() {
               <div className="grid grid-cols-2 gap-3">
                 <F label="First Name"><input value={spouseBasic.firstName} onChange={e => setSb("firstName", e.target.value)} className={inp} /></F>
                 <F label="Last Name"><input value={spouseBasic.lastName} onChange={e => setSb("lastName", e.target.value)} className={inp} /></F>
-                <F label="Date of Birth"><input type="date" value={spouseBasic.dob} onChange={e => setSb("dob", e.target.value)} className={inp} /></F>
+                <F label="Date of Birth"><DateInput value={spouseBasic.dob} onChange={val => setSb("dob", val)} className={inp} /></F>
                 <F label="Gender">
                   <select value={spouseBasic.gender} onChange={e => setSb("gender", e.target.value)} className={sel}>
                     <option value="">Select...</option>
@@ -529,7 +530,7 @@ export default function JoinPage() {
                     <input value={child.lastName} onChange={e => updChild(i, "lastName", e.target.value)} className={inp} required />
                   </F>
                   <F label="Date of Birth" req>
-                    <input type="date" value={child.dob} onChange={e => updChild(i, "dob", e.target.value)} className={inp} required />
+                    <DateInput value={child.dob} onChange={val => updChild(i, "dob", val)} className={inp} required />
                   </F>
                   <F label="Gender" req>
                     <select value={child.gender} onChange={e => updChild(i, "gender", e.target.value)} className={sel} required>
