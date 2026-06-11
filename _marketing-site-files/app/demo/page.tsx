@@ -13,24 +13,31 @@ import { useState } from 'react';
 
 const DEMO_MODULES = [
   {
-    title: 'Platform overview',
+    title: 'The full platform, in 5 minutes',
     duration: '~5 min',
-    desc: 'A full top-to-bottom walkthrough of the Kereke Hub dashboard, covering navigation, workspace setup, and what each module does.',
-    videoUrl: '', // e.g. "https://www.youtube.com/embed/abc123"
+    desc: 'A complete top-to-bottom walkthrough of Kereke Hub. See every module, how navigation works, and what the dashboard looks like from day one.',
+    videoUrl: 'https://www.youtube.com/embed/rODn5DAO_og',
     icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
   },
   {
-    title: 'Church profile and branding',
+    title: 'Make it feel like home',
     duration: '~3 min',
-    desc: 'Setting up your church name, brand color, and workspace identity. How the branding updates across the entire dashboard instantly.',
-    videoUrl: '',
+    desc: 'Set up your church name, upload your logo, pick your brand color. Watch it apply instantly across the entire dashboard.',
+    videoUrl: 'https://www.youtube.com/embed/nJOWX1pqVIE',
     icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01',
   },
   {
-    title: 'Membership management',
+    title: 'Let the platform do the work',
+    duration: '~4 min',
+    desc: 'Build a visitor welcome workflow with multiple steps and triggers, then watch it fire automatically the moment a new visitor is added.',
+    videoUrl: 'https://www.youtube.com/embed/RRUZr2bo3H4',
+    icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+  },
+  {
+    title: 'Your whole congregation, one roster',
     duration: '~6 min',
-    desc: 'Adding members, importing from a spreadsheet, managing household relationships, and using the search and filter tools in the roster.',
-    videoUrl: '',
+    desc: 'Add members manually or import from a spreadsheet. Manage household links, search and filter your roster, and keep every profile up to date.',
+    videoUrl: 'https://www.youtube.com/embed/7mjp3HhNHEA',
     icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
   },
   {
@@ -88,13 +95,6 @@ const DEMO_MODULES = [
     desc: 'Adding songs to the library with keys and notes, then building a service setlist by pulling from the library.',
     videoUrl: '',
     icon: 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3',
-  },
-  {
-    title: 'Automated workflows',
-    duration: '~4 min',
-    desc: 'Building a visitor welcome workflow with multiple steps and triggers, then watching it fire automatically when a new visitor is added.',
-    videoUrl: '',
-    icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
   },
   {
     title: 'Custom forms',
