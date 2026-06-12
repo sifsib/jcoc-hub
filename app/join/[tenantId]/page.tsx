@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useParams } from "next/navigation";
-import DateInput from "../../components/ui/DateInput";
+import DateInput from "../../../components/ui/DateInput";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
