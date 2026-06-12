@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getAuth } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/app/lib/firebase';
+import { db } from '../lib/firebase';
 
 type LinkingState = 'idle' | 'starting' | 'polling_qr' | 'scanning' | 'connected' | 'error';
 
