@@ -1,122 +1,119 @@
-// components/WhatsAppLinker.tsx - Add to kereke-hub
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { getAuth } from 'firebase/auth';
-import { QRCodeSVG } from 'qrcode.react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 type LinkingState = 'idle' | 'starting' | 'polling_qr' | 'scanning' | 'connected' | 'error';
 
 export function WhatsAppLinker() {
-  const [state, setState] = useState<LinkingState>('idle');
-  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [state, setState]           = useState<LinkingState>('idle');
+  const [qrBase64, setQrBase64]     = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const [error, setError]           = useState<string | null>(null);
+  const pollRef                     = useRef<NodeJS.Timeout | null>(null);
+  const instanceRef                 = useRef<string | null>(null);
 
   const stopPolling = () => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   };
 
-  const getToken = async () => {
+  // Get the tenant ID (used as the Evolution API instance name)
+  const getTenantId = async (): Promise<string> => {
     const user = getAuth().currentUser;
-    if (!user) throw new Error('Not authenticated');
-    return user.getIdToken();
+    if (!user) throw new Error('Not logged in');
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    const tenantId = snap.data()?.tenantId as string | undefined;
+    if (!tenantId) throw new Error('No tenant found for this account');
+    return tenantId;
   };
 
   const startAuth = async () => {
     try {
       setState('starting');
       setError(null);
-      setQrCode(null);
+      setQrBase64(null);
 
-      // Step 1: tell the Railway service to start a socket for this tenant
-      const startRes = await fetch('/api/whatsapp', {
+      const tenantId = await getTenantId();
+      instanceRef.current = tenantId;
+
+      // Create (or recreate) the Evolution API instance for this tenant
+      const res = await fetch('/api/whatsapp/create-instance', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${await getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action: 'start-auth' })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instanceName: tenantId }),
       });
 
-      if (!startRes.ok) throw new Error('Failed to start auth');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create WhatsApp instance');
+      }
 
-      const startData = await startRes.json();
+      const data = await res.json();
 
-      // If already connected, just show connected state
-      if (startData.status === 'already_connected') {
-        const statusRes = await fetch('/api/whatsapp?action=status', {
-          headers: { Authorization: `Bearer ${await getToken()}` }
-        });
-        const statusData = await statusRes.json();
-        setPhoneNumber(statusData.phone);
-        setState('connected');
+      // Evolution API sometimes returns the QR immediately on create
+      if (data.qrBase64) {
+        setQrBase64(data.qrBase64);
+        setState('scanning');
+        pollRef.current = setInterval(() => checkStatus(tenantId), 3000);
         return;
       }
 
-      // Step 2: socket is initializing, poll for QR code
+      // Otherwise poll for QR code
       setState('polling_qr');
-      let qrAttempts = 0;
+      let attempts = 0;
 
       pollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts > 20) { // 60 second timeout
+          stopPolling();
+          setError('Timed out waiting for QR code. Please try again.');
+          setState('error');
+          return;
+        }
+
         try {
-          qrAttempts++;
+          const qrRes = await fetch(
+            `/api/whatsapp/qr-code?instanceName=${encodeURIComponent(tenantId)}`,
+            { cache: 'no-store' }
+          );
 
-          // Stop trying after ~60 seconds (20 attempts x 3s)
-          if (qrAttempts > 20) {
-            stopPolling();
-            setError('Timed out waiting for QR code. Please try again.');
-            setState('error');
-            return;
-          }
-
-          const qrRes = await fetch('/api/whatsapp?action=qr', {
-            headers: { Authorization: `Bearer ${await getToken()}` }
-          });
-
-          if (qrRes.status === 404) return; // QR not ready yet, keep polling
-
-          if (!qrRes.ok) throw new Error('QR request failed');
+          if (!qrRes.ok) return; // Not ready yet, keep polling
 
           const qrData = await qrRes.json();
-          if (qrData.qr) {
-            setQrCode(qrData.qr);
+          const base64 = qrData.base64 ?? qrData.qrcode?.base64;
+
+          if (base64) {
+            setQrBase64(base64);
             setState('scanning');
             stopPolling();
-
-            // Now poll for connection status
-            pollRef.current = setInterval(checkStatus, 3000);
+            pollRef.current = setInterval(() => checkStatus(tenantId), 3000);
           }
-        } catch (err) {
-          console.error('QR poll error:', err);
+        } catch {
+          // Network blip, keep polling
         }
       }, 3000);
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : 'Something went wrong');
       setState('error');
     }
   };
 
-  const checkStatus = async () => {
+  const checkStatus = async (instanceName: string) => {
     try {
-      const res = await fetch('/api/whatsapp?action=status', {
-        headers: { Authorization: `Bearer ${await getToken()}` }
-      });
+      const res  = await fetch(`/api/whatsapp/status?instanceName=${encodeURIComponent(instanceName)}`, { cache: 'no-store' });
       const data = await res.json();
 
-      if (data.connected) {
-        setPhoneNumber(data.phone);
+      // Evolution API returns state: "open" when connected
+      if (data.instance?.state === 'open' || data.state === 'open') {
+        setPhoneNumber(data.instance?.ownerJid?.split('@')[0] ?? null);
         setState('connected');
         stopPolling();
       }
-    } catch (err) {
-      console.error('Status check error:', err);
+    } catch {
+      // Keep polling
     }
   };
 
@@ -124,25 +121,39 @@ export function WhatsAppLinker() {
     try {
       setState('starting');
       stopPolling();
-      await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${await getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action: 'disconnect' })
+      const tenantId = instanceRef.current ?? await getTenantId();
+      await fetch(`/api/whatsapp/delete-instance`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instanceName: tenantId }),
       });
       setState('idle');
       setPhoneNumber(null);
-      setQrCode(null);
+      setQrBase64(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : 'Failed to disconnect');
       setState('error');
     }
   };
 
-  // Cleanup on unmount
+  // Check existing connection on mount
   useEffect(() => {
+    const checkExisting = async () => {
+      try {
+        const tenantId = await getTenantId();
+        instanceRef.current = tenantId;
+        const res  = await fetch(`/api/whatsapp/status?instanceName=${encodeURIComponent(tenantId)}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.instance?.state === 'open' || data.state === 'open') {
+          setPhoneNumber(data.instance?.ownerJid?.split('@')[0] ?? null);
+          setState('connected');
+        }
+      } catch {
+        // Not connected, stay idle
+      }
+    };
+    checkExisting();
     return () => stopPolling();
   }, []);
 
@@ -150,26 +161,29 @@ export function WhatsAppLinker() {
     return (
       <div className="rounded-lg bg-green-50 p-6 border border-green-200">
         <h3 className="text-lg font-semibold text-green-900 mb-2">WhatsApp Connected</h3>
-        <p className="text-green-800 mb-4">Phone: {phoneNumber}</p>
-        <button
-          onClick={disconnect}
-          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
+        {phoneNumber && <p className="text-green-800 mb-4">Number: +{phoneNumber}</p>}
+        <button onClick={disconnect} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
           Disconnect
         </button>
       </div>
     );
   }
 
-  if (state === 'scanning' && qrCode) {
+  if (state === 'scanning' && qrBase64) {
     return (
       <div className="rounded-lg bg-blue-50 p-6 border border-blue-200">
         <h3 className="text-lg font-semibold text-blue-900 mb-4">Scan QR Code</h3>
-        <p className="text-blue-800 mb-2">
+        <p className="text-blue-800 mb-4">
           Open WhatsApp on your phone, tap <strong>Settings &gt; Linked Devices &gt; Link a Device</strong>, then scan this code.
         </p>
         <div className="flex justify-center my-4">
-          <QRCodeSVG value={qrCode} size={256} />
+          <img
+            src={qrBase64.startsWith('data:') ? qrBase64 : `data:image/png;base64,${qrBase64}`}
+            alt="WhatsApp QR Code"
+            width={256}
+            height={256}
+            className="rounded"
+          />
         </div>
         <p className="text-sm text-blue-700 text-center">Waiting for scan...</p>
       </div>
@@ -204,10 +218,7 @@ export function WhatsAppLinker() {
     <div className="rounded-lg bg-gray-50 p-6 border border-gray-200">
       <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect WhatsApp</h3>
       <p className="text-gray-700 mb-4">Link your church WhatsApp number to send messages directly from the hub.</p>
-      <button
-        onClick={startAuth}
-        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-      >
+      <button onClick={startAuth} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
         Connect WhatsApp
       </button>
     </div>
