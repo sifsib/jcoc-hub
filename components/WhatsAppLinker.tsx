@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getAuth } from 'firebase/auth';
-import QRCode from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 
 type LinkingState = 'idle' | 'starting' | 'polling_qr' | 'scanning' | 'connected' | 'error';
 
@@ -169,7 +169,7 @@ export function WhatsAppLinker() {
           Open WhatsApp on your phone, tap <strong>Settings &gt; Linked Devices &gt; Link a Device</strong>, then scan this code.
         </p>
         <div className="flex justify-center my-4">
-          <QRCode value={qrCode} size={256} />
+          <QRCodeSVG value={qrCode} size={256} />
         </div>
         <p className="text-sm text-blue-700 text-center">Waiting for scan...</p>
       </div>
