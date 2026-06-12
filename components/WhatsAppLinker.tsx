@@ -3,13 +3,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useAuth } from '@/lib/context/AuthContext';
+import { getAuth } from 'firebase/auth';
 import QRCode from 'qrcode.react';
 
 type LinkingState = 'idle' | 'starting' | 'polling_qr' | 'scanning' | 'connected' | 'error';
 
 export function WhatsAppLinker() {
-  const { user } = useAuth();
   const [state, setState] = useState<LinkingState>('idle');
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
@@ -24,9 +23,9 @@ export function WhatsAppLinker() {
   };
 
   const getToken = async () => {
-    const token = await user?.getIdToken();
-    if (!token) throw new Error('Not authenticated');
-    return token;
+    const user = getAuth().currentUser;
+    if (!user) throw new Error('Not authenticated');
+    return user.getIdToken();
   };
 
   const startAuth = async () => {
