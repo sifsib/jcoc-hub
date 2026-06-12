@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
-import WhatsAppService from '@/lib/services/whatsappService';
+import WhatsAppService from '../../../lib/services/whatsappService';
 import { adminAuth } from '@/lib/firebase-admin';
 
 const RAILWAY_BASE_URL = process.env.RAILWAY_WHATSAPP_URL!;
