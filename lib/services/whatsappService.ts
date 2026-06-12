@@ -25,7 +25,10 @@ class WhatsAppService {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-      throw new Error(err.error || `HTTP ${response.status}`);
+      const message = err.error || `HTTP ${response.status}`;
+      const error = new Error(message) as Error & { httpStatus: number };
+      error.httpStatus = response.status;
+      throw error;
     }
 
     return response.json();

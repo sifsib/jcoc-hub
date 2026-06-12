@@ -72,9 +72,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
   } catch (error) {
-    // Surface 404 from Railway (QR not ready yet) cleanly
+    // Pass Railway's actual HTTP status through (e.g. 404 = QR not ready yet)
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    const status = msg.includes('404') ? 404 : 500;
+    const httpStatus = (error as Error & { httpStatus?: number }).httpStatus;
+    const status = httpStatus ?? 500;
     return NextResponse.json({ error: msg }, { status });
   }
 }

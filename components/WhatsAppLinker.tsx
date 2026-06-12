@@ -67,8 +67,8 @@ export function WhatsAppLinker() {
         try {
           qrAttempts++;
 
-          // Stop trying after ~30 seconds (10 attempts x 3s)
-          if (qrAttempts > 10) {
+          // Stop trying after ~60 seconds (20 attempts x 3s)
+          if (qrAttempts > 20) {
             stopPolling();
             setError('Timed out waiting for QR code. Please try again.');
             setState('error');
