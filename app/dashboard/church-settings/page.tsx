@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { WhatsAppLinker } from "../../../components/WhatsAppLinker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -435,6 +436,13 @@ export default function ChurchSettingsPage() {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Integration */}
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">WhatsApp Integration</h2>
+        <p className="text-sm text-gray-500 mb-4">Connect your church WhatsApp number to send messages directly from the hub.</p>
+        <WhatsAppLinker />
+      </div>
     </div>
   );
 }
