@@ -8,6 +8,12 @@
 //   BETA_ACCESS_CODE env var   → beta (4 months free, then R139/mo)
 //   no code / wrong code       → standard (30-day trial, then R99, then R139)
 //   email === INTERNAL_EMAIL   → internal (free forever)
+//
+// Brevo integration:
+//   BREVO_API_KEY env var      → Brevo API key (from Brevo dashboard > SMTP & API > API Keys)
+//   BREVO_LIST_ID env var      → numeric ID of your "New Signups" list in Brevo
+//   On signup, the new contact is added to Brevo with their church name, admin name,
+//   account type, and trial end date. This triggers the onboarding automation in Brevo.
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
@@ -33,6 +39,59 @@ function resolveAccountType(email: string, code: string): "internal" | "beta" | 
   if (betaCode && code.trim().toUpperCase() === betaCode) return "beta";
   return "standard";
 }
+
+// ─── Brevo ────────────────────────────────────────────────────────────────────
+// Adds the new signup as a Brevo contact and enrolls them in the onboarding list.
+// This is fire-and-forget: a Brevo failure never blocks the signup itself.
+async function addContactToBrevo(
+  email: string,
+  firstName: string,
+  churchName: string,
+  accountType: string,
+  trialEndsAt: string | null
+): Promise<void> {
+  const apiKey = process.env.BREVO_API_KEY;
+  const rawListId = process.env.BREVO_LIST_ID;
+  if (!apiKey || !rawListId) return; // not configured yet — skip silently
+
+  const listId = parseInt(rawListId, 10);
+  if (isNaN(listId)) return;
+
+  // Format trial end as human-readable date for merge tags in emails, e.g. "13 July 2026"
+  const trialEndFormatted = trialEndsAt
+    ? new Date(trialEndsAt).toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : "";
+
+  const res = await fetch("https://api.brevo.com/v3/contacts", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": apiKey,
+    },
+    body: JSON.stringify({
+      email,
+      attributes: {
+        FIRSTNAME: firstName,
+        CHURCH_NAME: churchName,
+        ACCOUNT_TYPE: accountType,
+        TRIAL_ENDS_AT: trialEndFormatted,
+      },
+      listIds: [listId],
+      updateEnabled: true, // update if contact already exists
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo API ${res.status}: ${body}`);
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
 
 function buildBillingFields(accountType: "internal" | "beta" | "standard", now: Date) {
   if (accountType === "internal") {
@@ -115,6 +174,8 @@ export async function POST(req: NextRequest) {
     });
 
     // 4. Log the signup — source: "self_service" triggers the welcome email Cloud Function
+    //    NOTE: if you have already set up Brevo to handle welcome emails, disable the
+    //    onSignupCreated Cloud Function to avoid sending a duplicate welcome email.
     await adminDb.collection("signups").add({
       uid, tenantId,
       churchName: churchName.trim(),
@@ -126,6 +187,16 @@ export async function POST(req: NextRequest) {
       source: "self_service",
       createdAt: ts,
     });
+
+    // 5. Add to Brevo for onboarding email sequence (non-blocking — Brevo failure
+    //    does NOT prevent the signup from completing successfully)
+    addContactToBrevo(
+      normalizedEmail,
+      adminName.trim(),
+      churchName.trim(),
+      accountType,
+      billing.trialEndsAt ?? null
+    ).catch((err) => console.error("[Brevo] Failed to add contact:", err));
 
     // Client will signInWithEmailAndPassword then call /api/login for the session cookie
     return NextResponse.json({ success: true, tenantId, accountType }, { status: 201 });

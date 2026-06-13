@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import {
@@ -15,7 +15,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Broadcast {
+interface WaBroadcast {
   id: string;
   type: "whatsapp_broadcast";
   message: string;
@@ -25,11 +25,32 @@ interface Broadcast {
   createdAt: { seconds: number } | null;
 }
 
+interface EmailBroadcast {
+  id: string;
+  type: "email_broadcast";
+  subject: string;
+  sentBy: string;
+  tenantId: string;
+  recipientCount: number;
+  failedCount: number;
+  createdAt: string | { seconds: number } | null;
+}
+
+interface BrevoStatus {
+  connected: boolean;
+  senderEmail: string;
+  senderName: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDate(ts: { seconds: number } | null) {
+function formatDate(ts: { seconds: number } | string | null) {
   if (!ts) return "—";
-  return new Date(ts.seconds * 1000).toLocaleString("en-ZA", {
+  const date =
+    typeof ts === "string"
+      ? new Date(ts)
+      : new Date((ts as { seconds: number }).seconds * 1000);
+  return date.toLocaleString("en-ZA", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -42,61 +63,148 @@ function buildWaLink(message: string) {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
+// Plain text → minimal HTML for Brevo
+function textToHtml(text: string): string {
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return `<p style="font-family:Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;">${escaped
+    .split(/\n\n+/)
+    .join('</p><p style="font-family:Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;">')
+    .replace(/\n/g, "<br>")}</p>`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CommunicationsPage() {
   const { appUser, loading: userLoading } = useAppUser();
   const tenantId = appUser?.tenantId ?? null;
 
-  const [activeTab, setActiveTab] = useState<"compose" | "history">("compose");
-  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  // ── Channel ──
+  const [channel, setChannel] = useState<"whatsapp" | "email">("whatsapp");
 
+  // ── WhatsApp state ──
+  const [waTab, setWaTab] = useState<"compose" | "history">("compose");
+  const [waBroadcasts, setWaBroadcasts] = useState<WaBroadcast[]>([]);
+  const [waHistoryLoading, setWaHistoryLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [successId, setSuccessId] = useState("");
+  const [waSubmitting, setWaSubmitting] = useState(false);
+  const [waError, setWaError] = useState("");
+  const [waSuccessId, setWaSuccessId] = useState("");
 
-  // ── Load history ──
+  // ── Email state ──
+  const [emailTab, setEmailTab] = useState<"compose" | "history" | "setup">("compose");
+  const [brevoStatus, setBrevoStatus] = useState<BrevoStatus | null>(null);
+  const [brevoLoading, setBrevoLoading] = useState(false);
+  // Setup form
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [senderEmailInput, setSenderEmailInput] = useState("");
+  const [senderNameInput, setSenderNameInput] = useState("");
+  const [savingBrevo, setSavingBrevo] = useState(false);
+  const [brevoSaveError, setBrevoSaveError] = useState("");
+  // Compose
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [emailSuccess, setEmailSuccess] = useState("");
+  const [memberEmailCount, setMemberEmailCount] = useState<number | null>(null);
+  // History
+  const [emailHistory, setEmailHistory] = useState<EmailBroadcast[]>([]);
+  const [emailHistoryLoading, setEmailHistoryLoading] = useState(false);
+
+  // ── Load WhatsApp history ──
   useEffect(() => {
+    if (!tenantId || channel !== "whatsapp") return;
+    setWaHistoryLoading(true);
+    getDocs(
+      query(
+        collection(db, "communications"),
+        where("tenantId", "==", tenantId),
+        where("type", "==", "whatsapp_broadcast"),
+        orderBy("createdAt", "desc")
+      )
+    )
+      .then((snap) =>
+        setWaBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as WaBroadcast)))
+      )
+      .catch(console.error)
+      .finally(() => setWaHistoryLoading(false));
+  }, [tenantId, channel, waSuccessId]);
+
+  // ── Load Brevo status + member count when Email channel opens ──
+  const loadBrevoStatus = useCallback(async () => {
     if (!tenantId) return;
-
-    async function loadHistory() {
-      setHistoryLoading(true);
-      try {
-        const q = query(
-          collection(db, "communications"),
-          where("tenantId", "==", tenantId),
-          orderBy("createdAt", "desc")
-        );
-        const snap = await getDocs(q);
-        setBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Broadcast)));
-      } catch (err) {
-        console.error("Failed to load communications:", err);
-      } finally {
-        setHistoryLoading(false);
+    setBrevoLoading(true);
+    try {
+      const res = await fetch("/api/tenant/brevo");
+      if (res.ok) {
+        const data: BrevoStatus = await res.json();
+        setBrevoStatus(data);
+        if (data.connected) {
+          setSenderEmailInput(data.senderEmail);
+          setSenderNameInput(data.senderName);
+        }
       }
+    } catch (err) {
+      console.error("Failed to load Brevo status:", err);
+    } finally {
+      setBrevoLoading(false);
     }
+  }, [tenantId]);
 
-    loadHistory();
-  }, [tenantId, successId]); // re-fetch after a successful send
+  const loadMemberEmailCount = useCallback(async () => {
+    if (!tenantId) return;
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, "members"),
+          where("tenantId", "==", tenantId),
+          where("status", "==", "active")
+        )
+      );
+      const withEmail = snap.docs.filter((d) => !!d.data().email?.trim()).length;
+      setMemberEmailCount(withEmail);
+    } catch {
+      setMemberEmailCount(null);
+    }
+  }, [tenantId]);
 
-  // ── Send handler ──
-  async function handleSend(e: React.FormEvent) {
+  useEffect(() => {
+    if (channel === "email" && !brevoStatus) {
+      loadBrevoStatus();
+      loadMemberEmailCount();
+    }
+  }, [channel, brevoStatus, loadBrevoStatus, loadMemberEmailCount]);
+
+  // ── Load email history ──
+  useEffect(() => {
+    if (channel !== "email" || emailTab !== "history" || !tenantId) return;
+    setEmailHistoryLoading(true);
+    getDocs(
+      query(
+        collection(db, "communications"),
+        where("tenantId", "==", tenantId),
+        where("type", "==", "email_broadcast"),
+        orderBy("createdAt", "desc")
+      )
+    )
+      .then((snap) =>
+        setEmailHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() } as EmailBroadcast)))
+      )
+      .catch(console.error)
+      .finally(() => setEmailHistoryLoading(false));
+  }, [channel, emailTab, tenantId, emailSuccess]);
+
+  // ── WhatsApp send ──
+  async function handleWaSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!message.trim()) {
-      setError("Please type a message before sending.");
-      return;
-    }
-    if (!tenantId || !appUser) {
-      setError("Session error. Please refresh and try again.");
-      return;
-    }
-
-    setSubmitting(true);
-    setError("");
-    setSuccessId("");
-
+    if (!message.trim()) { setWaError("Please type a message before sending."); return; }
+    if (!tenantId || !appUser) { setWaError("Session error. Please refresh and try again."); return; }
+    setWaSubmitting(true);
+    setWaError("");
+    setWaSuccessId("");
     try {
       const docRef = await addDoc(collection(db, "communications"), {
         type: "whatsapp_broadcast",
@@ -106,22 +214,73 @@ export default function CommunicationsPage() {
         tenantId,
         createdAt: serverTimestamp(),
       });
-
-      // Open WhatsApp with pre-filled message
       window.open(buildWaLink(message.trim()), "_blank", "noopener,noreferrer");
-
-      setSuccessId(docRef.id);
+      setWaSuccessId(docRef.id);
       setMessage("");
-      setActiveTab("history");
-    } catch (err) {
-      console.error("Send failed:", err);
-      setError("Something went wrong. Please try again.");
+      setWaTab("history");
+    } catch {
+      setWaError("Something went wrong. Please try again.");
     } finally {
-      setSubmitting(false);
+      setWaSubmitting(false);
     }
   }
 
-  // ── Loading guard ──
+  // ── Brevo save ──
+  async function handleBrevoSave(e: React.FormEvent) {
+    e.preventDefault();
+    setBrevoSaveError("");
+    setSavingBrevo(true);
+    try {
+      const res = await fetch("/api/tenant/brevo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: apiKeyInput,
+          senderEmail: senderEmailInput,
+          senderName: senderNameInput,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setBrevoSaveError(data.error || "Something went wrong."); return; }
+      setBrevoStatus({ connected: true, senderEmail: senderEmailInput, senderName: senderNameInput });
+      setApiKeyInput(""); // clear after save
+      setEmailTab("compose");
+    } catch {
+      setBrevoSaveError("Could not reach the server. Please try again.");
+    } finally {
+      setSavingBrevo(false);
+    }
+  }
+
+  // ── Email send ──
+  async function handleEmailSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!emailSubject.trim()) { setEmailError("Subject line is required."); return; }
+    if (!emailBody.trim()) { setEmailError("Email body is required."); return; }
+    setEmailSending(true);
+    setEmailError("");
+    setEmailSuccess("");
+    try {
+      const res = await fetch("/api/communications/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          subject: emailSubject.trim(),
+          htmlContent: textToHtml(emailBody),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEmailError(data.error || "Something went wrong."); return; }
+      setEmailSuccess(`Sent to ${data.sent} member${data.sent !== 1 ? "s" : ""}${data.failed > 0 ? ` (${data.failed} failed)` : ""}.`);
+      setEmailSubject("");
+      setEmailBody("");
+    } catch {
+      setEmailError("Could not reach the server. Please try again.");
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
   if (userLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -130,7 +289,7 @@ export default function CommunicationsPage() {
     );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
@@ -139,151 +298,451 @@ export default function CommunicationsPage() {
       <div>
         <h1 className="text-2xl font-semibold text-white">Communications</h1>
         <p className="text-slate-400 text-sm mt-1">
-          Send WhatsApp broadcasts to your congregation and track past messages.
+          Send messages to your congregation via WhatsApp or Email.
         </p>
       </div>
 
-      {/* Tabs */}
+      {/* ── Channel tabs ── */}
       <div className="flex gap-1 border-b border-slate-700">
-        {(["compose", "history"] as const).map((tab) => (
+        {(["whatsapp", "email"] as const).map((ch) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
-              activeTab === tab
+            key={ch}
+            onClick={() => setChannel(ch)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium capitalize transition-colors ${
+              channel === ch
                 ? "text-emerald-400 border-b-2 border-emerald-400"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            {tab === "compose" ? "New Broadcast" : "History"}
+            {ch === "whatsapp" ? (
+              <>
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.858L.057 23.5a.5.5 0 0 0 .623.606l5.765-1.51A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.947 0-3.766-.527-5.323-1.445l-.378-.224-3.92 1.026 1.046-3.81-.247-.393A9.956 9.956 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+                </svg>
+                WhatsApp
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+                Email
+              </>
+            )}
           </button>
         ))}
       </div>
 
-      {/* ── Compose Tab ── */}
-      {activeTab === "compose" && (
-        <form onSubmit={handleSend} className="space-y-5">
-          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
-
-            {/* Channel badge */}
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 bg-emerald-900/40 text-emerald-400 text-xs font-medium px-3 py-1 rounded-full border border-emerald-700/40">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.858L.057 23.5a.5.5 0 0 0 .623.606l5.765-1.51A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.947 0-3.766-.527-5.323-1.445l-.378-.224-3.92 1.026 1.046-3.81-.247-.393A9.956 9.956 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
-                </svg>
-                WhatsApp Broadcast
-              </span>
-            </div>
-
-            {/* Message textarea */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">
-                Message
-              </label>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={6}
-                placeholder="Type your broadcast message here..."
-                className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 resize-none transition"
-              />
-              <p className="text-xs text-slate-500 text-right">{message.length} characters</p>
-            </div>
-
-            {/* Info note */}
-            <div className="bg-slate-900/40 border border-slate-700/50 rounded-lg px-4 py-3 text-xs text-slate-400">
-              Clicking <span className="text-slate-200 font-medium">Send Broadcast</span> will log this message and open WhatsApp with the text pre-filled so you can share it to your groups or contacts.
-            </div>
-
-            {/* Error */}
-            {error && (
-              <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-2">
-                {error}
-              </p>
-            )}
-
-            {/* Submit */}
-            <div className="flex justify-end">
+      {/* ══════════════════════════════════════════════════════════════════════
+          WHATSAPP CHANNEL
+      ══════════════════════════════════════════════════════════════════════ */}
+      {channel === "whatsapp" && (
+        <>
+          {/* Sub-tabs */}
+          <div className="flex gap-1 border-b border-slate-700/60">
+            {(["compose", "history"] as const).map((tab) => (
               <button
-                type="submit"
-                disabled={submitting || !message.trim()}
-                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                key={tab}
+                onClick={() => setWaTab(tab)}
+                className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
+                  waTab === tab
+                    ? "text-emerald-400 border-b-2 border-emerald-400"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
               >
-                {submitting ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
-                    Send Broadcast
-                  </>
-                )}
+                {tab === "compose" ? "New Broadcast" : "History"}
               </button>
-            </div>
+            ))}
           </div>
-        </form>
-      )}
 
-      {/* ── History Tab ── */}
-      {activeTab === "history" && (
-        <div className="space-y-3">
-          {successId && (
-            <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-lg px-4 py-3 text-sm text-emerald-400">
-              Broadcast sent and logged successfully.
-            </div>
-          )}
-
-          {historyLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <span className="w-5 h-5 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin" />
-            </div>
-          ) : broadcasts.length === 0 ? (
-            <div className="text-center py-16 text-slate-500 text-sm">
-              No broadcasts sent yet.
-            </div>
-          ) : (
-            broadcasts.map((b) => (
-              <div
-                key={b.id}
-                className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <span className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-medium">
+          {/* Compose */}
+          {waTab === "compose" && (
+            <form onSubmit={handleWaSend} className="space-y-5">
+              <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-900/40 text-emerald-400 text-xs font-medium px-3 py-1 rounded-full border border-emerald-700/40">
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
                       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
                       <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.858L.057 23.5a.5.5 0 0 0 .623.606l5.765-1.51A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.947 0-3.766-.527-5.323-1.445l-.378-.224-3.92 1.026 1.046-3.81-.247-.393A9.956 9.956 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
                     </svg>
                     WhatsApp Broadcast
                   </span>
-                  <span className="text-xs text-slate-500">{formatDate(b.createdAt)}</span>
                 </div>
-
-                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
-                  {b.message}
-                </p>
-
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-xs text-slate-500">
-                    Sent by {b.sentByName}
-                  </span>
-                  <a
-                    href={buildWaLink(b.message)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-300">Message</label>
+                  <textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={6}
+                    placeholder="Type your broadcast message here..."
+                    className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 resize-none transition"
+                  />
+                  <p className="text-xs text-slate-500 text-right">{message.length} characters</p>
+                </div>
+                <div className="bg-slate-900/40 border border-slate-700/50 rounded-lg px-4 py-3 text-xs text-slate-400">
+                  Clicking <span className="text-slate-200 font-medium">Send Broadcast</span> will log this message and open WhatsApp with the text pre-filled so you can share it to your groups or contacts.
+                </div>
+                {waError && (
+                  <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-2">{waError}</p>
+                )}
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={waSubmitting || !message.trim()}
+                    className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
                   >
-                    Resend via WhatsApp
-                  </a>
+                    {waSubmitting ? (
+                      <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending...</>
+                    ) : (
+                      <><svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>Send Broadcast</>
+                    )}
+                  </button>
                 </div>
               </div>
-            ))
+            </form>
           )}
-        </div>
+
+          {/* WhatsApp History */}
+          {waTab === "history" && (
+            <div className="space-y-3">
+              {waSuccessId && (
+                <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-lg px-4 py-3 text-sm text-emerald-400">
+                  Broadcast sent and logged successfully.
+                </div>
+              )}
+              {waHistoryLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <span className="w-5 h-5 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin" />
+                </div>
+              ) : waBroadcasts.length === 0 ? (
+                <div className="text-center py-16 text-slate-500 text-sm">No WhatsApp broadcasts sent yet.</div>
+              ) : (
+                waBroadcasts.map((b) => (
+                  <div key={b.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-medium">
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.858L.057 23.5a.5.5 0 0 0 .623.606l5.765-1.51A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.947 0-3.766-.527-5.323-1.445l-.378-.224-3.92 1.026 1.046-3.81-.247-.393A9.956 9.956 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+                        WhatsApp Broadcast
+                      </span>
+                      <span className="text-xs text-slate-500">{formatDate(b.createdAt)}</span>
+                    </div>
+                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{b.message}</p>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-xs text-slate-500">Sent by {b.sentByName}</span>
+                      <a href={buildWaLink(b.message)} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                        Resend via WhatsApp
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          EMAIL CHANNEL
+      ══════════════════════════════════════════════════════════════════════ */}
+      {channel === "email" && (
+        <>
+          {/* Sub-tabs */}
+          <div className="flex gap-1 border-b border-slate-700/60">
+            {(["compose", "history", "setup"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setEmailTab(tab)}
+                className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
+                  emailTab === tab
+                    ? "text-emerald-400 border-b-2 border-emerald-400"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {tab === "setup" ? (
+                  <span className="flex items-center gap-1.5">
+                    Setup
+                    {!brevoLoading && (
+                      <span className={`w-2 h-2 rounded-full ${brevoStatus?.connected ? "bg-emerald-400" : "bg-amber-400"}`} />
+                    )}
+                  </span>
+                ) : tab === "compose" ? "New Email" : "History"}
+              </button>
+            ))}
+          </div>
+
+          {brevoLoading && (
+            <div className="flex items-center justify-center py-12">
+              <span className="w-5 h-5 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin" />
+            </div>
+          )}
+
+          {/* ── Setup Tab ── */}
+          {!brevoLoading && emailTab === "setup" && (
+            <div className="space-y-5">
+              {/* Status badge */}
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+                brevoStatus?.connected
+                  ? "bg-emerald-900/20 border-emerald-700/50 text-emerald-400"
+                  : "bg-amber-900/20 border-amber-700/50 text-amber-400"
+              }`}>
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${brevoStatus?.connected ? "bg-emerald-400" : "bg-amber-400"}`} />
+                <div>
+                  <p className="text-sm font-medium">
+                    {brevoStatus?.connected ? "Brevo connected" : "Brevo not connected"}
+                  </p>
+                  {brevoStatus?.connected && (
+                    <p className="text-xs mt-0.5 text-emerald-500">
+                      Sending as {brevoStatus.senderName} &lt;{brevoStatus.senderEmail}&gt;
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* What is Brevo + steps */}
+              <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">
+                    {brevoStatus?.connected ? "Update your Brevo connection" : "Connect your Brevo account"}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Brevo is a free email service. Your church gets its own Brevo account and sends emails directly to your members.
+                    The free plan covers up to 300 emails per day, which is enough for most churches.
+                  </p>
+                </div>
+
+                {/* Steps */}
+                <ol className="space-y-3 text-sm">
+                  {[
+                    {
+                      n: 1,
+                      label: "Create a free Brevo account",
+                      detail: (
+                        <span>
+                          Go to{" "}
+                          <a href="https://www.brevo.com" target="_blank" rel="noopener noreferrer" className="text-emerald-400 underline hover:text-emerald-300">
+                            brevo.com
+                          </a>{" "}
+                          and sign up. Use your church email address.
+                        </span>
+                      ),
+                    },
+                    {
+                      n: 2,
+                      label: "Verify your sender email",
+                      detail: "In Brevo: click your name (top right) > Senders & Dedicated IPs > Senders. Add your church email address and verify it. This is the address your emails will come from.",
+                    },
+                    {
+                      n: 3,
+                      label: "Get your API key",
+                      detail: "In Brevo: click your name > SMTP & API > API Keys. Create a new key. Copy it and paste it below.",
+                    },
+                  ].map(({ n, label, detail }) => (
+                    <li key={n} className="flex gap-3">
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-900/50 border border-emerald-700/50 text-emerald-400 text-xs font-bold flex items-center justify-center">
+                        {n}
+                      </span>
+                      <div>
+                        <p className="font-medium text-slate-200">{label}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{detail}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+
+                {/* Form */}
+                <form onSubmit={handleBrevoSave} className="space-y-3 pt-2 border-t border-slate-700/50">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-300">Brevo API Key</label>
+                    <input
+                      type="password"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder={brevoStatus?.connected ? "Enter new key to update" : "Paste your Brevo API key"}
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-300">Sender Email</label>
+                    <input
+                      type="email"
+                      value={senderEmailInput}
+                      onChange={(e) => setSenderEmailInput(e.target.value)}
+                      placeholder="e.g. pastor@gracechurch.co.za"
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                    />
+                    <p className="text-xs text-slate-500">Must be verified in your Brevo account (Step 2 above).</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-300">Sender Name</label>
+                    <input
+                      type="text"
+                      value={senderNameInput}
+                      onChange={(e) => setSenderNameInput(e.target.value)}
+                      placeholder="e.g. Grace Church"
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                    />
+                    <p className="text-xs text-slate-500">This is what members see as the sender in their inbox.</p>
+                  </div>
+
+                  {brevoSaveError && (
+                    <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">{brevoSaveError}</p>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={savingBrevo || !apiKeyInput.trim() || !senderEmailInput.trim() || !senderNameInput.trim()}
+                      className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                    >
+                      {savingBrevo ? (
+                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Verifying...</>
+                      ) : brevoStatus?.connected ? "Update Connection" : "Connect Brevo"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ── Compose Tab ── */}
+          {!brevoLoading && emailTab === "compose" && (
+            <>
+              {!brevoStatus?.connected ? (
+                <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-8 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-slate-700/60 flex items-center justify-center mx-auto">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-6 h-6 text-slate-400">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                  </div>
+                  <p className="text-slate-300 text-sm font-medium">Email not connected</p>
+                  <p className="text-slate-500 text-xs">Connect your free Brevo account first to start sending emails to your congregation.</p>
+                  <button
+                    onClick={() => setEmailTab("setup")}
+                    className="mt-2 inline-flex items-center gap-1.5 text-emerald-400 text-sm font-medium hover:text-emerald-300 transition-colors"
+                  >
+                    Go to Setup
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                      <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleEmailSend} className="space-y-5">
+                  <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
+
+                    {/* Channel badge + recipient count */}
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1.5 bg-blue-900/30 text-blue-400 text-xs font-medium px-3 py-1 rounded-full border border-blue-700/40">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                          <polyline points="22,6 12,13 2,6"/>
+                        </svg>
+                        Email Broadcast
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {memberEmailCount === null
+                          ? "Loading recipients..."
+                          : memberEmailCount === 0
+                          ? "No members with email addresses yet"
+                          : `${memberEmailCount} member${memberEmailCount !== 1 ? "s" : ""} will receive this`}
+                      </span>
+                    </div>
+
+                    {/* Subject */}
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-slate-300">Subject</label>
+                      <input
+                        type="text"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        placeholder="e.g. Sunday Service this week"
+                        className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                      />
+                    </div>
+
+                    {/* Body */}
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-slate-300">Message</label>
+                      <textarea
+                        value={emailBody}
+                        onChange={(e) => setEmailBody(e.target.value)}
+                        rows={8}
+                        placeholder="Type your email message here. Blank lines create paragraph breaks."
+                        className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 resize-none transition"
+                      />
+                      <p className="text-xs text-slate-500 text-right">{emailBody.length} characters</p>
+                    </div>
+
+                    {/* Info note */}
+                    <div className="bg-slate-900/40 border border-slate-700/50 rounded-lg px-4 py-3 text-xs text-slate-400 space-y-1">
+                      <p>Emails will be sent individually to each active member who has an email address in their roster profile.</p>
+                      <p>Brevo free plan: 300 emails per day. Upgrade your Brevo account for larger congregations.</p>
+                    </div>
+
+                    {emailError && (
+                      <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-2">{emailError}</p>
+                    )}
+                    {emailSuccess && (
+                      <p className="text-sm text-emerald-400 bg-emerald-900/20 border border-emerald-800/40 rounded-lg px-4 py-2">{emailSuccess}</p>
+                    )}
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={emailSending || !emailSubject.trim() || !emailBody.trim() || memberEmailCount === 0}
+                        className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                      >
+                        {emailSending ? (
+                          <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending...</>
+                        ) : (
+                          <><svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>Send Email</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+            </>
+          )}
+
+          {/* ── Email History Tab ── */}
+          {!brevoLoading && emailTab === "history" && (
+            <div className="space-y-3">
+              {emailHistoryLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <span className="w-5 h-5 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin" />
+                </div>
+              ) : emailHistory.length === 0 ? (
+                <div className="text-center py-16 text-slate-500 text-sm">No email broadcasts sent yet.</div>
+              ) : (
+                emailHistory.map((e) => (
+                  <div key={e.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 text-blue-400 text-xs font-medium">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                          <polyline points="22,6 12,13 2,6"/>
+                        </svg>
+                        Email Broadcast
+                      </span>
+                      <span className="text-xs text-slate-500">{formatDate(e.createdAt)}</span>
+                    </div>
+                    <p className="text-sm text-slate-200 font-medium">{e.subject}</p>
+                    <div className="flex items-center gap-4 pt-1">
+                      <span className="text-xs text-emerald-400">{e.recipientCount} sent</span>
+                      {e.failedCount > 0 && (
+                        <span className="text-xs text-red-400">{e.failedCount} failed</span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
