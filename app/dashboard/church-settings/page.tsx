@@ -159,6 +159,7 @@ export default function ChurchSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
 
   // Member form state
   const [memberFields, setMemberFields] = useState<Record<string, FieldConfig>>(DEFAULT_MEMBER_FIELDS);
@@ -442,6 +443,77 @@ export default function ChurchSettingsPage() {
         <h2 className="text-lg font-semibold text-gray-900 mb-2">WhatsApp Integration</h2>
         <p className="text-sm text-gray-500 mb-4">Connect your church WhatsApp number to send messages directly from the hub.</p>
         <WhatsAppLinker />
+      </div>
+
+      {/* Embed Membership Form */}
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">Embed Membership Form</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Paste this code into any page on your church website to embed the membership registration form directly.
+        </p>
+
+        {tenantId ? (
+          <div className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col gap-4">
+            {/* Live link */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Standalone link</p>
+              <a
+                href={`https://hub.kerekehub.co.za/join/${tenantId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-emerald-600 hover:underline break-all"
+              >
+                {`https://hub.kerekehub.co.za/join/${tenantId}`}
+              </a>
+              <p className="text-xs text-gray-400 mt-1">Use this URL to share the form as a direct link, or for testing.</p>
+            </div>
+
+            {/* Embed snippet */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Embed code (iframe)</p>
+              <div className="relative">
+                <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+{`<iframe
+  src="https://hub.kerekehub.co.za/join/${tenantId}"
+  width="100%"
+  height="900"
+  frameborder="0"
+  style="border:none; border-radius:12px;"
+  title="Church Membership Form"
+></iframe>`}
+                </pre>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `<iframe\n  src="https://hub.kerekehub.co.za/join/${tenantId}"\n  width="100%"\n  height="900"\n  frameborder="0"\n  style="border:none; border-radius:12px;"\n  title="Church Membership Form"\n></iframe>`
+                    ).then(() => {
+                      setCopiedEmbed(true);
+                      setTimeout(() => setCopiedEmbed(false), 2500);
+                    });
+                  }}
+                  className="absolute top-2 right-2 bg-white border border-gray-200 hover:border-emerald-400 text-xs font-semibold text-gray-600 hover:text-emerald-600 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                >
+                  {copiedEmbed ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Paste this anywhere in your website HTML. Works with WordPress, Wix, Squarespace, and most website builders.
+              </p>
+            </div>
+
+            {/* Tips */}
+            <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3">
+              <p className="text-xs font-semibold text-emerald-700 mb-1">Tips</p>
+              <ul className="text-xs text-emerald-700 space-y-1 list-disc list-inside">
+                <li>Increase the height value if the form feels cramped (try 1100 for married member forms).</li>
+                <li>The form automatically loads your church name and branding colors.</li>
+                <li>Submissions land in your Roster under "Pending Requests".</li>
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 italic">Loading your church details...</p>
+        )}
       </div>
     </div>
   );
