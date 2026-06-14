@@ -926,8 +926,8 @@ export default function ManageMembershipPage() {
     try {
       const exceptionData: AbsenceException = {
         tag: finalTag,
-        note: exceptionNote.trim() || undefined,
         setAt: new Date().toISOString().split("T")[0],
+        ...(exceptionNote.trim() ? { note: exceptionNote.trim() } : {}),
       };
       await updateDoc(doc(db, "members", editingMemberId), { absenceException: exceptionData });
       setEditingMemberException(exceptionData);

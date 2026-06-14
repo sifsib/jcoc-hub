@@ -181,8 +181,8 @@ export default function MemberDetailPage() {
     try {
       const exceptionData: AbsenceException = {
         tag: finalTag,
-        note: exceptionNote.trim() || undefined,
         setAt: new Date().toISOString().split("T")[0],
+        ...(exceptionNote.trim() ? { note: exceptionNote.trim() } : {}),
       };
       await updateDoc(doc(db, "members", memberId as string), { absenceException: exceptionData });
       setMember((prev) => prev ? { ...prev, absenceException: exceptionData } : prev);
