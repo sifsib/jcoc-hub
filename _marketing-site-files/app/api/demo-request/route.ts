@@ -1,45 +1,55 @@
-// ─────────────────────────────────────────────────────────────
 // kereke-marketing: app/api/demo-request/route.ts
 //
 // Handles demo booking requests from /demo#request.
 //
 // On each submission this route does THREE things:
-//   1. Writes a support ticket to Firestore (source: "demo_request")
-//      so it appears on the super-admin support dashboard immediately.
-//   2. Sends an alert email to sifisosibuyane@gmail.com
-//   3. Sends an alert email to sales@kerekehub.co.za
+//   1. Writes to Firestore demo_requests collection (admin dashboard reads this)
+//   2. Also writes a support_ticket so it appears in the support tab
+//   3. Sends an alert email to sifiso@kerekehub.co.za via Brevo transactional API
 //
 // Required env vars:
-//   FIREBASE_PROJECT_ID
-//   FIREBASE_CLIENT_EMAIL
-//   FIREBASE_PRIVATE_KEY
-//   SMTP_HOST          e.g. smtp.gmail.com
-//   SMTP_PORT          e.g. 587
-//   SMTP_USER          the sending email address
-//   SMTP_PASS          the app password / SMTP credential
-//   SMTP_FROM          display name + address, e.g. "Kereke Hub <no-reply@kerekehub.co.za>"
-// ─────────────────────────────────────────────────────────────
+//   FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY
+//   BREVO_API_KEY
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
-import nodemailer from "nodemailer";
 
-// ── Email helpers ─────────────────────────────────────────────
+const BREVO_API_KEY = process.env.BREVO_API_KEY!;
+const ADMIN_EMAIL = "sifiso@kerekehub.co.za";
+const SENDER_EMAIL = "sifiso@kerekehub.co.za";
+const SENDER_NAME = "Kereke Hub";
 
-function buildTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+async function sendBrevoEmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+}) {
+  if (!BREVO_API_KEY) {
+    console.warn("[Brevo] BREVO_API_KEY not set — skipping email.");
+    return;
+  }
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": BREVO_API_KEY,
     },
+    body: JSON.stringify({
+      sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+      to: [{ email: opts.to }],
+      subject: opts.subject,
+      htmlContent: opts.html,
+    }),
   });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo ${res.status}: ${body}`);
+  }
 }
 
-function alertEmailHtml(data: {
+function buildAlertEmail(data: {
   name: string;
   email: string;
   phone: string;
@@ -47,10 +57,10 @@ function alertEmailHtml(data: {
   role: string;
   message: string;
   ticketRef: string;
-}) {
+}): string {
   return `
     <div style="font-family:sans-serif;max-width:540px;margin:0 auto;color:#1e293b;">
-      <div style="background:#064e3b;padding:20px 28px;border-radius:8px 8px 0 0;">
+      <div style="background:#1A5C38;padding:20px 28px;border-radius:8px 8px 0 0;">
         <h2 style="color:#fff;margin:0;font-size:18px;">New Demo Request</h2>
         <p style="color:#6ee7b7;margin:4px 0 0;font-size:13px;">Ref: ${data.ticketRef}</p>
       </div>
@@ -71,19 +81,17 @@ function alertEmailHtml(data: {
             : ""
         }
         <div style="margin-top:20px;">
-          <a href="https://hub.kerekehub.co.za/dashboard/support" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:13px;font-weight:600;">
-            View ticket on dashboard
+          <a href="https://hub.kerekehub.co.za/dashboard/admin-settings" style="display:inline-block;background:#1A5C38;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:13px;font-weight:600;">
+            View on Admin Panel
           </a>
         </div>
         <p style="margin-top:16px;font-size:12px;color:#94a3b8;">
-          This alert was sent by Kereke Hub because a demo was requested at kerekehub.co.za.
+          Sent via Kereke Hub platform notifications.
         </p>
       </div>
     </div>
   `;
 }
-
-// ── Route handler ─────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -98,7 +106,6 @@ export async function POST(req: NextRequest) {
       message = "",
     } = body;
 
-    // Validation
     if (!name.trim() || !email.trim() || !churchName.trim()) {
       return NextResponse.json(
         { error: "Name, email, and church name are required." },
@@ -112,8 +119,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── 1. Write to Firestore support_tickets ──────────────────
-    const docRef = await adminDb.collection("support_tickets").add({
+    const ticketRef = "DM-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+
+    // 1. Write to demo_requests (admin panel reads this)
+    await adminDb.collection("demo_requests").add({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim() || null,
+      churchName: churchName.trim(),
+      role: role.trim() || null,
+      message: message.trim() || null,
+      status: "open",
+      ticketRef,
+      createdAt: new Date().toISOString(),
+    });
+
+    // 2. Also write to support_tickets for the support tab
+    await adminDb.collection("support_tickets").add({
       name: name.trim(),
       email: email.trim().toLowerCase(),
       phone: phone.trim() || null,
@@ -124,50 +146,29 @@ export async function POST(req: NextRequest) {
       category: "general",
       priority: "normal",
       status: "open",
-      ticketRef: "",           // Cloud Function stamps this within seconds
+      ticketRef,
       tenantId: null,
       source: "demo_request",
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    const ticketRef = "TK-" + docRef.id.slice(0, 6).toUpperCase();
-
-    // ── 2 & 3. Send alert emails ───────────────────────────────
-    const transporter = buildTransporter();
-    const alertHtml = alertEmailHtml({
-      name: name.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      churchName: churchName.trim(),
-      role: role.trim(),
-      message: message.trim(),
-      ticketRef,
-    });
-
-    const from = process.env.SMTP_FROM ?? `Kereke Hub <${process.env.SMTP_USER}>`;
-    const subject = `Demo request: ${churchName.trim()} (${ticketRef})`;
-
-    // Fire both emails concurrently
-    await Promise.all([
-      transporter.sendMail({
-        from,
-        to: "sifisosibuyane@gmail.com",
-        subject,
-        html: alertHtml,
+    // 3. Notify Sifiso via Brevo — non-blocking
+    sendBrevoEmail({
+      to: ADMIN_EMAIL,
+      subject: `New demo request: ${churchName.trim()} (${ticketRef})`,
+      html: buildAlertEmail({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        churchName: churchName.trim(),
+        role: role.trim(),
+        message: message.trim(),
+        ticketRef,
       }),
-      transporter.sendMail({
-        from,
-        to: "sales@kerekehub.co.za",
-        subject,
-        html: alertHtml,
-      }),
-    ]);
+    }).catch((err) => console.error("[Brevo] Demo request email failed:", err));
 
-    return NextResponse.json(
-      { success: true, ticketRef },
-      { status: 201 }
-    );
+    return NextResponse.json({ success: true, ticketRef }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/demo-request] Error:", err);
     return NextResponse.json(

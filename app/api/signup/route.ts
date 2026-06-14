@@ -40,6 +40,52 @@ function resolveAccountType(email: string, code: string): "internal" | "beta" | 
   return "standard";
 }
 
+// ─── Brevo admin notification ─────────────────────────────────────────────────
+// Fires a transactional email to Sifiso every time a new church signs up.
+async function notifyAdminOfSignup(
+  churchName: string,
+  adminName: string,
+  email: string,
+  accountType: string
+): Promise<void> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return;
+
+  await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": apiKey,
+    },
+    body: JSON.stringify({
+      sender: { name: "Kereke Hub", email: "sifiso@kerekehub.co.za" },
+      to: [{ email: "sifiso@kerekehub.co.za" }],
+      subject: `New church signup: ${churchName}`,
+      htmlContent: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
+          <div style="background:#1A5C38;padding:20px 28px;border-radius:8px 8px 0 0;">
+            <h2 style="color:#fff;margin:0;font-size:18px;">New Church Signup</h2>
+          </div>
+          <div style="background:#f8fafc;padding:24px 28px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;color:#1e293b;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr><td style="padding:6px 0;color:#64748b;width:130px;">Church</td><td style="padding:6px 0;font-weight:700;">${churchName}</td></tr>
+              <tr><td style="padding:6px 0;color:#64748b;">Admin</td><td style="padding:6px 0;">${adminName}</td></tr>
+              <tr><td style="padding:6px 0;color:#64748b;">Email</td><td style="padding:6px 0;"><a href="mailto:${email}" style="color:#059669;">${email}</a></td></tr>
+              <tr><td style="padding:6px 0;color:#64748b;">Account Type</td><td style="padding:6px 0;">${accountType.charAt(0).toUpperCase() + accountType.slice(1)}</td></tr>
+            </table>
+            <div style="margin-top:20px;">
+              <a href="https://hub.kerekehub.co.za/dashboard/admin-settings" style="display:inline-block;background:#1A5C38;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:13px;font-weight:600;">
+                View on Admin Panel
+              </a>
+            </div>
+          </div>
+        </div>
+      `,
+    }),
+  });
+}
+
 // ─── Brevo ────────────────────────────────────────────────────────────────────
 // Adds the new signup as a Brevo contact and enrolls them in the onboarding list.
 // This is fire-and-forget: a Brevo failure never blocks the signup itself.
@@ -188,8 +234,7 @@ export async function POST(req: NextRequest) {
       createdAt: ts,
     });
 
-    // 5. Add to Brevo for onboarding email sequence (non-blocking — Brevo failure
-    //    does NOT prevent the signup from completing successfully)
+    // 5. Add to Brevo for onboarding email sequence (non-blocking)
     addContactToBrevo(
       normalizedEmail,
       adminName.trim(),
@@ -197,6 +242,14 @@ export async function POST(req: NextRequest) {
       accountType,
       billing.trialEndsAt ?? null
     ).catch((err) => console.error("[Brevo] Failed to add contact:", err));
+
+    // 6. Notify Sifiso of the new signup (non-blocking)
+    notifyAdminOfSignup(
+      churchName.trim(),
+      adminName.trim(),
+      normalizedEmail,
+      accountType
+    ).catch((err) => console.error("[Brevo] Admin signup notification failed:", err));
 
     // Client will signInWithEmailAndPassword then call /api/login for the session cookie
     return NextResponse.json({ success: true, tenantId, accountType }, { status: 201 });

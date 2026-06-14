@@ -40,15 +40,32 @@ export async function POST(req: NextRequest) {
     }
 
     if (payment_status === "COMPLETE") {
-      // Subscription activated — update tenant billing status
+      const now = new Date();
+      const amount = parseFloat(amount_gross || "0");
+      const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const invoiceNumber = `INV-${period.replace("-", "")}-${tenantId.slice(0, 6).toUpperCase()}`;
+
+      // Update tenant billing status
       await adminDb.collection("tenants").doc(tenantId).update({
         paymentStatus: "active",
         billingPhase: "active",
-        lastPaymentAt: new Date().toISOString(),
-        lastPaymentAmount: parseFloat(amount_gross || "0"),
-        updatedAt: new Date(),
+        lastPaymentAt: now.toISOString(),
+        lastPaymentAmount: amount,
+        updatedAt: now,
       });
-      console.log(`[itn] Payment confirmed for tenant ${tenantId}`);
+
+      // Log to payments collection for invoice generation
+      await adminDb.collection("payments").add({
+        tenantId,
+        period,
+        amount,
+        invoiceNumber,
+        paidAt: now.toISOString(),
+        paymentRef: params.pf_payment_id || "",
+        createdAt: now.toISOString(),
+      });
+
+      console.log(`[itn] Payment confirmed for tenant ${tenantId}, period ${period}`);
     } else if (payment_status === "CANCELLED") {
       await adminDb.collection("tenants").doc(tenantId).update({
         paymentStatus: "cancelled",

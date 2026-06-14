@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, orderBy, getDocs } from "firebase/firestore";
 
 interface TenantBilling {
   name: string;
@@ -57,11 +57,37 @@ function getNextBillingEvent(t: TenantBilling): {
   return { label: "Full rate", date: null, amount: 159 };
 }
 
+interface PaymentRecord {
+  id: string;
+  period: string; // YYYY-MM
+  amount: number;
+  paidAt: string;
+  invoiceNumber: string;
+}
+
+function buildPeriodOptions(): { label: string; value: string }[] {
+  const options: { label: string; value: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+    options.push({ label, value });
+  }
+  return options;
+}
+
 export default function BillingPage() {
   const [billing, setBilling] = useState<TenantBilling | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [payfastLoading, setPayfastLoading] = useState(false);
+
+  // Invoice state
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
+  const [selectedMonth, setSelectedMonth] = useState<string>(String(new Date().getMonth() + 1).padStart(2, "0"));
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -71,9 +97,28 @@ export default function BillingPage() {
         const snap = await getDoc(doc(db, "tenants", user.uid));
         if (snap.exists()) {
           setBilling(snap.data() as TenantBilling);
+          setCurrentTenantId(user.uid);
         } else {
           setError("Could not load billing information.");
         }
+
+        // Load payment history
+        const paymentsSnap = await getDocs(
+          query(
+            collection(db, "payments"),
+            where("tenantId", "==", user.uid),
+            orderBy("period", "desc")
+          )
+        );
+        setPayments(
+          paymentsSnap.docs.map((d) => ({
+            id: d.id,
+            period: d.data().period || "",
+            amount: d.data().amount || 0,
+            paidAt: d.data().paidAt || "",
+            invoiceNumber: d.data().invoiceNumber || "",
+          }))
+        );
       } catch {
         setError("Failed to fetch billing data.");
       } finally {
@@ -207,6 +252,95 @@ export default function BillingPage() {
             {formatDate(nextEvent.date)}
             {days > 0 && days !== Infinity && ` (${days} day${days === 1 ? "" : "s"} away)`}
           </p>
+        </div>
+      )}
+
+      {/* Invoice generator */}
+      {!isInternal && (
+        <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl p-6 mb-6">
+          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-1">
+            Invoices
+          </h2>
+          <p className="text-slate-400 text-xs mb-5">
+            Generate a PDF invoice for any month you have paid. Select the year and month, then click Generate.
+          </p>
+
+          <div className="flex flex-wrap items-end gap-3">
+            {/* Year picker */}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5">Year</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Month picker */}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5">Month</label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {[
+                  ["01","January"],["02","February"],["03","March"],["04","April"],
+                  ["05","May"],["06","June"],["07","July"],["08","August"],
+                  ["09","September"],["10","October"],["11","November"],["12","December"],
+                ].map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={() => {
+                const period = `${selectedYear}-${selectedMonth}`;
+                window.open(`/api/billing/invoice?period=${period}`, "_blank");
+              }}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors"
+            >
+              Generate Invoice
+            </button>
+          </div>
+
+          {/* Payment history list */}
+          {payments.length > 0 && (
+            <div className="mt-6">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Payment History</p>
+              <div className="space-y-2">
+                {payments.map((p) => {
+                  const [y, m] = p.period.split("-");
+                  const label = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleDateString("en-ZA", {
+                    month: "long",
+                    year: "numeric",
+                  });
+                  return (
+                    <div key={p.id} className="flex items-center justify-between bg-slate-700/40 rounded-lg px-4 py-3">
+                      <div>
+                        <p className="text-white text-sm font-semibold">{label}</p>
+                        <p className="text-slate-400 text-xs">{p.invoiceNumber}</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-emerald-400 font-semibold text-sm">R{p.amount.toFixed(2)}</span>
+                        <button
+                          onClick={() => window.open(`/api/billing/invoice?period=${p.period}`, "_blank")}
+                          className="text-xs text-slate-300 hover:text-white border border-slate-600 hover:border-slate-400 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

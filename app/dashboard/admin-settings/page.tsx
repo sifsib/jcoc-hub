@@ -29,8 +29,11 @@ interface DemoRequest {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   churchName: string;
+  role?: string;
   message: string;
+  status: string; // open | in_progress | closed_signed_up | closed_no_signup
   createdAt: string;
 }
 
@@ -91,6 +94,17 @@ export default function AdminSettingsPage() {
   } | null>(null);
   const [ticketStatusFilter, setTicketStatusFilter] = useState<string>("all");
 
+  // Invoice modal state
+  const [invoiceModal, setInvoiceModal] = useState<{
+    tenantId: string;
+    tenantName: string;
+    year: string;
+    month: string;
+  } | null>(null);
+
+  // Demo delete confirm
+  const [demoDeleteId, setDemoDeleteId] = useState<string | null>(null);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
@@ -141,8 +155,11 @@ export default function AdminSettingsPage() {
             id: d.id,
             name: d.data().name || "-",
             email: d.data().email || "-",
+            phone: d.data().phone || "",
             churchName: d.data().churchName || d.data().church || "-",
+            role: d.data().role || "",
             message: d.data().message || "",
+            status: d.data().status || "open",
             createdAt: d.data().createdAt || "",
           }))
         );
@@ -344,6 +361,69 @@ export default function AdminSettingsPage() {
     }
   };
 
+  // Delete a self-service signup record
+  const deleteSignup = async (signupId: string) => {
+    setActionLoading(signupId);
+    try {
+      await deleteDoc(doc(db, "signups", signupId));
+      setSignups((prev) => prev.filter((s) => s.id !== signupId));
+    } catch (err) {
+      console.error("Failed to delete signup:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Update demo request status
+  const updateDemoStatus = async (demoId: string, newStatus: string) => {
+    setActionLoading(demoId);
+    try {
+      await updateDoc(doc(db, "demo_requests", demoId), {
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      });
+      setDemoRequests((prev) =>
+        prev.map((d) => (d.id === demoId ? { ...d, status: newStatus } : d))
+      );
+    } catch (err) {
+      console.error("Failed to update demo status:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Delete a demo request
+  const deleteDemo = async (demoId: string) => {
+    setActionLoading(demoId);
+    try {
+      await deleteDoc(doc(db, "demo_requests", demoId));
+      setDemoRequests((prev) => prev.filter((d) => d.id !== demoId));
+      setDemoDeleteId(null);
+    } catch (err) {
+      console.error("Failed to delete demo request:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Export demo requests as CSV
+  const exportDemosCSV = () => {
+    const headers = ["Name","Email","Phone","Church","Role","Message","Status","Submitted"];
+    const rows = demoRequests.map((d) => [
+      d.name, d.email, d.phone || "", d.churchName, d.role || "",
+      (d.message || "").replace(/,/g, ";"),
+      d.status, formatDate(d.createdAt),
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `demo-requests-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const formatDate = (val: string) => {
     if (!val) return "-";
     const d = new Date(typeof val === "string" ? val : (val as any)?.toDate?.() ?? val);
@@ -504,6 +584,17 @@ export default function AdminSettingsPage() {
                       <td className="px-6 py-4 text-gray-500">{formatDate(tenant.createdAt)}</td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setInvoiceModal({
+                              tenantId: tenant.id,
+                              tenantName: tenant.name,
+                              year: String(new Date().getFullYear()),
+                              month: String(new Date().getMonth() + 1).padStart(2, "0"),
+                            })}
+                            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition"
+                          >
+                            Invoice
+                          </button>
                           {tenant.status !== "suspended" ? (
                             <button
                               onClick={() => updateTenantStatus(tenant.id, "suspended")}
@@ -594,18 +685,24 @@ export default function AdminSettingsPage() {
                         </td>
                         <td className="px-6 py-4 text-gray-500">{formatDate(s.createdAt)}</td>
                         <td className="px-6 py-4 text-right">
-                          {s.accountType === "standard" && (
+                          <div className="flex items-center justify-end gap-2">
+                            {s.accountType === "standard" && (
+                              <button
+                                onClick={() => convertToBeta(s)}
+                                disabled={actionLoading === s.id}
+                                className="text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                              >
+                                {actionLoading === s.id ? "..." : "Convert to Beta"}
+                              </button>
+                            )}
                             <button
-                              onClick={() => convertToBeta(s)}
+                              onClick={() => deleteSignup(s.id)}
                               disabled={actionLoading === s.id}
-                              className="text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                              className="text-xs font-bold text-gray-500 hover:text-red-700 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
                             >
-                              {actionLoading === s.id ? "..." : "Convert to Beta"}
+                              {actionLoading === s.id ? "..." : "Delete"}
                             </button>
-                          )}
-                          {s.accountType !== "standard" && (
-                            <span className="text-xs text-gray-400 italic">No action</span>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -618,41 +715,108 @@ export default function AdminSettingsPage() {
 
         {/* Demo requests tab */}
         {activeTab === "demos" && (
-          <div className="overflow-x-auto">
+          <div>
+            {/* Toolbar */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-gray-50">
+              <p className="text-sm text-gray-500">{demoRequests.length} request{demoRequests.length !== 1 ? "s" : ""}</p>
+              <button
+                onClick={exportDemosCSV}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-4 py-1.5 rounded-lg transition"
+              >
+                Export to Excel (CSV)
+              </button>
+            </div>
+
             {demoRequests.length === 0 ? (
               <p className="p-8 text-center text-sm text-gray-400">No demo requests yet.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Church</th>
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Message</th>
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Submitted</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {demoRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-gray-900">{req.name}</td>
-                      <td className="px-6 py-4">
-                        <a
-                          href={`mailto:${req.email}`}
-                          className="text-emerald-600 hover:text-emerald-700 hover:underline"
-                        >
-                          {req.email}
-                        </a>
-                      </td>
-                      <td className="px-6 py-4 text-gray-700">{req.churchName}</td>
-                      <td className="px-6 py-4 text-gray-500 max-w-xs truncate" title={req.message}>
-                        {req.message || "-"}
-                      </td>
-                      <td className="px-6 py-4 text-gray-500">{formatDate(req.createdAt)}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Church</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Message</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Submitted</th>
+                      <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {demoRequests.map((req) => {
+                      const DEMO_STATUS_COLORS: Record<string, string> = {
+                        open: "bg-blue-50 text-blue-700 border border-blue-200",
+                        in_progress: "bg-amber-50 text-amber-700 border border-amber-200",
+                        closed_signed_up: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+                        closed_no_signup: "bg-gray-100 text-gray-500 border border-gray-200",
+                      };
+                      const DEMO_STATUS_LABELS: Record<string, string> = {
+                        open: "Open",
+                        in_progress: "In Progress",
+                        closed_signed_up: "Closed - Signed Up",
+                        closed_no_signup: "Closed - No Signup",
+                      };
+                      return (
+                        <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 font-semibold text-gray-900">{req.name}</td>
+                          <td className="px-6 py-4">
+                            <a href={`mailto:${req.email}`} className="text-emerald-600 hover:underline">{req.email}</a>
+                          </td>
+                          <td className="px-6 py-4 text-gray-700">{req.churchName}</td>
+                          <td className="px-6 py-4 text-gray-500 max-w-xs truncate" title={req.message}>{req.message || "-"}</td>
+                          <td className="px-6 py-4 text-gray-500">{formatDate(req.createdAt)}</td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold ${DEMO_STATUS_COLORS[req.status] ?? "bg-gray-100 text-gray-500"}`}>
+                              {DEMO_STATUS_LABELS[req.status] ?? req.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <select
+                                value={req.status}
+                                onChange={(e) => updateDemoStatus(req.id, e.target.value)}
+                                disabled={actionLoading === req.id}
+                                className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+                              >
+                                <option value="open">Open</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="closed_signed_up">Closed - Signed Up</option>
+                                <option value="closed_no_signup">Closed - No Signup</option>
+                              </select>
+                              {demoDeleteId === req.id ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-red-600 font-semibold">Sure?</span>
+                                  <button
+                                    onClick={() => deleteDemo(req.id)}
+                                    disabled={actionLoading === req.id}
+                                    className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-2 py-1 rounded-lg transition disabled:opacity-50"
+                                  >
+                                    Yes
+                                  </button>
+                                  <button
+                                    onClick={() => setDemoDeleteId(null)}
+                                    className="text-xs font-bold text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg border border-gray-200 transition"
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDemoDeleteId(req.id)}
+                                  className="text-xs font-bold text-gray-500 hover:text-red-700 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-3 py-1.5 rounded-lg transition"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}
@@ -868,6 +1032,68 @@ export default function AdminSettingsPage() {
               </>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* ── Invoice Generator Modal ── */}
+      {invoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-sm mx-4 p-6 flex flex-col gap-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-lg">🧾</div>
+              <div>
+                <p className="text-base font-bold text-gray-900">Generate Invoice</p>
+                <p className="text-sm text-gray-500 mt-0.5">For <strong>{invoiceModal.tenantName}</strong>. Select the billing period.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Year</label>
+                <select
+                  value={invoiceModal.year}
+                  onChange={(e) => setInvoiceModal((prev) => prev ? { ...prev, year: e.target.value } : null)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                >
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                    <option key={y} value={String(y)}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Month</label>
+                <select
+                  value={invoiceModal.month}
+                  onChange={(e) => setInvoiceModal((prev) => prev ? { ...prev, month: e.target.value } : null)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                >
+                  {[
+                    ["01","January"],["02","February"],["03","March"],["04","April"],
+                    ["05","May"],["06","June"],["07","July"],["08","August"],
+                    ["09","September"],["10","October"],["11","November"],["12","December"],
+                  ].map(([val, label]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setInvoiceModal(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const period = `${invoiceModal.year}-${invoiceModal.month}`;
+                  window.open(`/api/billing/invoice?period=${period}&tenantId=${invoiceModal.tenantId}`, "_blank");
+                  setInvoiceModal(null);
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+              >
+                Open Invoice
+              </button>
+            </div>
           </div>
         </div>
       )}
