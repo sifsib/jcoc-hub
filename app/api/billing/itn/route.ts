@@ -63,20 +63,3 @@ export async function POST(req: NextRequest) {
         paidAt: now.toISOString(),
         paymentRef: params.pf_payment_id || "",
         createdAt: now.toISOString(),
-      });
-
-      console.log(`[itn] Payment confirmed for tenant ${tenantId}, period ${period}`);
-    } else if (payment_status === "CANCELLED") {
-      await adminDb.collection("tenants").doc(tenantId).update({
-        paymentStatus: "cancelled",
-        updatedAt: new Date(),
-      });
-      console.log(`[itn] Payment cancelled for tenant ${tenantId}`);
-    }
-
-    return new NextResponse("OK", { status: 200 });
-  } catch (err) {
-    console.error("[itn] Error:", err);
-    return new NextResponse("Server error", { status: 500 });
-  }
-}
