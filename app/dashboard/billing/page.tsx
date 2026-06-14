@@ -266,4 +266,128 @@ export default function BillingPage() {
           </p>
 
           <div className="flex flex-wrap items-end gap-3">
-            {/* Year
+            {/* Year picker */}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5">Year</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Month picker */}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5">Month</label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {[
+                  ["01","January"],["02","February"],["03","March"],["04","April"],
+                  ["05","May"],["06","June"],["07","July"],["08","August"],
+                  ["09","September"],["10","October"],["11","November"],["12","December"],
+                ].map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={() => {
+                const period = `${selectedYear}-${selectedMonth}`;
+                window.open(`/api/billing/invoice?period=${period}`, "_blank");
+              }}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors"
+            >
+              Generate Invoice
+            </button>
+          </div>
+
+          {/* Payment history list */}
+          {payments.length > 0 && (
+            <div className="mt-6">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Payment History</p>
+              <div className="space-y-2">
+                {payments.map((p) => {
+                  const [y, m] = p.period.split("-");
+                  const label = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleDateString("en-ZA", {
+                    month: "long",
+                    year: "numeric",
+                  });
+                  return (
+                    <div key={p.id} className="flex items-center justify-between bg-slate-700/40 rounded-lg px-4 py-3">
+                      <div>
+                        <p className="text-white text-sm font-semibold">{label}</p>
+                        <p className="text-slate-400 text-xs">{p.invoiceNumber}</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-emerald-400 font-semibold text-sm">R{p.amount.toFixed(2)}</span>
+                        <button
+                          onClick={() => window.open(`/api/billing/invoice?period=${p.period}`, "_blank")}
+                          className="text-xs text-slate-300 hover:text-white border border-slate-600 hover:border-slate-400 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payment status */}
+      {!isInternal && (
+        <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">
+            Payment Method
+          </h2>
+
+          {isPaid ? (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-emerald-900/40 flex items-center justify-center">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm">Recurring subscription active</p>
+                <p className="text-slate-400 text-xs">Managed via PayFast. Cancel anytime by contacting support.</p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-slate-400 text-sm mb-4">
+                No payment method set up yet. You will need to add one before your free period ends
+                to keep your account active.
+              </p>
+              {error && (
+                <p className="text-red-400 text-sm bg-red-900/20 px-4 py-2 rounded-lg mb-4">{error}</p>
+              )}
+              {needsPayment && (
+                <button
+                  onClick={handleSetupPayment}
+                  disabled={payfastLoading}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors"
+                >
+                  {payfastLoading ? "Redirecting to PayFast..." : `Set Up Payment (R${nextEvent.amount}/mo)`}
+                </button>
+              )}
+              <p className="text-slate-500 text-xs mt-3">
+                You will be taken to PayFast to securely enter your card details. Kereke Hub never stores payment information.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

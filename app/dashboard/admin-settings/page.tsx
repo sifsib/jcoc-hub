@@ -899,4 +899,205 @@ export default function AdminSettingsPage() {
                           key={ticket.id}
                           className="hover:bg-gray-50 transition-colors cursor-pointer"
                           onClick={() => setExpandedTicket(expandedTicket === ticket.id ? null : ticket.id)}
-        
+                        >
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-xs text-emerald-600 font-semibold">{ticket.ticketRef}</span>
+                            {ticket.priority === "urgent" && (
+                              <span className="ml-2 text-xs bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full font-bold">Urgent</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 font-medium text-gray-900 max-w-[220px] truncate" title={ticket.subject}>
+                            {ticket.subject}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-gray-800 font-medium text-xs">{ticket.name}</div>
+                            <a
+                              href={`mailto:${ticket.email}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-emerald-600 hover:underline text-xs"
+                            >
+                              {ticket.email}
+                            </a>
+                            {ticket.churchName && (
+                              <div className="text-gray-400 text-xs">{ticket.churchName}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 text-xs capitalize">
+                            {CATEGORY_LABELS[ticket.category] ?? ticket.category}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={ticketStatusBadge(ticket.status)}>
+                              {statusLabel[ticket.status] ?? ticket.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 text-xs">{formatDate(ticket.createdAt)}</td>
+                          <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => updateTicketStatus(ticket.id, ticket.status)}
+                              disabled={actionLoading === ticket.id}
+                              className="text-xs font-bold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50 whitespace-nowrap"
+                            >
+                              {actionLoading === ticket.id
+                                ? "..."
+                                : (TICKET_STATUS_ACTION[ticket.status] ?? "Update")}
+                            </button>
+                          </td>
+                        </tr>
+
+                        {/* Expanded message row */}
+                        {expandedTicket === ticket.id && (
+                          <tr key={`${ticket.id}-expanded`} className="bg-amber-50/40">
+                            <td colSpan={7} className="px-6 py-4 border-b border-amber-100">
+                              <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Message</div>
+                              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{ticket.message || "No message content."}</p>
+                              {ticket.phone && (
+                                <p className="text-xs text-gray-500 mt-2">Phone: {ticket.phone}</p>
+                              )}
+                              <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+                                <span>Source: {ticket.source === "dashboard" ? "Hub Dashboard" : "Public Form"}</span>
+                                {ticket.tenantId && <span>Tenant ID: {ticket.tenantId}</span>}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+      {/* ── Delete Tenant Modal ── */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md mx-4 p-6 flex flex-col gap-5">
+
+            {/* Step 1: Warning */}
+            {deleteConfirm.step === 1 && (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-lg">🗑️</div>
+                  <div>
+                    <p className="text-base font-bold text-gray-900">Delete Church Account</p>
+                    <p className="text-sm text-gray-500 mt-0.5">This will permanently delete <strong>{deleteConfirm.tenantName}</strong> and all their data — members, attendance, finance records, and everything else. This cannot be undone.</p>
+                  </div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-medium">
+                  All church data will be wiped from the platform permanently.
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                  <button onClick={() => setDeleteConfirm(prev => prev ? { ...prev, step: 2 } : null)} className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition">
+                    Yes, I want to delete this church
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2: Type church name to confirm */}
+            {deleteConfirm.step === 2 && (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-lg">⚠️</div>
+                  <div>
+                    <p className="text-base font-bold text-gray-900">Final Confirmation</p>
+                    <p className="text-sm text-gray-500 mt-0.5">Type the church name exactly to confirm deletion.</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Type <span className="text-red-600 font-mono">{deleteConfirm.tenantName}</span> to confirm
+                  </label>
+                  <input
+                    autoFocus
+                    value={deleteConfirm.inputValue}
+                    onChange={e => setDeleteConfirm(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-400"
+                    placeholder={deleteConfirm.tenantName}
+                  />
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                  <button
+                    onClick={() => deleteTenant(deleteConfirm.tenantId)}
+                    disabled={deleteConfirm.inputValue !== deleteConfirm.tenantName || deleteConfirm.deleting}
+                    className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {deleteConfirm.deleting && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                    {deleteConfirm.deleting ? "Deleting..." : "Permanently Delete"}
+                  </button>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ── Invoice Generator Modal ── */}
+      {invoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-sm mx-4 p-6 flex flex-col gap-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-lg">🧾</div>
+              <div>
+                <p className="text-base font-bold text-gray-900">Generate Invoice</p>
+                <p className="text-sm text-gray-500 mt-0.5">For <strong>{invoiceModal.tenantName}</strong>. Select the billing period.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Year</label>
+                <select
+                  value={invoiceModal.year}
+                  onChange={(e) => setInvoiceModal((prev) => prev ? { ...prev, year: e.target.value } : null)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                >
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                    <option key={y} value={String(y)}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Month</label>
+                <select
+                  value={invoiceModal.month}
+                  onChange={(e) => setInvoiceModal((prev) => prev ? { ...prev, month: e.target.value } : null)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                >
+                  {[
+                    ["01","January"],["02","February"],["03","March"],["04","April"],
+                    ["05","May"],["06","June"],["07","July"],["08","August"],
+                    ["09","September"],["10","October"],["11","November"],["12","December"],
+                  ].map(([val, label]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setInvoiceModal(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const period = `${invoiceModal.year}-${invoiceModal.month}`;
+                  window.open(`/api/billing/invoice?period=${period}&tenantId=${invoiceModal.tenantId}`, "_blank");
+                  setInvoiceModal(null);
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+              >
+                Open Invoice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
