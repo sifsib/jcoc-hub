@@ -284,6 +284,7 @@ function generateInvoiceHTML(data: {
   <div class="invoice-wrap">
     <div class="header">
       <div class="header-left">
+        <img src="https://hub.kerekehub.co.za/kereke-logo.jpg" alt="Kereke Hub" style="height:48px; width:auto; display:block; margin-bottom:12px; border-radius:6px;" />
         <h1>INVOICE</h1>
         <p>KEREKEHUB (PTY) LTD</p>
       </div>
