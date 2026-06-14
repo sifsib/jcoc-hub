@@ -82,7 +82,7 @@ export default function CommunicationsPage() {
   const tenantId = appUser?.tenantId ?? null;
 
   // ── Channel ──
-  const [channel, setChannel] = useState<"whatsapp" | "email">("whatsapp");
+  const [channel, setChannel] = useState<"whatsapp" | "email" | "mailing">("whatsapp");
 
   // ── WhatsApp state ──
   const [waTab, setWaTab] = useState<"compose" | "history">("compose");
@@ -113,6 +113,26 @@ export default function CommunicationsPage() {
   // History
   const [emailHistory, setEmailHistory] = useState<EmailBroadcast[]>([]);
   const [emailHistoryLoading, setEmailHistoryLoading] = useState(false);
+
+
+  // ── Mailing list state ──
+  interface BrevoList { id: number; name: string; totalSubscribers: number }
+  const [mailingSettings, setMailingSettings] = useState<{
+    brevoMailingListId: number | null;
+    brevoMailingListName: string;
+    brevoWelcomeTemplateId: string;
+    brevoBirthdayTemplateId: string;
+  } | null>(null);
+  const [mailingLists, setMailingLists] = useState<BrevoList[]>([]);
+  const [mailingLoading, setMailingLoading] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [creatingList, setCreatingList] = useState(false);
+  const [createListError, setCreateListError] = useState("");
+  const [createListSuccess, setCreateListSuccess] = useState("");
+  const [welcomeTemplateId, setWelcomeTemplateId] = useState("");
+  const [birthdayTemplateId, setBirthdayTemplateId] = useState("");
+  const [savingTemplates, setSavingTemplates] = useState(false);
+  const [templateSaveMsg, setTemplateSaveMsg] = useState("");
 
   // ── Load WhatsApp history ──
   useEffect(() => {
@@ -196,6 +216,24 @@ export default function CommunicationsPage() {
       .catch(console.error)
       .finally(() => setEmailHistoryLoading(false));
   }, [channel, emailTab, tenantId, emailSuccess]);
+
+
+  // ── Load mailing settings + lists when Mailing channel opens ──
+  useEffect(() => {
+    if (channel !== "mailing" || mailingSettings !== null) return;
+    setMailingLoading(true);
+    Promise.all([
+      fetch("/api/brevo/settings").then((r) => r.json()).catch(() => null),
+      fetch("/api/brevo/lists").then((r) => r.json()).catch(() => ({ lists: [] })),
+    ]).then(([settings, listsData]) => {
+      if (settings && !settings.error) {
+        setMailingSettings(settings);
+        setWelcomeTemplateId(settings.brevoWelcomeTemplateId || "");
+        setBirthdayTemplateId(settings.brevoBirthdayTemplateId || "");
+      }
+      setMailingLists(listsData?.lists || []);
+    }).finally(() => setMailingLoading(false));
+  }, [channel, mailingSettings]);
 
   // ── WhatsApp send ──
   async function handleWaSend(e: React.FormEvent) {
@@ -281,6 +319,65 @@ export default function CommunicationsPage() {
     }
   }
 
+
+  // ── Create mailing list ──
+  async function handleCreateList(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newListName.trim()) { setCreateListError("List name is required."); return; }
+    setCreatingList(true);
+    setCreateListError("");
+    setCreateListSuccess("");
+    try {
+      const res = await fetch("/api/brevo/lists", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ listName: newListName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setCreateListError(data.error || "Something went wrong."); return; }
+      setCreateListSuccess(
+        `List "${data.listName}" created and ${data.syncedCount} member${data.syncedCount !== 1 ? "s" : ""} synced to Brevo.`
+      );
+      setMailingSettings((prev) => prev ? { ...prev, brevoMailingListId: data.listId, brevoMailingListName: data.listName } : prev);
+      setMailingLists((prev) => [{ id: data.listId, name: data.listName, totalSubscribers: data.syncedCount }, ...prev]);
+      setNewListName("");
+    } catch {
+      setCreateListError("Could not reach the server.");
+    } finally {
+      setCreatingList(false);
+    }
+  }
+
+  // ── Save template IDs ──
+  async function handleSaveTemplates(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingTemplates(true);
+    setTemplateSaveMsg("");
+    try {
+      await fetch("/api/brevo/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ brevoWelcomeTemplateId: welcomeTemplateId, brevoBirthdayTemplateId: birthdayTemplateId }),
+      });
+      setTemplateSaveMsg("Saved!");
+      setTimeout(() => setTemplateSaveMsg(""), 3000);
+    } catch {
+      setTemplateSaveMsg("Error saving. Please try again.");
+    } finally {
+      setSavingTemplates(false);
+    }
+  }
+
+  // ── Set active list ──
+  async function handleSetActiveList(list: { id: number; name: string }) {
+    await fetch("/api/brevo/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ brevoMailingListId: list.id, brevoMailingListName: list.name }),
+    });
+    setMailingSettings((prev) => prev ? { ...prev, brevoMailingListId: list.id, brevoMailingListName: list.name } : prev);
+  }
+
   if (userLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -304,7 +401,7 @@ export default function CommunicationsPage() {
 
       {/* ── Channel tabs ── */}
       <div className="flex gap-1 border-b border-slate-700">
-        {(["whatsapp", "email"] as const).map((ch) => (
+        {(["whatsapp", "email", "mailing"] as const).map((ch) => (
           <button
             key={ch}
             onClick={() => setChannel(ch)}
@@ -322,13 +419,20 @@ export default function CommunicationsPage() {
                 </svg>
                 WhatsApp
               </>
-            ) : (
+            ) : ch === "email" ? (
               <>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                   <polyline points="22,6 12,13 2,6"/>
                 </svg>
                 Email
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                  <path d="M19 11H5m14 0l-4-4m4 4l-4 4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Mailing Lists
               </>
             )}
           </button>
@@ -743,6 +847,249 @@ export default function CommunicationsPage() {
             </div>
           )}
         </>
+      )}
+
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          MAILING LISTS CHANNEL
+      ══════════════════════════════════════════════════════════════════════ */}
+      {channel === "mailing" && (
+        <div className="space-y-6">
+          {/* ── Selling point banner ── */}
+          <div className="bg-gradient-to-r from-emerald-900/40 to-slate-800/60 border border-emerald-700/50 rounded-xl p-5">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-emerald-800/60 border border-emerald-700/40 flex items-center justify-center flex-shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5 text-emerald-400">
+                  <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Connect your church to Brevo</h3>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  When Brevo is connected, Kereke Hub automatically: adds new members to your mailing list the moment they are registered, sends them your custom welcome email using a template you designed in Brevo, and wishes members happy birthday on their special day without you lifting a finger.
+                </p>
+                <p className="text-xs text-emerald-400 mt-2 font-medium">
+                  Need help setting this up? Contact{" "}
+                  <a href="mailto:sifiso@kerekehub.co.za" className="underline hover:text-emerald-300">sifiso@kerekehub.co.za</a>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── How-to steps ── */}
+          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-white">How it works</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                {
+                  icon: (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5 text-emerald-400">
+                      <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ),
+                  title: "1. Connect Brevo",
+                  desc: "Go to Email > Setup and paste your Brevo API key. Takes 60 seconds.",
+                },
+                {
+                  icon: (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5 text-emerald-400">
+                      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ),
+                  title: "2. Create a list",
+                  desc: "Create a mailing list below. All current members with emails are synced to it automatically.",
+                },
+                {
+                  icon: (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5 text-emerald-400">
+                      <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ),
+                  title: "3. Set templates",
+                  desc: "Design your welcome and birthday emails in Brevo, then paste the template ID below.",
+                },
+              ].map((step) => (
+                <div key={step.title} className="bg-slate-900/40 border border-slate-700/50 rounded-lg p-4 space-y-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-900/40 border border-emerald-700/30 flex items-center justify-center">
+                    {step.icon}
+                  </div>
+                  <p className="text-xs font-semibold text-slate-200">{step.title}</p>
+                  <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {mailingLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <span className="w-5 h-5 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin" />
+            </div>
+          ) : !brevoStatus?.connected ? (
+            <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-8 text-center space-y-3">
+              <p className="text-slate-300 text-sm font-medium">Brevo not connected</p>
+              <p className="text-slate-500 text-xs">Connect your Brevo account under Email > Setup first.</p>
+              <button
+                onClick={() => { setChannel("email"); setEmailTab("setup"); }}
+                className="mt-2 inline-flex items-center gap-1.5 text-emerald-400 text-sm font-medium hover:text-emerald-300 transition-colors"
+              >
+                Go to Email Setup
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* Active list status */}
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+                mailingSettings?.brevoMailingListId
+                  ? "bg-emerald-900/20 border-emerald-700/50"
+                  : "bg-slate-800/60 border-slate-700"
+              }`}>
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${mailingSettings?.brevoMailingListId ? "bg-emerald-400" : "bg-slate-500"}`} />
+                <div>
+                  <p className="text-sm font-medium text-white">
+                    {mailingSettings?.brevoMailingListId
+                      ? `Active list: ${mailingSettings.brevoMailingListName}`
+                      : "No active mailing list"}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {mailingSettings?.brevoMailingListId
+                      ? "New members are auto-added to this list when they are registered."
+                      : "Create a list below or select an existing one to enable auto-add."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Create new list */}
+              <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
+                <h3 className="text-sm font-semibold text-white">Create a new mailing list</h3>
+                <p className="text-xs text-slate-400">
+                  This creates the list in Brevo and exports all current active members to it instantly.
+                  Future members are added automatically when they are registered.
+                </p>
+                <form onSubmit={handleCreateList} className="flex gap-3">
+                  <input
+                    type="text"
+                    value={newListName}
+                    onChange={(e) => setNewListName(e.target.value)}
+                    placeholder={`e.g. ${brevoStatus?.senderName || "Church"} Members`}
+                    className="flex-1 bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                  />
+                  <button
+                    type="submit"
+                    disabled={creatingList || !newListName.trim()}
+                    className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    {creatingList ? (
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                        <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
+                      </svg>
+                    )}
+                    {creatingList ? "Creating..." : "Create + Export"}
+                  </button>
+                </form>
+                {createListError && (
+                  <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">{createListError}</p>
+                )}
+                {createListSuccess && (
+                  <p className="text-sm text-emerald-400 bg-emerald-900/20 border border-emerald-800/40 rounded-lg px-3 py-2">{createListSuccess}</p>
+                )}
+              </div>
+
+              {/* Existing lists */}
+              {mailingLists.length > 0 && (
+                <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-3">
+                  <h3 className="text-sm font-semibold text-white">Your Brevo lists</h3>
+                  <div className="space-y-2">
+                    {mailingLists.map((list) => {
+                      const isActive = list.id === mailingSettings?.brevoMailingListId;
+                      return (
+                        <div key={list.id} className={`flex items-center justify-between gap-4 px-4 py-3 rounded-lg border ${isActive ? "bg-emerald-900/20 border-emerald-700/50" : "bg-slate-900/40 border-slate-700/50"}`}>
+                          <div>
+                            <p className={`text-sm font-medium ${isActive ? "text-emerald-300" : "text-slate-200"}`}>{list.name}</p>
+                            <p className="text-xs text-slate-500">{list.totalSubscribers} subscriber{list.totalSubscribers !== 1 ? "s" : ""}</p>
+                          </div>
+                          {isActive ? (
+                            <span className="text-xs text-emerald-400 font-medium px-2.5 py-1 rounded-full bg-emerald-900/40 border border-emerald-700/40">Active</span>
+                          ) : (
+                            <button
+                              onClick={() => handleSetActiveList(list)}
+                              className="text-xs text-slate-400 hover:text-emerald-400 font-medium transition-colors"
+                            >
+                              Set as active
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Template ID settings */}
+              <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Automation templates</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Design these emails in your Brevo account under <span className="text-slate-300">Email Campaigns > Templates</span>. Copy the template ID (the number in the URL) and paste it here.
+                  </p>
+                </div>
+                <form onSubmit={handleSaveTemplates} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-emerald-400">
+                        <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Welcome email template ID
+                    </label>
+                    <input
+                      type="text"
+                      value={welcomeTemplateId}
+                      onChange={(e) => setWelcomeTemplateId(e.target.value)}
+                      placeholder="e.g. 42"
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition font-mono"
+                    />
+                    <p className="text-xs text-slate-500">Sent automatically when a new member is added to the roster.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-emerald-400">
+                        <path d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-1.5-.454M9 6l3 3m0 0l3-3m-3 3V2m0 16l3 3m-3-3l-3 3" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Birthday email template ID
+                    </label>
+                    <input
+                      type="text"
+                      value={birthdayTemplateId}
+                      onChange={(e) => setBirthdayTemplateId(e.target.value)}
+                      placeholder="e.g. 57"
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition font-mono"
+                    />
+                    <p className="text-xs text-slate-500">Sent automatically on each member's birthday at 8am SAST.</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-500">
+                      Both templates can use <code className="text-emerald-400 bg-slate-900/60 px-1 rounded">{"{{params.FIRSTNAME}}"}</code> and <code className="text-emerald-400 bg-slate-900/60 px-1 rounded">{"{{params.LASTNAME}}"}</code> as merge tags.
+                    </p>
+                    <button
+                      type="submit"
+                      disabled={savingTemplates}
+                      className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                    >
+                      {savingTemplates ? (
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : null}
+                      {templateSaveMsg || (savingTemplates ? "Saving..." : "Save")}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

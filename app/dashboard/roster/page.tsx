@@ -454,6 +454,14 @@ export default function ManageMembershipPage() {
   const [pendingLoading, setPendingLoading] = useState(false);
   const [showJoinLink, setShowJoinLink] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
+  // ── Filter state ──
+  const [filterMinistryGroup, setFilterMinistryGroup] = useState("");
+  const [filterMaritalStatus, setFilterMaritalStatus] = useState("");
+  const [filterCellRegion, setFilterCellRegion] = useState("");
+  const [filterBornAgain, setFilterBornAgain] = useState("");
+  const [filterWaterBaptized, setFilterWaterBaptized] = useState("");
+  const [filterMembershipType, setFilterMembershipType] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const [config, setConfig] = useState<TenantConfig>({
     ministries: DEFAULT_MINISTRIES,
     membershipTypes: DEFAULT_MEMBERSHIP_TYPES,
@@ -1191,6 +1199,18 @@ export default function ManageMembershipPage() {
 
   // ─── Loading ────────────────────────────────────────────────────────────────
 
+  // ── Derived: filtered members ─────────────────────────────────────────────
+  const filteredMembers = members.filter((m) => {
+    if (filterMinistryGroup && m.ministryGroup !== filterMinistryGroup) return false;
+    if (filterMaritalStatus && m.maritalStatus !== filterMaritalStatus) return false;
+    if (filterCellRegion && m.cellRegion !== filterCellRegion) return false;
+    if (filterBornAgain && m.faithStatus?.bornAgain !== filterBornAgain) return false;
+    if (filterWaterBaptized && m.faithStatus?.waterBaptized !== filterWaterBaptized) return false;
+    if (filterMembershipType && m.membershipType !== filterMembershipType) return false;
+    return true;
+  });
+  const activeFilters = [filterMinistryGroup, filterMaritalStatus, filterCellRegion, filterBornAgain, filterWaterBaptized, filterMembershipType].filter(Boolean).length;
+
   if (userLoading || loading) {
     return (
       <div className="p-10 flex items-center gap-2">
@@ -1914,7 +1934,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
           {/* ── Export button (CSV/XLSX) ── */}
           <ExportMemberButton
-            data={members.map(m => {
+            data={filteredMembers.map(m => {
               const a = (m as any).address || {};
               const addrParts = [a.line1, a.line2, a.suburb, a.town, a.postalCode].filter(Boolean);
               return {
@@ -1976,13 +1996,128 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
         </div>
       )}
 
+
+      {/* ── Filter panel ── */}
+      <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+        <div className="px-5 py-3 flex items-center justify-between gap-4">
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+              <path d="M3 4h18M7 8h10M10 12h4" strokeLinecap="round"/>
+            </svg>
+            {showFilters ? "Hide Filters" : "Filter Members"}
+            {activeFilters > 0 && (
+              <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {activeFilters}
+              </span>
+            )}
+          </button>
+          {activeFilters > 0 && (
+            <button
+              onClick={() => {
+                setFilterMinistryGroup(""); setFilterMaritalStatus("");
+                setFilterCellRegion(""); setFilterBornAgain("");
+                setFilterWaterBaptized(""); setFilterMembershipType("");
+              }}
+              className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+            >
+              Clear all filters
+            </button>
+          )}
+        </div>
+
+        {showFilters && (
+          <div className="px-5 pb-4 border-t border-gray-100 pt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {/* Ministry Group */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Ministry Group</label>
+              <select
+                value={filterMinistryGroup}
+                onChange={(e) => setFilterMinistryGroup(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All</option>
+                {config.ministryGroups.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+
+            {/* Marital Status */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Marital Status</label>
+              <select
+                value={filterMaritalStatus}
+                onChange={(e) => setFilterMaritalStatus(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All</option>
+                {["Single", "Married", "Divorced", "Widowed", "Separated"].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            {/* Cell Region / Branch */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cell Region / Branch</label>
+              <select
+                value={filterCellRegion}
+                onChange={(e) => setFilterCellRegion(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All</option>
+                {config.cellRegions.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+
+            {/* Born Again */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Born Again?</label>
+              <select
+                value={filterBornAgain}
+                onChange={(e) => setFilterBornAgain(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All</option>
+                {["Yes", "No", "Not Sure"].map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+
+            {/* Water Baptized */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Water Baptized?</label>
+              <select
+                value={filterWaterBaptized}
+                onChange={(e) => setFilterWaterBaptized(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All</option>
+                {["Yes", "No", "Not Yet"].map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+
+            {/* Type of Membership */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Type of Membership</label>
+              <select
+                value={filterMembershipType}
+                onChange={(e) => setFilterMembershipType(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All</option>
+                {config.membershipTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b bg-gray-50">
-          <p className="text-sm font-bold text-gray-700">Active Register — {members.length} member{members.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm font-bold text-gray-700">Active Register — {filteredMembers.length}{activeFilters > 0 ? ` of ${members.length}` : ""} member{filteredMembers.length !== 1 ? "s" : ""}</p>
         </div>
-        {members.length === 0 ? (
+        {filteredMembers.length === 0 ? (
           <div className="p-10 text-center text-gray-400 text-sm">
-            No members yet. Use <strong>+ Add Member</strong> to register your first member, or <strong>Import Members</strong> to import from your website.
+            {members.length === 0 ? (<>No members yet. Use <strong>+ Add Member</strong> to register your first member, or <strong>Import Members</strong> to import from your website.</>) : (<>No members match the current filters. <button onClick={() => { setFilterMinistryGroup(""); setFilterMaritalStatus(""); setFilterCellRegion(""); setFilterBornAgain(""); setFilterWaterBaptized(""); setFilterMembershipType(""); }} className="text-blue-600 underline font-medium">Clear filters</button></>)}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1997,7 +2132,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {members.map(m => {
+                {filteredMembers.map(m => {
                   const days = daysUntilBirthday(m.dob);
                   return (
                     <tr key={m.id} className="hover:bg-gray-50/70 transition-colors">

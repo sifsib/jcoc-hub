@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quick Question - Kereke Hub</title>
+  <!--
+    KEREKE HUB - EMAIL 5: Survey Email
+    Timing: 28 days after signup
+    Subject: Quick question, {{ contact.FIRSTNAME }} - 2 minutes
+    Preview: We want to know how your experience has been.
+
+    BEFORE GOING LIVE:
+    1. Replace https://hub.kerekehub.co.za/kereke-logo.jpg with your hosted logo URL (run brevo-emails/upload-logo.js)
+    2. Replace https://hub.kerekehub.co.za/dashboard/feedback with your Google Form / Tally / Typeform URL
+  -->
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+
+  <div style="display:none;max-height:0;overflow:hidden;color:#f4f4f4;font-size:1px;">
+    We want to know how your experience has been.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f4f4;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+          <!-- HEADER -->
+          <tr>
+            <td align="center" style="background-color:#1A5C38;padding:32px 40px;">
+              <img src="https://hub.kerekehub.co.za/kereke-logo.jpg" alt="Kereke Hub" width="180" style="display:block;max-width:180px;height:auto;" />
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#2E7D4F;height:4px;line-height:4px;font-size:4px;">&nbsp;</td>
+          </tr>
+
+          <!-- EMAIL LABEL -->
+          <tr>
+            <td style="background-color:#E8F5EE;padding:10px 48px;">
+              <p style="margin:0;font-size:12px;color:#2E7D4F;font-weight:bold;letter-spacing:0.8px;text-transform:uppercase;">Day 28 - Feedback</p>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:36px 48px 32px 48px;color:#2C3E50;font-size:16px;line-height:1.7;">
+
+              <p style="margin:0 0 20px 0;">Hi {{ contact.FIRSTNAME }},</p>
+
+              <p style="margin:0 0 20px 0;">
+                You're near the end of your Kereke Hub trial. Before we get to what happens next, I have one question.
+              </p>
+
+              <!-- Big question -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
+                <tr>
+                  <td align="center" style="padding:32px 24px;background-color:#f7fbf9;border-radius:8px;border:1px solid #c8e6d4;">
+                    <p style="margin:0 0 6px 0;font-size:26px;color:#1A5C38;font-weight:bold;line-height:1.3;">How has it been?</p>
+                    <p style="margin:0;font-size:15px;color:#5a7a65;">We have a short 3-question survey. It takes about 2 minutes.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 28px 0;">
+                Your feedback directly shapes what we build next.
+              </p>
+
+              <!-- Survey CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 32px auto;">
+                <tr>
+                  <td align="center" style="border-radius:6px;background-color:#1A5C38;">
+                    <a href="https://hub.kerekehub.co.za/dashboard/feedback" target="_blank"
+                       style="display:inline-block;padding:16px 40px;color:#ffffff;font-size:16px;font-weight:bold;text-decoration:none;border-radius:6px;letter-spacing:0.3px;">
+                      Take the 2-Minute Survey
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <hr style="border:none;border-top:1px solid #e8ede9;margin:0 0 28px 0;" />
+
+              <p style="margin:0 0 6px 0;font-size:15px;color:#2C3E50;">
+                Whether the experience has been great, okay, or frustrating, we want to hear it. Honest feedback helps us improve Kereke Hub for every church in South Africa.
+              </p>
+
+              <p style="margin:20px 0 6px 0;font-size:15px;color:#2C3E50;">
+                If you'd rather just tell us directly, reply here. We read every response.
+              </p>
+
+              <p style="margin:24px 0 6px 0;font-size:15px;color:#2C3E50;">Thank you,</p>
+              <p style="margin:0;font-size:15px;color:#2C3E50;font-weight:bold;">The Kereke Hub Team</p>
+              <p style="margin:4px 0 0 0;font-size:14px;">
+                <a href="mailto:sifiso@kerekehub.co.za" style="color:#2E7D4F;text-decoration:none;">sifiso@kerekehub.co.za</a>
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background-color:#E8F5EE;padding:24px 48px;border-top:1px solid #c8e6d4;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 6px 0;font-size:13px;color:#5a7a65;">
+                      <a href="https://hub.kerekehub.co.za" style="color:#1A5C38;font-weight:bold;text-decoration:none;">hub.kerekehub.co.za</a>
+                      &nbsp;&bull;&nbsp;
+                      <a href="mailto:sifiso@kerekehub.co.za" style="color:#1A5C38;text-decoration:none;">sifiso@kerekehub.co.za</a>
+                    </p>
+                    <p style="margin:0;font-size:12px;color:#8aab95;">You received this because you signed up for a Kereke Hub trial.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

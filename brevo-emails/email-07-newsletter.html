@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kereke Hub Newsletter</title>
+  <!--
+    KEREKE HUB - EMAIL 7: Monthly Newsletter Template
+    Timing: Ongoing - send manually each month as a Brevo campaign
+    Subject: Kereke Hub  |  [MONTH YEAR]  -  [ONE-LINE HEADLINE]
+    Preview: [One sentence teaser about the main story]
+
+    HOW TO USE THIS TEMPLATE:
+    Replace every [BRACKETED PLACEHOLDER] before sending.
+    Keep total word count under 300 words.
+    One main story per month is enough.
+    Brevo adds the unsubscribe link automatically.
+    Never send more than one newsletter per month.
+
+    BEFORE GOING LIVE:
+    1. Replace https://hub.kerekehub.co.za/kereke-logo.jpg with your hosted logo URL (run brevo-emails/upload-logo.js)
+  -->
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+
+  <div style="display:none;max-height:0;overflow:hidden;color:#f4f4f4;font-size:1px;">
+    [One sentence teaser about the main story]&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f4f4;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+          <!-- HEADER -->
+          <tr>
+            <td align="center" style="background-color:#1A5C38;padding:32px 40px 20px 40px;">
+              <img src="https://hub.kerekehub.co.za/kereke-logo.jpg" alt="Kereke Hub" width="180" style="display:block;max-width:180px;height:auto;margin:0 auto 16px auto;" />
+              <p style="margin:0;color:#a8d5b8;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Monthly Newsletter &nbsp;|&nbsp; [MONTH YEAR]</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#2E7D4F;height:4px;line-height:4px;font-size:4px;">&nbsp;</td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:36px 48px 0 48px;color:#2C3E50;font-size:16px;line-height:1.7;">
+
+              <p style="margin:0 0 24px 0;">Hi {{ contact.FIRSTNAME }},</p>
+
+              <p style="margin:0 0 32px 0;">
+                [OPENING LINE - 1 to 2 sentences. Keep it light. Reference the month or season if relevant.]
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Section: What's new -->
+          <tr>
+            <td style="padding:0 48px 0 48px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;border-radius:8px;overflow:hidden;border:1px solid #e0ede5;">
+                <tr>
+                  <td style="background-color:#1A5C38;padding:14px 20px;">
+                    <p style="margin:0;color:#ffffff;font-size:13px;font-weight:bold;letter-spacing:0.8px;text-transform:uppercase;">What's new on Kereke Hub</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:20px 20px 4px 20px;">
+                    <p style="margin:0 0 8px 0;font-size:15px;font-weight:bold;color:#1A5C38;">[FEATURE OR UPDATE TITLE]</p>
+                    <p style="margin:0 0 20px 0;font-size:15px;color:#2C3E50;line-height:1.7;">
+                      [2 to 3 sentences about a new feature, improvement, or tip. Keep it practical. Example: "We've updated the Finance module to allow multiple contribution categories per transaction. If your church collects tithes and a building fund on the same Sunday, you can now split them in one entry."]
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Section: Tip of the month -->
+          <tr>
+            <td style="padding:0 48px 0 48px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;border-left:4px solid #2E7D4F;background-color:#f7fbf9;border-radius:0 6px 6px 0;">
+                <tr>
+                  <td style="padding:18px 20px;">
+                    <p style="margin:0 0 10px 0;font-size:12px;color:#2E7D4F;font-weight:bold;letter-spacing:0.8px;text-transform:uppercase;">Tip of the month</p>
+                    <p style="margin:0;font-size:15px;color:#2C3E50;line-height:1.7;">
+                      [ONE PRACTICAL TIP - something the reader can do this week. Example: "Did you know you can export your entire member roster as a CSV any time? Go to Roster, click Export, and you have a full backup in seconds."]
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Section: From the team (optional) -->
+          <tr>
+            <td style="padding:0 48px 0 48px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:32px;">
+                <tr>
+                  <td style="padding:18px 0;border-top:1px dashed #c8e6d4;">
+                    <p style="margin:0 0 8px 0;font-size:12px;color:#8aab95;font-weight:bold;letter-spacing:0.8px;text-transform:uppercase;">From the team (optional - delete if nothing real to say)</p>
+                    <p style="margin:0;font-size:15px;color:#2C3E50;line-height:1.7;">
+                      [OPTIONAL - 1 to 2 sentences from Kereke Hub. A behind-the-scenes thought, something you're working on, or a genuine note. Skip this block if there's nothing real to say. Forced warmth reads worse than no warmth.]
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Sign-off -->
+          <tr>
+            <td style="padding:0 48px 36px 48px;color:#2C3E50;font-size:15px;line-height:1.7;">
+              <p style="margin:0 0 6px 0;">Until next month,</p>
+              <p style="margin:0;font-weight:bold;">The Kereke Hub Team</p>
+              <p style="margin:4px 0 0 0;font-size:14px;">
+                <a href="mailto:sifiso@kerekehub.co.za" style="color:#2E7D4F;text-decoration:none;">sifiso@kerekehub.co.za</a>
+                &nbsp;&bull;&nbsp;
+                <a href="https://hub.kerekehub.co.za" style="color:#2E7D4F;text-decoration:none;">hub.kerekehub.co.za</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background-color:#E8F5EE;padding:24px 48px;border-top:1px solid #c8e6d4;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 6px 0;font-size:13px;color:#5a7a65;">
+                      <a href="https://hub.kerekehub.co.za" style="color:#1A5C38;font-weight:bold;text-decoration:none;">hub.kerekehub.co.za</a>
+                      &nbsp;&bull;&nbsp;
+                      <a href="mailto:sifiso@kerekehub.co.za" style="color:#1A5C38;text-decoration:none;">sifiso@kerekehub.co.za</a>
+                    </p>
+                    <p style="margin:0;font-size:12px;color:#8aab95;">You're receiving this as an active Kereke Hub subscriber.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

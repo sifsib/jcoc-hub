@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to Kereke Hub</title>
+  <!--
+    KEREKE HUB - EMAIL 1: Welcome Email
+    Timing: Immediately on signup
+    Subject: Welcome to Kereke Hub, {{ contact.CHURCH_NAME }}!
+    Preview: Your account is live. Here's how to hit the ground running.
+
+    BEFORE GOING LIVE:
+    1. Replace https://hub.kerekehub.co.za/kereke-logo.jpg with your hosted logo URL (run brevo-emails/upload-logo.js)
+    2. Confirm +27 78 044 3373 is your live WhatsApp number
+    3. Verify sender domain in Brevo under Senders and Domains
+  -->
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+
+  <!-- Preheader (hidden, shows in email client inbox) -->
+  <div style="display:none;max-height:0;overflow:hidden;color:#f4f4f4;font-size:1px;">
+    Your account is live. Here's how to hit the ground running.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+  </div>
+
+  <!-- Outer wrapper -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f4f4;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+
+        <!-- Email container -->
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+          <!-- HEADER -->
+          <tr>
+            <td align="center" style="background-color:#1A5C38;padding:32px 40px;">
+              <img src="https://hub.kerekehub.co.za/kereke-logo.jpg" alt="Kereke Hub" width="180" style="display:block;max-width:180px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- GREEN ACCENT BAR -->
+          <tr>
+            <td style="background-color:#2E7D4F;height:4px;line-height:4px;font-size:4px;">&nbsp;</td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:40px 48px 32px 48px;color:#2C3E50;font-size:16px;line-height:1.7;">
+
+              <p style="margin:0 0 20px 0;">Hi {{ contact.FIRSTNAME }},</p>
+
+              <p style="margin:0 0 20px 0;">
+                Welcome to Kereke Hub. We're glad to have <strong>{{ contact.CHURCH_NAME }}</strong> on board.
+              </p>
+
+              <p style="margin:0 0 20px 0;">
+                Your 30-day free trial is active and your account is ready. Here's how to make the most of your first few days:
+              </p>
+
+              <!-- Steps -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+
+                <!-- Step 1 -->
+                <tr>
+                  <td width="36" valign="top" style="padding:12px 0 0 0;">
+                    <div style="background-color:#1A5C38;color:#ffffff;font-weight:bold;font-size:13px;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;">1</div>
+                  </td>
+                  <td style="padding:12px 0 0 12px;color:#2C3E50;font-size:15px;line-height:1.6;">
+                    <strong>Complete your church profile.</strong> Go to Profile and add your church address, logo, and contact details. This carries through the rest of the system.
+                  </td>
+                </tr>
+
+                <!-- Step 2 -->
+                <tr>
+                  <td width="36" valign="top" style="padding:12px 0 0 0;">
+                    <div style="background-color:#1A5C38;color:#ffffff;font-weight:bold;font-size:13px;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;">2</div>
+                  </td>
+                  <td style="padding:12px 0 0 12px;color:#2C3E50;font-size:15px;line-height:1.6;">
+                    <strong>Import your member roster.</strong> Head to the Roster module. You can upload an Excel file of existing members, or add people one by one. The system links spouses and children under one household.
+                  </td>
+                </tr>
+
+                <!-- Step 3 -->
+                <tr>
+                  <td width="36" valign="top" style="padding:12px 0 0 0;">
+                    <div style="background-color:#1A5C38;color:#ffffff;font-weight:bold;font-size:13px;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;">3</div>
+                  </td>
+                  <td style="padding:12px 0 0 12px;color:#2C3E50;font-size:15px;line-height:1.6;">
+                    <strong>Record your first attendance session.</strong> Once members are in, open the Attendance module and mark your next Sunday service. Analytics build automatically from there.
+                  </td>
+                </tr>
+
+                <!-- Step 4 -->
+                <tr>
+                  <td width="36" valign="top" style="padding:12px 0 0 0;">
+                    <div style="background-color:#1A5C38;color:#ffffff;font-weight:bold;font-size:13px;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;">4</div>
+                  </td>
+                  <td style="padding:12px 0 0 12px;color:#2C3E50;font-size:15px;line-height:1.6;">
+                    <strong>Set up your finance categories.</strong> In the Finance module, add your income categories (tithes, offerings, building fund) and expense accounts, then start logging.
+                  </td>
+                </tr>
+
+                <!-- Step 5 -->
+                <tr>
+                  <td width="36" valign="top" style="padding:12px 0 0 0;">
+                    <div style="background-color:#1A5C38;color:#ffffff;font-weight:bold;font-size:13px;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;">5</div>
+                  </td>
+                  <td style="padding:12px 0 0 12px;color:#2C3E50;font-size:15px;line-height:1.6;">
+                    <strong>Invite your team.</strong> If your secretary, treasurer, or pastor should also have access, go to Team and send them an invite. You control what each person can see and do.
+                  </td>
+                </tr>
+
+              </table>
+
+              <!-- CTA Button -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 32px 0;">
+                <tr>
+                  <td style="border-radius:6px;background-color:#1A5C38;">
+                    <a href="https://hub.kerekehub.co.za/dashboard" target="_blank"
+                       style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;border-radius:6px;letter-spacing:0.3px;">
+                      Open Your Dashboard
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <hr style="border:none;border-top:1px solid #e8ede9;margin:0 0 28px 0;" />
+
+              <p style="margin:0 0 8px 0;font-size:15px;color:#2C3E50;">
+                If you need help or want to talk through any part of the setup, reach out:
+              </p>
+
+              <!-- Contact block -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
+                <tr>
+                  <td style="padding:4px 0;font-size:15px;color:#2C3E50;">
+                    Email: <a href="mailto:sifiso@kerekehub.co.za" style="color:#2E7D4F;text-decoration:none;">sifiso@kerekehub.co.za</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:15px;color:#2C3E50;">
+                    WhatsApp: <a href="https://wa.me/27780443373" style="color:#2E7D4F;text-decoration:none;">+27 78 044 3373</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:15px;color:#2C3E50;">
+                    Support: <a href="https://hub.kerekehub.co.za/dashboard/support" style="color:#2E7D4F;text-decoration:none;">hub.kerekehub.co.za/dashboard/support</a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 6px 0;font-size:15px;color:#2C3E50;">Looking forward to serving your church,</p>
+              <p style="margin:0;font-size:15px;color:#2C3E50;font-weight:bold;">The Kereke Hub Team</p>
+
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background-color:#E8F5EE;padding:24px 48px;border-top:1px solid #c8e6d4;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 6px 0;font-size:13px;color:#5a7a65;">
+                      <a href="https://hub.kerekehub.co.za" style="color:#1A5C38;font-weight:bold;text-decoration:none;">hub.kerekehub.co.za</a>
+                      &nbsp;&bull;&nbsp;
+                      <a href="mailto:sifiso@kerekehub.co.za" style="color:#1A5C38;text-decoration:none;">sifiso@kerekehub.co.za</a>
+                    </p>
+                    <p style="margin:0;font-size:12px;color:#8aab95;">
+                      You received this because you signed up for a Kereke Hub trial.
+                      <!-- Brevo adds unsubscribe link automatically -->
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Email container -->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

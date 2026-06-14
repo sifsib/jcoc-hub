@@ -45,18 +45,63 @@ async function getTransporter(tenantId: string) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// TRIGGER 1: MEMBER WELCOME EMAIL
+// TRIGGER 1: MEMBER WELCOME EMAIL + BREVO CONTACT SYNC
 //
 // Fires when a new document is created in /members/{memberId}.
-// Reads the tenant's Gmail SMTP credentials, then sends a
-// personalised welcome email to the new member.
 //
-// Required fields on the member document:
-//   - tenantId (string)
-//   - firstName (string)
-//   - lastName  (string)
-//   - email     (string)
+// Behaviour:
+//   a) If the tenant has Brevo configured (brevoApiKey):
+//        - Adds the new member as a Brevo contact
+//        - If brevoMailingListId is set, adds them to that list
+//        - If brevoWelcomeTemplateId is set, sends the Brevo template
+//   b) Falls back to Gmail SMTP welcome email if Brevo is not configured.
 // ─────────────────────────────────────────────────────────────
+
+// Helper: add a contact to Brevo + optionally send welcome template
+async function brevoOnboardMember(
+  apiKey: string,
+  email: string,
+  firstName: string,
+  lastName: string,
+  listId: number | null,
+  welcomeTemplateId: string | null
+) {
+  // Create / update contact
+  const contactBody: Record<string, any> = {
+    email,
+    attributes: { FIRSTNAME: firstName, LASTNAME: lastName },
+    updateEnabled: true,
+  };
+  if (listId) contactBody.listIds = [listId];
+
+  await fetch("https://api.brevo.com/v3/contacts", {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify(contactBody),
+  });
+
+  // Send welcome template if configured
+  if (welcomeTemplateId) {
+    await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        to: [{ email, name: `${firstName} ${lastName}`.trim() }],
+        templateId: Number(welcomeTemplateId),
+        params: { FIRSTNAME: firstName, LASTNAME: lastName },
+      }),
+    });
+  }
+}
+
 export const onMemberCreated = onDocumentCreated(
   "members/{memberId}",
   async (event) => {
@@ -65,45 +110,54 @@ export const onMemberCreated = onDocumentCreated(
 
     const { tenantId, firstName, lastName, email } = member;
 
-    // Skip silently if the member has no email — not an error
     if (!email || !tenantId) {
       console.log(`Member ${event.params.memberId} skipped — no email or tenantId.`);
       return;
     }
 
     try {
-      const { transporter, tenantData } = await getTransporter(tenantId);
+      const tenantSnap = await db.doc(`tenants/${tenantId}`).get();
+      const tenantData = tenantSnap.data()!;
       const churchName = tenantData.name || "Our Church";
-      const fromAddress = tenantData.smtpConfig.gmailUser;
 
-      await transporter.sendMail({
-        from: `"${churchName}" <${fromAddress}>`,
-        to: email,
-        subject: `Welcome to ${churchName}, ${firstName}!`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 32px; border-radius: 8px;">
-            <h2 style="color: #3B9A5F; margin-top: 0;">Welcome, ${firstName} ${lastName}!</h2>
-            <p style="color: #F8FAFC;">
-              You have been added to the <strong>${churchName}</strong> member directory on Kereke Hub.
-            </p>
-            <p style="color: #94A3B8;">
-              Your church family is glad to have you on record. If you have any questions,
-              please reach out to your church administrator directly.
-            </p>
-            <hr style="border-color: #3B9A5F; margin: 24px 0;" />
-            <p style="color: #94A3B8; font-size: 12px; margin-bottom: 0;">
-              This message was sent via Kereke Hub on behalf of ${churchName}.
-            </p>
-          </div>
-        `,
-      });
+      const brevoApiKey: string | undefined = tenantData.brevoApiKey;
+      const brevoListId: number | null = tenantData.brevoMailingListId ?? null;
+      const brevoWelcomeTemplateId: string | null = tenantData.brevoWelcomeTemplateId || null;
 
-      console.log(
-        `[onMemberCreated] Welcome email sent to ${email} (member: ${event.params.memberId})`
-      );
+      if (brevoApiKey) {
+        // ── Brevo path: add to list + send template ────────────
+        await brevoOnboardMember(
+          brevoApiKey,
+          email,
+          firstName || member.fullName?.split(" ")[0] || "",
+          lastName || member.fullName?.split(" ").slice(1).join(" ") || "",
+          brevoListId,
+          brevoWelcomeTemplateId
+        );
+        console.log(`[onMemberCreated] Brevo onboarding done for ${email}`);
+      } else {
+        // ── Fallback: Gmail SMTP welcome email ─────────────────
+        const { transporter } = await getTransporter(tenantId);
+        const fromAddress = tenantData.smtpConfig?.gmailUser;
+        if (!fromAddress) return;
+
+        await transporter.sendMail({
+          from: `"${churchName}" <${fromAddress}>`,
+          to: email,
+          subject: `Welcome to ${churchName}, ${firstName}!`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 32px; border-radius: 8px;">
+              <h2 style="color: #3B9A5F; margin-top: 0;">Welcome, ${firstName} ${lastName}!</h2>
+              <p style="color: #F8FAFC;">You have been added to the <strong>${churchName}</strong> member directory on Kereke Hub.</p>
+              <hr style="border-color: #3B9A5F; margin: 24px 0;" />
+              <p style="color: #94A3B8; font-size: 12px; margin-bottom: 0;">This message was sent via Kereke Hub on behalf of ${churchName}.</p>
+            </div>
+          `,
+        });
+        console.log(`[onMemberCreated] SMTP welcome email sent to ${email}`);
+      }
     } catch (err) {
-      // Log but do not throw — a failed email should not block the write
-      console.error(`[onMemberCreated] Failed to send welcome email:`, err);
+      console.error(`[onMemberCreated] Error:`, err);
     }
   }
 );
@@ -756,5 +810,93 @@ export const onSupportTicketCreated = onDocumentCreated(
     } catch (err) {
       console.error("[onSupportTicketCreated] Failed to send auto-reply:", err);
     }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED: BREVO BIRTHDAY EMAILS
+//
+// Runs daily at 08:00 SAST. For every tenant that has:
+//   - brevoApiKey configured
+//   - brevoBirthdayTemplateId configured
+//
+// Finds all members whose DOB month+day matches today and sends
+// the birthday Brevo template to each of them.
+//
+// Members need a "dob" field in YYYY-MM-DD format on their doc.
+// ─────────────────────────────────────────────────────────────
+export const brevoBirthdayEmails = onSchedule(
+  {
+    schedule: "0 6 * * *",   // 06:00 UTC = 08:00 SAST
+    timeZone: "Africa/Johannesburg",
+  },
+  async () => {
+    const today = new Date();
+    // Zero-pad month and day: "MM-DD"
+    const todayMD =
+      String(today.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(today.getDate()).padStart(2, "0");
+
+    console.log(`[brevoBirthdayEmails] Running for ${todayMD}`);
+
+    // Get all tenants that have Brevo birthday emails configured
+    const tenantsSnap = await db.collection("tenants").get();
+    let totalSent = 0;
+
+    for (const tenantDoc of tenantsSnap.docs) {
+      const t = tenantDoc.data();
+      const apiKey: string | undefined = t.brevoApiKey;
+      const templateId: string | undefined = t.brevoBirthdayTemplateId;
+
+      if (!apiKey || !templateId) continue;
+
+      // Fetch active members for this tenant
+      const membersSnap = await db
+        .collection("members")
+        .where("tenantId", "==", tenantDoc.id)
+        .where("status", "==", "active")
+        .get();
+
+      for (const memberDoc of membersSnap.docs) {
+        const m = memberDoc.data();
+        if (!m.email || !m.dob) continue;
+
+        // m.dob is "YYYY-MM-DD" — extract "MM-DD"
+        const dobMD = String(m.dob).slice(5, 10);
+        if (dobMD !== todayMD) continue;
+
+        const firstName = m.firstName || m.fullName?.split(" ")[0] || "";
+        const lastName = m.lastName || m.fullName?.split(" ").slice(1).join(" ") || "";
+
+        try {
+          const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+              "api-key": apiKey,
+              "content-type": "application/json",
+              accept: "application/json",
+            },
+            body: JSON.stringify({
+              to: [{ email: m.email.trim(), name: `${firstName} ${lastName}`.trim() }],
+              templateId: Number(templateId),
+              params: { FIRSTNAME: firstName, LASTNAME: lastName },
+            }),
+          });
+
+          if (res.ok) {
+            totalSent++;
+            console.log(`[brevoBirthdayEmails] Sent to ${m.email} (tenant: ${tenantDoc.id})`);
+          } else {
+            const body = await res.text();
+            console.error(`[brevoBirthdayEmails] Failed for ${m.email}: ${body}`);
+          }
+        } catch (err) {
+          console.error(`[brevoBirthdayEmails] Error sending to ${m.email}:`, err);
+        }
+      }
+    }
+
+    console.log(`[brevoBirthdayEmails] Done. ${totalSent} birthday email(s) sent.`);
   }
 );
