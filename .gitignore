@@ -79,6 +79,11 @@ serviceAccountKey.json
 .claude/
 .~lock.*#
 
+# Next.js build output — never commit this
+.next/
+out/
+tsconfig.tsbuildinfo
+
 # OS / Office temp files
 ~$*
 *.tmp
