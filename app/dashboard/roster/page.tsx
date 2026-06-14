@@ -14,6 +14,14 @@ import NotesPanel from "../../components/NotesPanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+const EXCEPTION_TAGS = ["School", "Work", "Medical", "Travel", "Other"];
+
+interface AbsenceException {
+  tag: string;
+  note?: string;
+  setAt?: string;
+}
+
 interface Member {
   id: string;
   fullName: string;
@@ -35,6 +43,7 @@ interface Member {
   ministryGroup?: string;
   churchRole?: string;
   source?: string;
+  absenceException?: AbsenceException | null;
 }
 
 interface ChildInput {
@@ -511,6 +520,15 @@ export default function ManageMembershipPage() {
   // POPIA
   const [consent, setConsent] = useState({ privacy: false, special: false, truth: false });
 
+  // Exception state
+  const [editingMemberException, setEditingMemberException] = useState<AbsenceException | null>(null);
+  const [showExceptionModal, setShowExceptionModal] = useState(false);
+  const [exceptionTag, setExceptionTag] = useState("School");
+  const [exceptionNote, setExceptionNote] = useState("");
+  const [customTag, setCustomTag] = useState("");
+  const [savingException, setSavingException] = useState(false);
+  const [clearingException, setClearingException] = useState(false);
+
   // Import
   const [importRows, setImportRows] = useState<any[]>([]);
   const [importParsing, setImportParsing] = useState(false);
@@ -887,6 +905,7 @@ export default function ManageMembershipPage() {
       role: m.role || "Member",
     });
     setCustomFieldValues((m as any).customFields || {});
+    setEditingMemberException((m as any).absenceException || null);
     setMemberWorkflows([]);
     setFeedback(null);
     setView("form");
@@ -897,6 +916,46 @@ export default function ManageMembershipPage() {
     )).then((snap) => {
       setMemberWorkflows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
+  };
+
+  const saveException = async () => {
+    if (!editingMemberId) return;
+    const finalTag = exceptionTag === "Other" ? customTag.trim() : exceptionTag;
+    if (!finalTag) return;
+    setSavingException(true);
+    try {
+      const exceptionData: AbsenceException = {
+        tag: finalTag,
+        note: exceptionNote.trim() || undefined,
+        setAt: new Date().toISOString().split("T")[0],
+      };
+      await updateDoc(doc(db, "members", editingMemberId), { absenceException: exceptionData });
+      setEditingMemberException(exceptionData);
+      setMembers(prev => prev.map(m => m.id === editingMemberId ? { ...m, absenceException: exceptionData } : m));
+      setShowExceptionModal(false);
+      setExceptionNote("");
+      setCustomTag("");
+    } catch (e) {
+      console.error("Failed to save exception:", e);
+      alert("Could not save exception. Please try again.");
+    } finally {
+      setSavingException(false);
+    }
+  };
+
+  const clearException = async () => {
+    if (!editingMemberId) return;
+    setClearingException(true);
+    try {
+      await updateDoc(doc(db, "members", editingMemberId), { absenceException: null });
+      setEditingMemberException(null);
+      setMembers(prev => prev.map(m => m.id === editingMemberId ? { ...m, absenceException: null } : m));
+    } catch (e) {
+      console.error("Failed to remove exception:", e);
+      alert("Could not remove exception. Please try again.");
+    } finally {
+      setClearingException(false);
+    }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -1457,6 +1516,114 @@ export default function ManageMembershipPage() {
             </button>
           </div>
         </form>
+
+        {/* Absence Exception — only shown when editing */}
+        {editingMemberId && (
+          <div className="mt-6 bg-white border border-blue-200 rounded-xl p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-800">Absence Exception</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Set this when a member is temporarily away (school, work, etc.). Their absences will still be recorded but will not count toward care tier alerts.
+                </p>
+              </div>
+              {editingMemberException?.tag ? (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">
+                    {editingMemberException.tag}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearException}
+                    disabled={clearingException}
+                    className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition disabled:opacity-50"
+                  >
+                    {clearingException ? "Removing..." : "Remove"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setExceptionTag("School"); setExceptionNote(""); setCustomTag(""); setShowExceptionModal(true); }}
+                  className="shrink-0 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition"
+                >
+                  Set Exception
+                </button>
+              )}
+            </div>
+            {editingMemberException?.note && (
+              <p className="text-xs text-blue-500 mt-2 italic">{editingMemberException.note}</p>
+            )}
+          </div>
+        )}
+
+        {/* Exception Modal */}
+        {showExceptionModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Set Absence Exception</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">This member will be excluded from care tier alerts while the exception is active.</p>
+                </div>
+                <button onClick={() => setShowExceptionModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">&times;</button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason</label>
+                <div className="flex flex-wrap gap-2">
+                  {EXCEPTION_TAGS.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setExceptionTag(tag)}
+                      className={`text-sm px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                        exceptionTag === tag
+                          ? "bg-blue-50 border-blue-400 text-blue-700"
+                          : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                {exceptionTag === "Other" && (
+                  <input
+                    type="text"
+                    value={customTag}
+                    onChange={(e) => setCustomTag(e.target.value)}
+                    placeholder="Describe the reason..."
+                    className="mt-1 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Note (optional)</label>
+                <input
+                  type="text"
+                  value={exceptionNote}
+                  onChange={(e) => setExceptionNote(e.target.value)}
+                  placeholder="e.g. Studying in Cape Town until December"
+                  className="border border-gray-200 rounded-lg p-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setShowExceptionModal(false)} className="text-sm text-gray-500 hover:text-gray-700 font-medium px-4 py-2 rounded-lg">Cancel</button>
+                <button
+                  type="button"
+                  onClick={saveException}
+                  disabled={savingException || (exceptionTag === "Other" && !customTag.trim())}
+                  className="text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg transition"
+                >
+                  {savingException ? "Saving..." : "Save Exception"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Notes — only shown when editing an existing member */}
         {editingMemberId && (
