@@ -64,6 +64,7 @@ interface ChildInput {
   lastName: string;
   dob: string;
   gender: string;
+  isMember: boolean;
 }
 
 interface ConsentState {
@@ -143,13 +144,14 @@ export default function JoinPage() {
   const spouseAddrField = (k: keyof Address, v: string) => setSb("address", { ...spouseBasic.address, [k]: v });
 
   // Spouse
+  const [isSpouseMember, setIsSpouseMember] = useState<"" | "yes" | "no">("");
   const [spouseBasic, setSpouseBasic] = useState<SpouseBasic>(emptySpouse());
   const setSb = (k: keyof SpouseBasic, v: any) => setSpouseBasic(p => ({ ...p, [k]: v }));
   const [spouseSameAddress, setSpouseSameAddress] = useState(false);
 
   // Children
   const [children, setChildren] = useState<ChildInput[]>([]);
-  const addChild = () => setChildren(p => [...p, { firstName: "", lastName: "", dob: "", gender: "" }]);
+  const addChild = () => setChildren(p => [...p, { firstName: "", lastName: "", dob: "", gender: "", isMember: false }]);
   const updChild = (i: number, k: keyof ChildInput, v: string) =>
     setChildren(p => p.map((c, idx) => idx === i ? { ...c, [k]: v } : c));
   const rmChild = (i: number) => setChildren(p => p.filter((_, idx) => idx !== i));
@@ -207,12 +209,19 @@ export default function JoinPage() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      await addDoc(collection(db, "memberRequests"), {
+      const baseConsent = {
+        consentedToPrivacyPolicy: consent.privacy,
+        consentedToSpecialInfo: consent.special,
+        consentTimestamp: serverTimestamp(),
+        consentPolicyVersion: "v1.0",
+      };
+
+      // 1. Primary member request
+      const primaryRef = await addDoc(collection(db, "memberRequests"), {
         tenantId,
         status: "pending",
         submittedAt: serverTimestamp(),
         source: "self-join",
-        // Member details
         fullName: `${primary.firstName.trim()} ${primary.lastName.trim()}`,
         firstName: primary.firstName.trim(),
         lastName: primary.lastName.trim(),
@@ -222,21 +231,74 @@ export default function JoinPage() {
         phone: primary.phone.trim(),
         address: primary.address,
         maritalStatus: primary.maritalStatus,
-        // Faith & Membership
+        householdRole: "primary",
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
         membershipType: primary.membershipType,
         cellRegion: primary.cellRegion,
         ministryGroup: primary.ministryGroup,
-        // Spouse
-        spouseDetails: primary.maritalStatus === "Married" ? spouseBasic : null,
-        // Children
-        children: children.length > 0 ? children : [],
-        // POPIA
-        consentedToPrivacyPolicy: consent.privacy,
-        consentedToSpecialInfo: consent.special,
-        consentTimestamp: serverTimestamp(),
-        consentPolicyVersion: "v1.0",
+        // Non-member spouse stored as nested detail only
+        spouseDetails: primary.maritalStatus === "Married" && isSpouseMember !== "yes" ? spouseBasic : null,
+        // Non-member children stored as nested detail only
+        children: children.filter(c => !c.isMember),
+        ...baseConsent,
       });
+
+      // 2. Spouse as separate member request (if they are joining as a member)
+      if (primary.maritalStatus === "Married" && isSpouseMember === "yes") {
+        await addDoc(collection(db, "memberRequests"), {
+          tenantId,
+          status: "pending",
+          submittedAt: serverTimestamp(),
+          source: "self-join",
+          fullName: `${spouseBasic.firstName.trim()} ${spouseBasic.lastName.trim()}`,
+          firstName: spouseBasic.firstName.trim(),
+          lastName: spouseBasic.lastName.trim(),
+          dob: spouseBasic.dob,
+          gender: spouseBasic.gender,
+          email: spouseBasic.email.trim().toLowerCase(),
+          phone: spouseBasic.phone.trim(),
+          address: spouseSameAddress ? primary.address : spouseBasic.address,
+          maritalStatus: "Married",
+          householdRole: "spouse",
+          linkedPrimaryRequestId: primaryRef.id,
+          faithStatus: { bornAgain: spouseBasic.bornAgain, waterBaptized: spouseBasic.waterBaptized },
+          membershipType: spouseBasic.membershipType,
+          ministryGroup: spouseBasic.ministryGroup,
+          consentedToPrivacyPolicy: true,
+          consentedToSpecialInfo: consent.special,
+          consentTimestamp: serverTimestamp(),
+          consentPolicyVersion: "v1.0",
+        });
+      }
+
+      // 3. Children joining as members — each gets their own request
+      for (const child of children.filter(c => c.isMember)) {
+        await addDoc(collection(db, "memberRequests"), {
+          tenantId,
+          status: "pending",
+          submittedAt: serverTimestamp(),
+          source: "self-join",
+          fullName: `${child.firstName.trim()} ${child.lastName.trim()}`,
+          firstName: child.firstName.trim(),
+          lastName: child.lastName.trim(),
+          dob: child.dob,
+          gender: child.gender,
+          email: "",
+          phone: "",
+          address: primary.address,
+          maritalStatus: "Single",
+          householdRole: "child",
+          linkedPrimaryRequestId: primaryRef.id,
+          faithStatus: { bornAgain: "", waterBaptized: "" },
+          membershipType: "",
+          ministryGroup: "",
+          consentedToPrivacyPolicy: true,
+          consentedToSpecialInfo: false,
+          consentTimestamp: serverTimestamp(),
+          consentPolicyVersion: "v1.0",
+        });
+      }
+
       setSubmitted(true);
     } catch (err) {
       console.error(err);
@@ -278,7 +340,7 @@ export default function JoinPage() {
           <div className="text-5xl mb-4">🎉</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Application submitted!</h2>
           <p className="text-gray-500 text-sm">
-            Thank you for submitting your membership form to <strong>{tenant?.name}</strong>. The church team will review your details and be in touch.
+            Thank you for submitting your membership application to <strong>{tenant?.name}</strong>. Separate applications have been created for each family member joining. The church team will review your details and be in touch.
           </p>
         </div>
       </div>
@@ -418,84 +480,113 @@ export default function JoinPage() {
             <div className="bg-white rounded-xl shadow-sm border p-6 flex flex-col gap-4">
               <SectionHeader n={3} title="Spouse Details" />
 
-              {/* Personal Details */}
-              <div className="grid grid-cols-2 gap-3">
-                <F label="First Name"><input value={spouseBasic.firstName} onChange={e => setSb("firstName", e.target.value)} className={inp} /></F>
-                <F label="Last Name"><input value={spouseBasic.lastName} onChange={e => setSb("lastName", e.target.value)} className={inp} /></F>
-                <F label="Date of Birth"><DateInput value={spouseBasic.dob} onChange={val => setSb("dob", val)} className={inp} /></F>
-                <F label="Gender">
-                  <select value={spouseBasic.gender} onChange={e => setSb("gender", e.target.value)} className={sel}>
-                    <option value="">Select...</option>
-                    <option>Male</option>
-                    <option>Female</option>
-                  </select>
-                </F>
-              </div>
-              <F label="Email Address">
-                <input type="email" value={spouseBasic.email} onChange={e => setSb("email", e.target.value)} placeholder="Optional" className={inp} />
-              </F>
-              <F label="Contact Number">
-                <input type="tel" value={spouseBasic.phone} onChange={e => setSb("phone", e.target.value)} className={inp} />
-              </F>
-
-              {/* Spouse Address */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold text-gray-700">Residential Address</p>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-600 select-none">
-                    <input
-                      type="checkbox"
-                      checked={spouseSameAddress}
-                      onChange={e => {
-                        setSpouseSameAddress(e.target.checked);
-                        if (e.target.checked) setSb("address", { ...primary.address });
-                      }}
-                      className="h-3.5 w-3.5 rounded border-gray-300 text-green-600"
-                    />
-                    Same as main member
-                  </label>
+              {/* Is spouse also registering as a member? */}
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-semibold text-gray-700">Is your spouse also registering as a member?</p>
+                <div className="flex gap-3">
+                  {(["yes", "no"] as const).map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setIsSpouseMember(opt)}
+                      className={`px-5 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                        isSpouseMember === opt
+                          ? "text-white border-transparent"
+                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                      }`}
+                      style={isSpouseMember === opt ? { backgroundColor: accent, borderColor: accent } : {}}
+                    >
+                      {opt === "yes" ? "Yes" : "No"}
+                    </button>
+                  ))}
                 </div>
-                <div className={`flex flex-col gap-2 ${spouseSameAddress ? "opacity-50 pointer-events-none" : ""}`}>
-                  <input value={spouseBasic.address.line1} onChange={e => spouseAddrField("line1", e.target.value)} placeholder="Line 1 (e.g. 12 Main Street)" className={inp} />
-                  <input value={spouseBasic.address.line2} onChange={e => spouseAddrField("line2", e.target.value)} placeholder="Line 2 (optional)" className={inp} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={spouseBasic.address.suburb} onChange={e => spouseAddrField("suburb", e.target.value)} placeholder="Suburb" className={inp} />
-                    <input value={spouseBasic.address.town} onChange={e => spouseAddrField("town", e.target.value)} placeholder="Town / City" className={inp} />
+              </div>
+
+              {/* Only show the form once they've answered yes or no */}
+              {isSpouseMember !== "" && (
+                <>
+                  {/* Personal Details */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <F label="First Name"><input value={spouseBasic.firstName} onChange={e => setSb("firstName", e.target.value)} className={inp} /></F>
+                    <F label="Last Name"><input value={spouseBasic.lastName} onChange={e => setSb("lastName", e.target.value)} className={inp} /></F>
+                    <F label="Date of Birth"><DateInput value={spouseBasic.dob} onChange={val => setSb("dob", val)} className={inp} /></F>
+                    <F label="Gender">
+                      <select value={spouseBasic.gender} onChange={e => setSb("gender", e.target.value)} className={sel}>
+                        <option value="">Select...</option>
+                        <option>Male</option>
+                        <option>Female</option>
+                      </select>
+                    </F>
                   </div>
-                  <input value={spouseBasic.address.postalCode} onChange={e => spouseAddrField("postalCode", e.target.value)} placeholder="Postal code" className={inp} style={{ maxWidth: "50%" }} />
-                </div>
-              </div>
+                  <F label="Email Address">
+                    <input type="email" value={spouseBasic.email} onChange={e => setSb("email", e.target.value)} placeholder="Optional" className={inp} />
+                  </F>
+                  <F label="Contact Number">
+                    <input type="tel" value={spouseBasic.phone} onChange={e => setSb("phone", e.target.value)} className={inp} />
+                  </F>
 
-              {/* Spouse Faith & Membership */}
-              <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Faith & Membership</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <F label="Born Again?">
-                    <select value={spouseBasic.bornAgain} onChange={e => setSb("bornAgain", e.target.value)} className={sel}>
-                      <option value="">Select...</option>
-                      <option>Yes</option><option>No</option><option>Not Sure</option>
-                    </select>
-                  </F>
-                  <F label="Water Baptized?">
-                    <select value={spouseBasic.waterBaptized} onChange={e => setSb("waterBaptized", e.target.value)} className={sel}>
-                      <option value="">Select...</option>
-                      <option>Yes</option><option>No</option>
-                    </select>
-                  </F>
-                </div>
-                <F label="Type of Membership Sought">
-                  <select value={spouseBasic.membershipType} onChange={e => setSb("membershipType", e.target.value)} className={sel}>
-                    <option value="">Select...</option>
-                    {config.membershipTypes.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </F>
-                <F label="Ministry Group">
-                  <select value={spouseBasic.ministryGroup} onChange={e => setSb("ministryGroup", e.target.value)} className={sel}>
-                    <option value="">Select...</option>
-                    {config.ministryGroups.map(g => <option key={g}>{g}</option>)}
-                  </select>
-                </F>
-              </div>
+                  {/* Spouse Address */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-gray-700">Residential Address</p>
+                      <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-600 select-none">
+                        <input
+                          type="checkbox"
+                          checked={spouseSameAddress}
+                          onChange={e => {
+                            setSpouseSameAddress(e.target.checked);
+                            if (e.target.checked) setSb("address", { ...primary.address });
+                          }}
+                          className="h-3.5 w-3.5 rounded border-gray-300 text-green-600"
+                        />
+                        Same as main member
+                      </label>
+                    </div>
+                    <div className={`flex flex-col gap-2 ${spouseSameAddress ? "opacity-50 pointer-events-none" : ""}`}>
+                      <input value={spouseBasic.address.line1} onChange={e => spouseAddrField("line1", e.target.value)} placeholder="Line 1 (e.g. 12 Main Street)" className={inp} />
+                      <input value={spouseBasic.address.line2} onChange={e => spouseAddrField("line2", e.target.value)} placeholder="Line 2 (optional)" className={inp} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={spouseBasic.address.suburb} onChange={e => spouseAddrField("suburb", e.target.value)} placeholder="Suburb" className={inp} />
+                        <input value={spouseBasic.address.town} onChange={e => spouseAddrField("town", e.target.value)} placeholder="Town / City" className={inp} />
+                      </div>
+                      <input value={spouseBasic.address.postalCode} onChange={e => spouseAddrField("postalCode", e.target.value)} placeholder="Postal code" className={inp} style={{ maxWidth: "50%" }} />
+                    </div>
+                  </div>
+
+                  {/* Spouse Faith & Membership — only shown when spouse is a member */}
+                  {isSpouseMember === "yes" && (
+                    <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Faith & Membership</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <F label="Born Again?">
+                          <select value={spouseBasic.bornAgain} onChange={e => setSb("bornAgain", e.target.value)} className={sel}>
+                            <option value="">Select...</option>
+                            <option>Yes</option><option>No</option><option>Not Sure</option>
+                          </select>
+                        </F>
+                        <F label="Water Baptized?">
+                          <select value={spouseBasic.waterBaptized} onChange={e => setSb("waterBaptized", e.target.value)} className={sel}>
+                            <option value="">Select...</option>
+                            <option>Yes</option><option>No</option>
+                          </select>
+                        </F>
+                      </div>
+                      <F label="Type of Membership Sought">
+                        <select value={spouseBasic.membershipType} onChange={e => setSb("membershipType", e.target.value)} className={sel}>
+                          <option value="">Select...</option>
+                          {config.membershipTypes.map(t => <option key={t}>{t}</option>)}
+                        </select>
+                      </F>
+                      <F label="Ministry Group">
+                        <select value={spouseBasic.ministryGroup} onChange={e => setSb("ministryGroup", e.target.value)} className={sel}>
+                          <option value="">Select...</option>
+                          {config.ministryGroups.map(g => <option key={g}>{g}</option>)}
+                        </select>
+                      </F>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -527,22 +618,39 @@ export default function JoinPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <F label="First Name" req>
-                    <input value={child.firstName} onChange={e => updChild(i, "firstName", e.target.value)} className={inp} required />
+                    <input value={child.firstName} onChange={e => updChild(i, "firstName", e.target.value)} className={inp} />
                   </F>
                   <F label="Last Name" req>
-                    <input value={child.lastName} onChange={e => updChild(i, "lastName", e.target.value)} className={inp} required />
+                    <input value={child.lastName} onChange={e => updChild(i, "lastName", e.target.value)} className={inp} />
                   </F>
                   <F label="Date of Birth" req>
-                    <DateInput value={child.dob} onChange={val => updChild(i, "dob", val)} className={inp} required />
+                    <DateInput value={child.dob} onChange={val => updChild(i, "dob", val)} className={inp} />
                   </F>
                   <F label="Gender" req>
-                    <select value={child.gender} onChange={e => updChild(i, "gender", e.target.value)} className={sel} required>
+                    <select value={child.gender} onChange={e => updChild(i, "gender", e.target.value)} className={sel}>
                       <option value="">Select...</option>
                       <option>Male</option>
                       <option>Female</option>
                     </select>
                   </F>
                 </div>
+                {/* Member registration toggle */}
+                <label className="flex items-center gap-3 cursor-pointer pt-1 border-t border-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={child.isMember}
+                    onChange={e => updChild(i, "isMember", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Register {child.firstName || "this child"} as a church member
+                  </span>
+                </label>
+                {child.isMember && (
+                  <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    A separate membership application will be submitted for {child.firstName || "this child"} and will appear in the admin pending queue for approval.
+                  </p>
+                )}
               </div>
             ))}
           </div>
