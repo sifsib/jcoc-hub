@@ -927,7 +927,7 @@ export default function CommunicationsPage() {
           ) : !brevoStatus?.connected ? (
             <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-8 text-center space-y-3">
               <p className="text-slate-300 text-sm font-medium">Brevo not connected</p>
-              <p className="text-slate-500 text-xs">Connect your Brevo account under Email > Setup first.</p>
+              <p className="text-slate-500 text-xs">Connect your Brevo account under Email {'>'} Setup first.</p>
               <button
                 onClick={() => { setChannel("email"); setEmailTab("setup"); }}
                 className="mt-2 inline-flex items-center gap-1.5 text-emerald-400 text-sm font-medium hover:text-emerald-300 transition-colors"
@@ -1034,7 +1034,7 @@ export default function CommunicationsPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-white">Automation templates</h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Design these emails in your Brevo account under <span className="text-slate-300">Email Campaigns > Templates</span>. Copy the template ID (the number in the URL) and paste it here.
+                    Design these emails in your Brevo account under <span className="text-slate-300">Email Campaigns {'>'} Templates</span>. Copy the template ID (the number in the URL) and paste it here.
                   </p>
                 </div>
                 <form onSubmit={handleSaveTemplates} className="space-y-4">
