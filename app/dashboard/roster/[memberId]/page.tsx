@@ -19,6 +19,14 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
+const EXCEPTION_TAGS = ["School", "Work", "Medical", "Travel", "Other"];
+
+interface AbsenceException {
+  tag: string;
+  note?: string;
+  setAt?: string;
+}
+
 interface Member {
   id: string;
   fullName?: string;
@@ -34,6 +42,7 @@ interface Member {
   role?: string;
   churchRole?: string;
   consentedToPrivacyPolicy?: boolean;
+  absenceException?: AbsenceException | null;
 }
 
 interface WorkflowInstance {
@@ -89,6 +98,13 @@ export default function MemberDetailPage() {
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
   const [expandedInstance, setExpandedInstance] = useState<string | null>(null);
   const [instanceSteps, setInstanceSteps] = useState<Record<string, InstanceStep[]>>({});
+
+  // Exception modal state
+  const [showExceptionModal, setShowExceptionModal] = useState(false);
+  const [exceptionTag, setExceptionTag] = useState("School");
+  const [exceptionNote, setExceptionNote] = useState("");
+  const [customTag, setCustomTag] = useState("");
+  const [savingException, setSavingException] = useState(false);
 
   useEffect(() => {
     if (!memberId) return;
@@ -157,6 +173,41 @@ export default function MemberDetailPage() {
     }));
   }
 
+  const saveException = async () => {
+    if (!memberId) return;
+    const finalTag = exceptionTag === "Other" ? customTag.trim() : exceptionTag;
+    if (!finalTag) return;
+    setSavingException(true);
+    try {
+      const exceptionData: AbsenceException = {
+        tag: finalTag,
+        note: exceptionNote.trim() || undefined,
+        setAt: new Date().toISOString().split("T")[0],
+      };
+      await updateDoc(doc(db, "members", memberId as string), { absenceException: exceptionData });
+      setMember((prev) => prev ? { ...prev, absenceException: exceptionData } : prev);
+      setShowExceptionModal(false);
+      setExceptionNote("");
+      setCustomTag("");
+    } catch (e) {
+      console.error("Failed to save exception:", e);
+      alert("Could not save exception. Please try again.");
+    } finally {
+      setSavingException(false);
+    }
+  };
+
+  const clearException = async () => {
+    if (!memberId) return;
+    try {
+      await updateDoc(doc(db, "members", memberId as string), { absenceException: null });
+      setMember((prev) => prev ? { ...prev, absenceException: null } : prev);
+    } catch (e) {
+      console.error("Failed to remove exception:", e);
+      alert("Could not remove exception. Please try again.");
+    }
+  };
+
   const today = new Date().toISOString().split("T")[0];
   const displayName = member?.fullName || `${member?.firstName || ""} ${member?.lastName || ""}`.trim();
 
@@ -195,7 +246,32 @@ export default function MemberDetailPage() {
       {/* Header */}
       <div className="mb-6">
         <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <h1 className="text-3xl font-bold text-gray-900">{displayName}</h1>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <h1 className="text-3xl font-bold text-gray-900">{displayName}</h1>
+            {member.absenceException?.tag ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">
+                  Exception: {member.absenceException.tag}
+                </span>
+                <button
+                  onClick={clearException}
+                  className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setExceptionTag("School"); setExceptionNote(""); setCustomTag(""); setShowExceptionModal(true); }}
+                className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"
+              >
+                Set Absence Exception
+              </button>
+            )}
+          </div>
+          {member.absenceException?.note && (
+            <p className="text-xs text-blue-500 mt-1">{member.absenceException.note}</p>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm">
             {member.email && (
               <div>
@@ -224,6 +300,79 @@ export default function MemberDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Exception Modal */}
+      {showExceptionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Set Absence Exception</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  This will exclude {displayName} from care tier stats while they are away.
+                </p>
+              </div>
+              <button onClick={() => setShowExceptionModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">&times;</button>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason</label>
+              <div className="flex flex-wrap gap-2">
+                {EXCEPTION_TAGS.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setExceptionTag(tag)}
+                    className={`text-sm px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                      exceptionTag === tag
+                        ? "bg-blue-50 border-blue-400 text-blue-700"
+                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+              {exceptionTag === "Other" && (
+                <input
+                  type="text"
+                  value={customTag}
+                  onChange={(e) => setCustomTag(e.target.value)}
+                  placeholder="Describe the reason..."
+                  className="mt-2 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Note (optional)</label>
+              <input
+                type="text"
+                value={exceptionNote}
+                onChange={(e) => setExceptionNote(e.target.value)}
+                placeholder="e.g. Studying in Cape Town until December"
+                className="border border-gray-200 rounded-lg p-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowExceptionModal(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 font-medium px-4 py-2 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveException}
+                disabled={savingException || (exceptionTag === "Other" && !customTag.trim())}
+                className="text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg transition"
+              >
+                {savingException ? "Saving..." : "Save Exception"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Active Workflows */}
       <div>

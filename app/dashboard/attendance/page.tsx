@@ -25,6 +25,7 @@ interface Member {
   role: string;
   cellRegion?: string;
   ministryGroup?: string;
+  absenceException?: { tag: string } | null;
 }
 
 interface AttendanceRecord {
@@ -551,6 +552,11 @@ export default function AttendancePage() {
                         {person.ministryGroup && (
                           <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">
                             {person.ministryGroup}
+                          </span>
+                        )}
+                        {person.absenceException?.tag && (
+                          <span className="text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full">
+                            Exception: {person.absenceException.tag}
                           </span>
                         )}
                         {isAbsent && record.absenceReason && (

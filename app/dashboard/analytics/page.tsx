@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
-import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc, doc } from "firebase/firestore";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
@@ -14,6 +14,7 @@ interface CareTierMember {
   fullName: string;
   phone: string;
   daysAbsent: number;
+  absenceException?: { tag: string; note?: string } | null;
 }
 
 interface CareTiers {
@@ -21,6 +22,7 @@ interface CareTiers {
   tier2: CareTierMember[];
   tier3: CareTierMember[];
   neverAttended: CareTierMember[];
+  exceptions: CareTierMember[];
 }
 
 interface MemberData {
@@ -56,7 +58,9 @@ export default function AnalyticsPage() {
     tier2: [],
     tier3: [],
     neverAttended: [],
+    exceptions: [],
   });
+  const [removingException, setRemovingException] = useState<string | null>(null);
 
   // Notes modal state
   const [notesModal, setNotesModal] = useState<{ member: CareTierMember; tier: number } | null>(null);
@@ -122,7 +126,7 @@ export default function AnalyticsPage() {
         // Sort all recorded Sunday dates descending (most recent first)
         const sortedSundays = Array.from(allSundayDates).sort((a, b) => b.localeCompare(a));
 
-        const tiers: CareTiers = { tier1: [], tier2: [], tier3: [], neverAttended: [] };
+        const tiers: CareTiers = { tier1: [], tier2: [], tier3: [], neverAttended: [], exceptions: [] };
 
         const membersForTiers: CareTierMember[] = [];
         querySnapshot.forEach((docSnap) => {
@@ -132,10 +136,16 @@ export default function AnalyticsPage() {
             fullName: data.fullName || "Unknown",
             phone: data.phone || "",
             daysAbsent: 0,
+            absenceException: data.absenceException || null,
           });
         });
 
         membersForTiers.forEach((member) => {
+          // Skip tier calc for members on an absence exception
+          if (member.absenceException?.tag) {
+            tiers.exceptions.push(member);
+            return;
+          }
           const sundayRecords = memberSundayMap[member.id] || {};
           const recordedSundays = sortedSundays.filter((d) => sundayRecords[d]);
 
@@ -237,6 +247,22 @@ export default function AnalyticsPage() {
       );
     }
     return null;
+  };
+
+  const removeException = async (memberId: string) => {
+    setRemovingException(memberId);
+    try {
+      await updateDoc(doc(db, "members", memberId), { absenceException: null });
+      setCareTiers((prev) => ({
+        ...prev,
+        exceptions: prev.exceptions.filter((m) => m.id !== memberId),
+      }));
+    } catch (e) {
+      console.error("Failed to remove exception:", e);
+      alert("Could not remove exception. Please try again.");
+    } finally {
+      setRemovingException(null);
+    }
   };
 
   const saveNote = async () => {
@@ -487,6 +513,44 @@ export default function AnalyticsPage() {
               </span>
             </div>
             <TierList members={careTiers.neverAttended} traceLabel="Welcome" tier={0} />
+          </div>
+        )}
+
+        {/* Absence Exceptions — members excluded from care tier stats */}
+        {careTiers.exceptions.length > 0 && (
+          <div className="bg-white border border-blue-200 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-bold text-blue-800">Absence Exceptions</h3>
+                <p className="text-xs text-blue-500 mt-0.5">
+                  These members are temporarily away. Their absences do not affect care tier stats.
+                </p>
+              </div>
+              <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded-full text-blue-600 border border-blue-200">
+                {careTiers.exceptions.length}
+              </span>
+            </div>
+            <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+              {careTiers.exceptions.map((member) => (
+                <div key={member.id} className="p-4 flex justify-between items-center hover:bg-gray-50 transition">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
+                    {member.absenceException?.tag && (
+                      <span className="inline-block mt-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                        {member.absenceException.tag}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => removeException(member.id)}
+                    disabled={removingException === member.id}
+                    className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition disabled:opacity-50"
+                  >
+                    {removingException === member.id ? "Removing..." : "Remove Exception"}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
