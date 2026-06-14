@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import DateInput from "../../../components/ui/DateInput";
 import { db } from "../../../lib/firebase";
-import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -159,21 +159,24 @@ export default function JoinPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // ─── Load tenant ──────────────────────────────────────────────────────────
+  // ─── Load tenant (via public API — no auth required) ─────────────────────
 
   useEffect(() => {
     if (!tenantId) return;
-    getDoc(doc(db, "tenants", tenantId)).then((snap) => {
-      if (!snap.exists()) { setNotFound(true); setLoading(false); return; }
-      const td = snap.data();
-      setTenant({ name: td.name || "Our Church", primaryColor: td.primaryColor, logoUrl: td.logoUrl });
-      setConfig({
-        membershipTypes: td.membershipTypes?.length ? td.membershipTypes : DEFAULT_MEMBERSHIP_TYPES,
-        cellRegions: td.cellRegions?.length ? td.cellRegions : DEFAULT_CELL_REGIONS,
-        ministryGroups: td.ministryGroups?.length ? td.ministryGroups : DEFAULT_MINISTRY_GROUPS,
-      });
-      setLoading(false);
-    }).catch(() => { setNotFound(true); setLoading(false); });
+    fetch(`/api/tenant-join-info/${tenantId}`)
+      .then(async (res) => {
+        if (res.status === 404) { setNotFound(true); setLoading(false); return; }
+        if (!res.ok) throw new Error("server_error");
+        const td = await res.json();
+        setTenant({ name: td.name, primaryColor: td.primaryColor, logoUrl: td.logoUrl });
+        setConfig({
+          membershipTypes: td.membershipTypes?.length ? td.membershipTypes : DEFAULT_MEMBERSHIP_TYPES,
+          cellRegions:     td.cellRegions?.length     ? td.cellRegions     : DEFAULT_CELL_REGIONS,
+          ministryGroups:  td.ministryGroups?.length  ? td.ministryGroups  : DEFAULT_MINISTRY_GROUPS,
+        });
+        setLoading(false);
+      })
+      .catch(() => { setNotFound(true); setLoading(false); });
   }, [tenantId]);
 
   // ─── Validation ───────────────────────────────────────────────────────────
