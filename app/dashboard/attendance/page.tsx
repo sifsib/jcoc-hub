@@ -5,6 +5,7 @@ import Image from "next/image";
 import { db } from "../../../lib/firebase";
 import DateInput from "../../../components/ui/DateInput";
 import { useAppUser } from "../../../lib/useAppUser";
+import ExportMemberButton from "../../components/ExportMemberButton";
 import {
   collection,
   query,
@@ -331,6 +332,49 @@ export default function AttendancePage() {
   const absentCount = filteredMembers.filter(m => attendanceCache[m.id]?.status === "absent").length;
   const pendingCount = filteredMembers.length - presentCount - absentCount;
 
+  // ─── Export rows for selected day (sorted: present → absent w/ reason → absent no reason → pending) ──
+
+  const attendanceExportRows = (() => {
+    const toRow = (m: Member) => {
+      const rec = attendanceCache[m.id];
+      let status = "Pending";
+      let absenceReported = "-";
+      let absenceReason = "-";
+      if (rec?.status === "present") { status = "Present"; }
+      if (rec?.status === "absent") {
+        status = "Absent";
+        absenceReported = rec.reported ? "Yes" : "No";
+        absenceReason = rec.absenceReason || "-";
+      }
+      return {
+        fullName: m.fullName,
+        role: m.role || "-",
+        cellRegion: m.cellRegion || "-",
+        ministryGroup: m.ministryGroup || "-",
+        status,
+        absenceReported,
+        absenceReason,
+      };
+    };
+
+    const present = filteredMembers.filter(m => attendanceCache[m.id]?.status === "present");
+    const absentReported = filteredMembers.filter(m => attendanceCache[m.id]?.status === "absent" && attendanceCache[m.id]?.reported === true);
+    const absentNoReason = filteredMembers.filter(m => attendanceCache[m.id]?.status === "absent" && !attendanceCache[m.id]?.reported);
+    const pending = filteredMembers.filter(m => !attendanceCache[m.id]);
+
+    return [...present, ...absentReported, ...absentNoReason, ...pending].map(toRow);
+  })();
+
+  const attendanceExportColumns = [
+    { key: "fullName" as const, label: "Full Name" },
+    { key: "role" as const, label: "Role" },
+    { key: "cellRegion" as const, label: "Cell Region" },
+    { key: "ministryGroup" as const, label: "Ministry Group" },
+    { key: "status" as const, label: "Status" },
+    { key: "absenceReported" as const, label: "Absence Reported" },
+    { key: "absenceReason" as const, label: "Absence Reason" },
+  ];
+
   // ─── No sessions configured ────────────────────────────────────────────────
 
   if (!sessionsLoading && sessions.length === 0) {
@@ -453,19 +497,27 @@ export default function AttendancePage() {
           </div>
 
           {/* Stats Header */}
-          <div className="bg-gray-50 p-4 border-b border-gray-100 flex gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-green-600">{presentCount}</span>
-              <span className="text-gray-500">Present</span>
+          <div className="bg-gray-50 p-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div className="flex gap-6">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-green-600">{presentCount}</span>
+                <span className="text-gray-500">Present</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-red-600">{absentCount}</span>
+                <span className="text-gray-500">Absent</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-gray-800">{pendingCount}</span>
+                <span className="text-gray-500">Pending</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-red-600">{absentCount}</span>
-              <span className="text-gray-500">Absent</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-gray-800">{pendingCount}</span>
-              <span className="text-gray-500">Pending</span>
-            </div>
+            <ExportMemberButton
+              data={attendanceExportRows}
+              filename={`Attendance_${activeSession?.name.replace(/\s+/g, "_") ?? "Service"}_${selectedDate}`}
+              columns={attendanceExportColumns}
+              disabled={filteredMembers.length === 0}
+            />
           </div>
 
           {/* Roster List */}
