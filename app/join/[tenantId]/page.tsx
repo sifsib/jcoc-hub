@@ -152,7 +152,7 @@ export default function JoinPage() {
   // Children
   const [children, setChildren] = useState<ChildInput[]>([]);
   const addChild = () => setChildren(p => [...p, { firstName: "", lastName: "", dob: "", gender: "", isMember: false }]);
-  const updChild = (i: number, k: keyof ChildInput, v: string) =>
+  const updChild = (i: number, k: keyof ChildInput, v: any) =>
     setChildren(p => p.map((c, idx) => idx === i ? { ...c, [k]: v } : c));
   const rmChild = (i: number) => setChildren(p => p.filter((_, idx) => idx !== i));
 
