@@ -9,9 +9,9 @@ import { adminDb } from "@/lib/firebase-admin";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { tenantId: string } }
+  { params }: { params: Promise<{ tenantId: string }> }
 ) {
-  const { tenantId } = params;
+  const { tenantId } = await params;
   if (!tenantId) {
     return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
   }
