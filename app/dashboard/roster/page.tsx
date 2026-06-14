@@ -866,6 +866,7 @@ export default function ManageMembershipPage() {
       gender: m.gender || "",
       email: m.email || "",
       phone: m.phone || "",
+      countryCode: (m as any).countryCode || "27",
       maritalStatus: m.maritalStatus || "",
       cellRegion: m.cellRegion || "",
       ministryGroup: m.ministryGroup || "",
