@@ -2100,37 +2100,43 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
           </button>
 
           {/* ── Export button (CSV/XLSX) ── */}
+          {/* Column headers use Brevo's expected attribute names so the file
+              can be imported into Brevo directly without remapping. */}
           <ExportMemberButton
             data={filteredMembers.map(m => {
               const a = (m as any).address || {};
               const addrParts = [a.line1, a.line2, a.suburb, a.town, a.postalCode].filter(Boolean);
+              // Derive first/last from dedicated fields; fall back to splitting fullName
+              const parts = (m.fullName || "").trim().split(/\s+/);
               return {
-                fullName: m.fullName || "",
+                FIRSTNAME: m.firstName || parts[0] || "",
+                LASTNAME: m.lastName || parts.slice(1).join(" ") || "",
                 email: m.email || "",
-                phone: m.phone || "",
-                address: addrParts.join(", "),
-                role: m.role || "",
-                membershipType: m.membershipType || "",
-                gender: m.gender || "",
-                dob: m.dob || "",
-                cellRegion: m.cellRegion || "",
-                ministryGroup: m.ministryGroup || "",
-                maritalStatus: m.maritalStatus || "",
+                SMS: m.phone || "",
+                ADDRESS: addrParts.join(", "),
+                ROLE: m.role || "",
+                MEMBERSHIP_TYPE: m.membershipType || "",
+                GENDER: m.gender || "",
+                DATE_OF_BIRTH: m.dob || "",
+                CELL_REGION: m.cellRegion || "",
+                MINISTRY_GROUP: m.ministryGroup || "",
+                MARITAL_STATUS: m.maritalStatus || "",
               };
             })}
-            filename="members"
+            filename="members-brevo"
             columns={[
-              { key: "fullName", label: "Full Name" },
-              { key: "email", label: "Email" },
-              { key: "phone", label: "Phone" },
-              { key: "address", label: "Address" },
-              { key: "role", label: "Role" },
-              { key: "membershipType", label: "Membership Type" },
-              { key: "gender", label: "Gender" },
-              { key: "dob", label: "Date of Birth" },
-              { key: "cellRegion", label: "Cell Region / Branch" },
-              { key: "ministryGroup", label: "Ministry Group" },
-              { key: "maritalStatus", label: "Marital Status" },
+              { key: "FIRSTNAME",       label: "FIRSTNAME" },
+              { key: "LASTNAME",        label: "LASTNAME" },
+              { key: "email",           label: "email" },
+              { key: "SMS",             label: "SMS" },
+              { key: "ADDRESS",         label: "ADDRESS" },
+              { key: "ROLE",            label: "ROLE" },
+              { key: "MEMBERSHIP_TYPE", label: "MEMBERSHIP_TYPE" },
+              { key: "GENDER",          label: "GENDER" },
+              { key: "DATE_OF_BIRTH",   label: "DATE_OF_BIRTH" },
+              { key: "CELL_REGION",     label: "CELL_REGION" },
+              { key: "MINISTRY_GROUP",  label: "MINISTRY_GROUP" },
+              { key: "MARITAL_STATUS",  label: "MARITAL_STATUS" },
             ]}
           />
 

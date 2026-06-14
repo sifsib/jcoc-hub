@@ -1,0 +1,79 @@
+<!--
+=============================================================================
+KFWC NAV UPDATE INSTRUCTIONS
+=============================================================================
+
+Replace the entire <header>...</header> block in each of these files:
+  - index.html
+  - about.html
+  - services.html
+  - media.html
+  - events.html
+  - contact.html
+  - privacy.html
+
+Copy and paste the header block below into each page, replacing the old one.
+The changes made are:
+  1. Added "Give" link (links to giving.html)
+  2. Changed "Members Zone" link to point to member-profile.html
+  3. Consistent nav across all pages
+
+ALSO: The old members-zone.html used to handle login. That login now lives
+inside member-profile.html. Make sure you upload both updated files.
+=============================================================================
+-->
+
+<header class="bg-white shadow-lg fixed w-full top-0 z-50">
+    <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
+        <a href="index.html" class="flex items-center space-x-3 text-kfwc-blue font-bold rounded-md p-2 hover:bg-gray-100 transition duration-300">
+            <img src="logo.jpg" alt="Kingdom Faith Worship Centre Logo" class="h-12 w-auto object-contain flex-shrink-0">
+            <span class="hidden sm:block text-2xl">Kingdom Faith Worship Centre</span>
+        </a>
+        <div class="hidden md:flex space-x-4 items-center">
+            <div class="flex items-center space-x-2">
+                <a href="https://www.facebook.com/KingdomFaithWC" target="_blank" rel="noopener noreferrer" aria-label="Facebook" class="text-kfwc-blue hover:text-blue-500 transition duration-300 p-2 rounded-md hover:bg-gray-100">
+                    <i class="fab fa-facebook-square text-2xl"></i>
+                </a>
+                <a href="https://www.instagram.com/kingdomfaithworshipcentre?igsh=MXVtbHUyaHFjYXU4dw==" target="_blank" rel="noopener noreferrer" aria-label="Instagram" class="text-kfwc-blue hover:text-pink-500 transition duration-300 p-2 rounded-md hover:bg-gray-100">
+                    <i class="fab fa-instagram-square text-2xl"></i>
+                </a>
+                <a href="https://www.youtube.com/@kfwclive" target="_blank" rel="noopener noreferrer" aria-label="YouTube" class="text-kfwc-blue hover:text-red-500 transition duration-300 p-2 rounded-md hover:bg-gray-100">
+                    <i class="fab fa-youtube-square text-2xl"></i>
+                </a>
+                <a href="https://www.tiktok.com/@kingdomfaithwc?_t=ZM-8xk5Vc8t52k&_r=1" target="_blank" rel="noopener noreferrer" aria-label="TikTok" class="text-kfwc-blue hover:text-gray-800 transition duration-300 p-2 rounded-md hover:bg-gray-100">
+                    <i class="fab fa-tiktok text-2xl"></i>
+                </a>
+            </div>
+            <a href="about.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition duration-300 rounded-md py-2 px-3 hover:bg-gray-100">About Us</a>
+            <a href="services.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition duration-300 rounded-md py-2 px-3 hover:bg-gray-100">Service Times</a>
+            <a href="media.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition duration-300 rounded-md py-2 px-3 hover:bg-gray-100">Media</a>
+            <a href="events.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition duration-300 rounded-md py-2 px-3 hover:bg-gray-100">Events &amp; RSVP</a>
+            <!-- NEW: Give link -->
+            <a href="giving.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition duration-300 rounded-md py-2 px-3 hover:bg-gray-100">Give</a>
+            <a href="contact.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition duration-300 rounded-md py-2 px-3 hover:bg-gray-100">Contact</a>
+            <!-- UPDATED: Points to member-profile.html now -->
+            <a href="member-profile.html" class="bg-kfwc-blue text-white font-bold transition duration-300 rounded-md py-2 px-4 hover:bg-blue-700">Members Zone</a>
+        </div>
+        <button id="mobile-menu-button" class="md:hidden text-gray-700 hover:text-kfwc-blue focus:outline-none p-2 rounded-md hover:bg-gray-100" aria-label="Toggle mobile menu">
+            <i class="fas fa-bars text-xl"></i>
+        </button>
+    </nav>
+    <div id="mobile-menu" class="hidden md:hidden bg-white shadow-lg py-2">
+        <a href="mailto:info@kfwc.org.za" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 transition duration-300">Email Us</a>
+        <div class="flex px-4 py-3 space-x-4 justify-start border-b border-gray-100">
+            <a href="https://www.facebook.com/KingdomFaithWC" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue hover:text-blue-500 transition"><i class="fab fa-facebook-square text-2xl"></i></a>
+            <a href="https://www.instagram.com/kingdomfaithworshipcentre?igsh=MXVtbHUyaHFjYXU4dw==" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue hover:text-pink-500 transition"><i class="fab fa-instagram-square text-2xl"></i></a>
+            <a href="https://www.youtube.com/@kfwclive" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue hover:text-red-500 transition"><i class="fab fa-youtube-square text-2xl"></i></a>
+            <a href="https://www.tiktok.com/@kingdomfaithwc?_t=ZM-8xk5Vc8t52k&_r=1" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue hover:text-gray-800 transition"><i class="fab fa-tiktok text-2xl"></i></a>
+        </div>
+        <a href="about.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 transition">About Us</a>
+        <a href="services.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 transition">Service Times</a>
+        <a href="media.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 transition">Media</a>
+        <a href="events.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 transition">Events &amp; RSVP</a>
+        <!-- NEW: Give link -->
+        <a href="giving.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 transition">Give</a>
+        <a href="contact.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 transition">Contact</a>
+        <!-- UPDATED: Points to member-profile.html now -->
+        <a href="member-profile.html" class="block px-4 py-3 bg-kfwc-blue text-white hover:bg-blue-700 transition">Members Zone</a>
+    </div>
+</header>

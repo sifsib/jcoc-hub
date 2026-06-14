@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Members Zone | Kingdom Faith Worship Centre</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA6NI2MLqerJ8BZ6r5ZMxfULPsG4rebjF4",
+            authDomain: "kfwc-members-zone.firebaseapp.com",
+            projectId: "kfwc-members-zone",
+            storageBucket: "kfwc-members-zone.firebasestorage.app",
+            messagingSenderId: "1018508790258",
+            appId: "1:1018508790258:web:0e671e7a3d98c9d4eb836b"
+        };
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script>
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = app.auth();
+        const db = app.firestore();
+    </script>
+
+    <style>
+        :root {
+            --color-kfwc-blue: #1E3A8A;
+            --color-kfwc-gold: #D9B700;
+            --color-kfwc-light-blue: #3B82F6;
+            --color-kfwc-blue-light: #F0F8FF;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.75;
+            background-color: #f0f4f8;
+            color: #333;
+            padding-top: 5rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .bg-kfwc-blue { background-color: var(--color-kfwc-blue); }
+        .text-kfwc-blue { color: var(--color-kfwc-blue); }
+
+        .btn-primary {
+            background-color: var(--color-kfwc-gold);
+            color: white;
+            font-weight: 700;
+            padding: 0.85rem 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 6px 15px rgba(217, 183, 0, 0.4);
+            transition: all 0.3s ease-in-out;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+        }
+
+        .btn-primary:hover {
+            background-color: #c7a700;
+            transform: translateY(-2px);
+        }
+
+        /* Login form */
+        .auth-card {
+            max-width: 440px;
+            margin: 3rem auto;
+            padding: 2.5rem;
+            background: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .input-field {
+            padding: 0.85rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            width: 100%;
+            font-size: 0.95rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--color-kfwc-blue);
+            box-shadow: 0 0 0 3px rgba(30,58,138,0.15);
+        }
+
+        .password-wrapper { position: relative; }
+        .password-wrapper input { padding-right: 3rem; }
+        .password-toggle {
+            position: absolute; top: 50%; right: 0.75rem;
+            transform: translateY(-50%);
+            background: transparent; border: none;
+            cursor: pointer; color: #6b7280; font-size: 1rem;
+            transition: color 0.2s;
+        }
+        .password-toggle:hover { color: var(--color-kfwc-blue); }
+
+        /* Dashboard */
+        .dashboard-header {
+            background: linear-gradient(135deg, #1E3A8A 0%, #2d5cbe 100%);
+            color: white;
+            padding: 2.5rem 1.5rem;
+        }
+
+        .dash-card {
+            background: white;
+            border-radius: 1.25rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            overflow: hidden;
+        }
+
+        .dash-card-header {
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .dash-card-header h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .dash-card-body { padding: 1.25rem 1.5rem; }
+
+        .status-badge-submitted {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #dcfce7;
+            color: #15803d;
+            font-weight: 700;
+            padding: 0.5rem 1.2rem;
+            border-radius: 9999px;
+            font-size: 0.9rem;
+            border: 1px solid #86efac;
+        }
+
+        .status-badge-pending {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #fef9c3;
+            color: #a16207;
+            font-weight: 700;
+            padding: 0.5rem 1.2rem;
+            border-radius: 9999px;
+            font-size: 0.9rem;
+            border: 1px solid #fde047;
+        }
+
+        .doc-item {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f3f4f6;
+            text-decoration: none;
+            color: #1f2937;
+            transition: color 0.2s;
+        }
+
+        .doc-item:last-child { border-bottom: none; }
+        .doc-item:hover { color: var(--color-kfwc-blue); }
+
+        .doc-icon {
+            width: 38px; height: 38px;
+            background: #eff6ff;
+            border-radius: 0.5rem;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .announcement-item {
+            padding: 0.9rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .announcement-item:last-child { border-bottom: none; }
+
+        .announcement-date {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .amendment-note {
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            border-radius: 0.75rem;
+            padding: 0.85rem 1.1rem;
+            font-size: 0.875rem;
+            color: #92400e;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+        }
+
+        .main-content { flex-grow: 1; }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 0.375rem;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+
+<body class="text-gray-800">
+
+    <!-- ===== HEADER / NAV ===== -->
+    <header class="bg-white shadow-lg fixed w-full top-0 z-50">
+        <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="index.html" class="flex items-center space-x-3 text-kfwc-blue font-bold rounded-md p-2 hover:bg-gray-100 transition duration-300">
+                <img src="logo.jpg" alt="Kingdom Faith Worship Centre Logo" class="h-12 w-auto object-contain flex-shrink-0">
+                <span class="hidden sm:block text-2xl">Kingdom Faith Worship Centre</span>
+            </a>
+            <div class="hidden md:flex space-x-4 items-center">
+                <div class="flex items-center space-x-2">
+                    <a href="https://www.facebook.com/KingdomFaithWC" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue hover:text-blue-500 p-2 rounded-md hover:bg-gray-100 transition"><i class="fab fa-facebook-square text-2xl"></i></a>
+                    <a href="https://www.instagram.com/kingdomfaithworshipcentre?igsh=MXVtbHUyaHFjYXU4dw==" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue hover:text-pink-500 p-2 rounded-md hover:bg-gray-100 transition"><i class="fab fa-instagram-square text-2xl"></i></a>
+                    <a href="https://www.youtube.com/@kfwclive" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue hover:text-red-500 p-2 rounded-md hover:bg-gray-100 transition"><i class="fab fa-youtube-square text-2xl"></i></a>
+                    <a href="https://www.tiktok.com/@kingdomfaithwc?_t=ZM-8xk5Vc8t52k&_r=1" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue hover:text-gray-800 p-2 rounded-md hover:bg-gray-100 transition"><i class="fab fa-tiktok text-2xl"></i></a>
+                </div>
+                <a href="about.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition rounded-md py-2 px-3 hover:bg-gray-100">About Us</a>
+                <a href="services.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition rounded-md py-2 px-3 hover:bg-gray-100">Service Times</a>
+                <a href="media.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition rounded-md py-2 px-3 hover:bg-gray-100">Media</a>
+                <a href="events.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition rounded-md py-2 px-3 hover:bg-gray-100">Events &amp; RSVP</a>
+                <a href="giving.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition rounded-md py-2 px-3 hover:bg-gray-100">Give</a>
+                <a href="contact.html" class="text-gray-700 hover:text-kfwc-blue font-semibold transition rounded-md py-2 px-3 hover:bg-gray-100">Contact</a>
+                <a href="member-profile.html" class="bg-kfwc-blue text-white font-bold transition rounded-md py-2 px-4 hover:bg-blue-700">Members Zone</a>
+            </div>
+            <button id="mobile-menu-button" class="md:hidden text-gray-700 focus:outline-none p-2 rounded-md hover:bg-gray-100" aria-label="Toggle menu">
+                <i class="fas fa-bars text-xl"></i>
+            </button>
+        </nav>
+        <div id="mobile-menu" class="hidden md:hidden bg-white shadow-lg py-2">
+            <a href="mailto:info@kfwc.org.za" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">Email Us</a>
+            <div class="flex px-4 py-3 space-x-4 border-b border-gray-100">
+                <a href="https://www.facebook.com/KingdomFaithWC" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue"><i class="fab fa-facebook-square text-2xl"></i></a>
+                <a href="https://www.instagram.com/kingdomfaithworshipcentre?igsh=MXVtbHUyaHFjYXU4dw==" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue"><i class="fab fa-instagram-square text-2xl"></i></a>
+                <a href="https://www.youtube.com/@kfwclive" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue"><i class="fab fa-youtube-square text-2xl"></i></a>
+                <a href="https://www.tiktok.com/@kingdomfaithwc?_t=ZM-8xk5Vc8t52k&_r=1" target="_blank" rel="noopener noreferrer" class="text-kfwc-blue"><i class="fab fa-tiktok text-2xl"></i></a>
+            </div>
+            <a href="about.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">About Us</a>
+            <a href="services.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">Service Times</a>
+            <a href="media.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">Media</a>
+            <a href="events.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">Events &amp; RSVP</a>
+            <a href="giving.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">Give</a>
+            <a href="contact.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">Contact</a>
+            <a href="member-profile.html" class="block px-4 py-3 bg-kfwc-blue text-white hover:bg-blue-700">Members Zone</a>
+        </div>
+    </header>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="main-content">
+
+        <!-- LOGIN PANEL (shown when signed out) -->
+        <div id="login-panel" class="hidden bg-kfwc-blue-light py-12 min-h-screen" style="background-color: var(--color-kfwc-blue-light);">
+            <div class="auth-card">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-lock text-kfwc-blue text-2xl"></i>
+                    </div>
+                    <h1 class="text-2xl font-extrabold text-gray-800">Members Zone</h1>
+                    <p class="text-gray-500 text-sm mt-1">Sign in to access the members area</p>
+                </div>
+
+                <div id="auth-message" class="hidden text-center text-sm font-semibold mb-4 p-3 rounded-lg"></div>
+
+                <!-- Sign In Form -->
+                <form id="signin-form" class="space-y-4">
+                    <div>
+                        <label for="signin-email" class="block text-sm font-medium text-gray-700 mb-1">Email address</label>
+                        <input type="email" id="signin-email" required class="input-field" placeholder="you@example.com">
+                    </div>
+                    <div>
+                        <label for="signin-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="signin-password" required class="input-field">
+                            <button type="button" class="password-toggle" id="toggle-pw" aria-label="Show password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <button type="button" id="forgot-link" class="text-right w-full mt-1 text-sm text-kfwc-blue hover:underline">Forgot password?</button>
+                    </div>
+                    <button type="submit" class="btn-primary">Sign In</button>
+                </form>
+
+                <div class="mt-6 pt-5 border-t border-gray-100 text-center">
+                    <p class="text-sm text-gray-500">Not a member yet?</p>
+                    <a href="members-zone.html" class="text-kfwc-blue font-semibold hover:underline text-sm">Submit a membership form</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD PANEL (shown when signed in) -->
+        <div id="dashboard-panel" class="hidden">
+
+            <!-- Dashboard Header -->
+            <div class="dashboard-header">
+                <div class="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <p class="text-blue-200 text-sm font-semibold uppercase tracking-wider mb-1">Members Zone</p>
+                        <h1 class="text-2xl md:text-3xl font-extrabold" id="welcome-name">Welcome back</h1>
+                        <p class="text-blue-200 text-sm" id="member-email-display"></p>
+                    </div>
+                    <button id="signout-btn" class="self-start sm:self-auto flex items-center gap-2 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                        <i class="fas fa-sign-out-alt"></i> Sign Out
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div class="max-w-5xl mx-auto px-4 py-8">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                    <!-- Left column: Membership status + Amendment note -->
+                    <div class="lg:col-span-1 flex flex-col gap-6">
+
+                        <!-- Membership Status Card -->
+                        <div class="dash-card">
+                            <div class="dash-card-header">
+                                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-id-card text-kfwc-blue text-sm"></i>
+                                </div>
+                                <h3>Membership Status</h3>
+                            </div>
+                            <div class="dash-card-body text-center py-6">
+                                <div id="membership-loading" class="skeleton h-8 w-48 mx-auto mb-3"></div>
+                                <div id="membership-status" class="hidden">
+                                    <!-- Populated by JS -->
+                                </div>
+                                <p id="membership-hint" class="hidden text-sm text-gray-500 mt-3"></p>
+                            </div>
+                        </div>
+
+                        <!-- Amendment Note -->
+                        <div class="amendment-note">
+                            <i class="fas fa-info-circle mt-0.5 flex-shrink-0"></i>
+                            <p>Need to update your details? Contact the church office. Your information can only be amended by an administrator.</p>
+                        </div>
+
+                        <!-- Contact shortcut -->
+                        <div class="dash-card">
+                            <div class="dash-card-body">
+                                <p class="text-sm font-semibold text-gray-700 mb-3">Church Office</p>
+                                <a href="mailto:info@kfwc.org.za" class="flex items-center gap-2 text-sm text-kfwc-blue hover:underline mb-2">
+                                    <i class="fas fa-envelope w-4"></i> info@kfwc.org.za
+                                </a>
+                                <a href="contact.html" class="flex items-center gap-2 text-sm text-kfwc-blue hover:underline">
+                                    <i class="fas fa-phone w-4"></i> Contact page
+                                </a>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Right column: Announcements + Documents -->
+                    <div class="lg:col-span-2 flex flex-col gap-6">
+
+                        <!-- Announcements Card -->
+                        <div class="dash-card">
+                            <div class="dash-card-header">
+                                <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-bullhorn text-yellow-600 text-sm"></i>
+                                </div>
+                                <h3>Church Announcements</h3>
+                            </div>
+                            <div class="dash-card-body">
+                                <!-- ============================================================
+                                     CHURCH ADMIN: Add or edit announcements below.
+                                     Copy the announcement-item block to add more.
+                                     Remove old ones when they are no longer relevant.
+                                ============================================================ -->
+
+                                <div class="announcement-item">
+                                    <p class="announcement-date">June 2025</p>
+                                    <p class="font-semibold text-gray-800">Welcome to the new Members Zone</p>
+                                    <p class="text-sm text-gray-600 mt-1">
+                                        Our members area has been updated. You can now view your membership status, access church documents, and stay up to date with internal announcements here.
+                                    </p>
+                                </div>
+
+                                <div class="announcement-item">
+                                    <p class="announcement-date">Coming Up</p>
+                                    <p class="font-semibold text-gray-800">Mid-Year Prayer Service</p>
+                                    <p class="text-sm text-gray-600 mt-1">
+                                        Join us for our mid-year corporate prayer gathering. Details will be shared from the pulpit and via WhatsApp.
+                                    </p>
+                                </div>
+
+                                <!-- Add more announcements above this line -->
+                                <p class="text-xs text-gray-400 mt-4 text-center">Announcements are updated by the church team. Check back regularly.</p>
+                            </div>
+                        </div>
+
+                        <!-- Church Documents Card -->
+                        <div class="dash-card">
+                            <div class="dash-card-header">
+                                <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-folder-open text-green-600 text-sm"></i>
+                                </div>
+                                <h3>Church Documents</h3>
+                            </div>
+                            <div class="dash-card-body">
+                                <!-- ============================================================
+                                     CHURCH ADMIN: Upload your PDF documents to the same folder
+                                     as this file on your hosting, then update the href links
+                                     below. You can add or remove doc-item rows as needed.
+                                ============================================================ -->
+
+                                <a href="docs/kfwc-constitution.pdf" target="_blank" class="doc-item">
+                                    <div class="doc-icon">
+                                        <i class="fas fa-file-pdf text-red-500 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-semibold text-sm">Church Constitution</p>
+                                        <p class="text-xs text-gray-400">PDF Document</p>
+                                    </div>
+                                    <i class="fas fa-download ml-auto text-gray-300 text-sm"></i>
+                                </a>
+
+                                <a href="docs/kfwc-privacy-policy.pdf" target="_blank" class="doc-item">
+                                    <div class="doc-icon">
+                                        <i class="fas fa-file-pdf text-red-500 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-semibold text-sm">Privacy Policy</p>
+                                        <p class="text-xs text-gray-400">PDF Document</p>
+                                    </div>
+                                    <i class="fas fa-download ml-auto text-gray-300 text-sm"></i>
+                                </a>
+
+                                <a href="docs/kfwc-membership-policy.pdf" target="_blank" class="doc-item">
+                                    <div class="doc-icon">
+                                        <i class="fas fa-file-pdf text-red-500 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-semibold text-sm">Membership Policy</p>
+                                        <p class="text-xs text-gray-400">PDF Document</p>
+                                    </div>
+                                    <i class="fas fa-download ml-auto text-gray-300 text-sm"></i>
+                                </a>
+
+                                <a href="docs/kfwc-code-of-conduct.pdf" target="_blank" class="doc-item">
+                                    <div class="doc-icon">
+                                        <i class="fas fa-file-alt text-blue-500 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-semibold text-sm">Code of Conduct</p>
+                                        <p class="text-xs text-gray-400">PDF Document</p>
+                                    </div>
+                                    <i class="fas fa-download ml-auto text-gray-300 text-sm"></i>
+                                </a>
+
+                                <!-- Add more document links above this line -->
+                                <p class="text-xs text-gray-400 mt-4 text-center">Documents are maintained by the church administration team.</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LOADING STATE (initial auth check) -->
+        <div id="loading-panel" class="flex items-center justify-center min-h-screen">
+            <div class="text-center">
+                <div class="w-12 h-12 border-4 border-kfwc-blue border-t-transparent rounded-full animate-spin mx-auto mb-4" style="border-color: #1E3A8A; border-top-color: transparent;"></div>
+                <p class="text-gray-500 text-sm">Loading...</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="bg-gray-900 text-white py-10 text-center mt-auto">
+        <div class="container mx-auto px-4">
+            <p class="text-lg">© <span id="current-year"></span> Kingdom Faith Worship Centre. All rights reserved. Designed by Sibuyane Enterprise www.sibuyane.co.za</p>
+            <div class="flex justify-center space-x-6 mt-6">
+                <a href="privacy.html" class="text-gray-400 hover:text-yellow-400 transition duration-300">Privacy Policy</a>
+                <button type="button" onclick="window.KFWC_showCookieSettings && window.KFWC_showCookieSettings()" class="text-gray-400 hover:text-yellow-400 transition duration-300" style="background:none;border:none;cursor:pointer;font:inherit;padding:0;">Cookie settings</button>
+            </div>
+            <div class="flex justify-center space-x-5 mt-6">
+                <a href="https://www.facebook.com/KingdomFaithWC" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition transform hover:scale-110"><i class="fab fa-facebook-square text-3xl"></i></a>
+                <a href="https://www.instagram.com/kingdomfaithworshipcentre?igsh=MXVtbHUyaHFjYXU4dw==" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition transform hover:scale-110"><i class="fab fa-instagram-square text-3xl"></i></a>
+                <a href="https://www.youtube.com/@kfwclive" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition transform hover:scale-110"><i class="fab fa-youtube-square text-3xl"></i></a>
+                <a href="https://www.tiktok.com/@kingdomfaithwc?_t=ZM-8xk5Vc8t52k&_r=1" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition transform hover:scale-110"><i class="fab fa-tiktok text-3xl"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+
+        // Mobile menu
+        document.getElementById('mobile-menu-button').addEventListener('click', () => {
+            document.getElementById('mobile-menu').classList.toggle('hidden');
+        });
+
+        // Elements
+        const loadingPanel   = document.getElementById('loading-panel');
+        const loginPanel     = document.getElementById('login-panel');
+        const dashboardPanel = document.getElementById('dashboard-panel');
+        const authMessage    = document.getElementById('auth-message');
+
+        function showMessage(msg, type) {
+            authMessage.textContent = msg;
+            authMessage.className = 'text-center text-sm font-semibold mb-4 p-3 rounded-lg ' +
+                (type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700');
+            authMessage.classList.remove('hidden');
+        }
+
+        // ─── Password toggle ───────────────────────────────────────────────
+        document.getElementById('toggle-pw').addEventListener('click', function() {
+            const input = document.getElementById('signin-password');
+            const icon  = this.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+                this.setAttribute('aria-label', 'Hide password');
+            } else {
+                input.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+                this.setAttribute('aria-label', 'Show password');
+            }
+        });
+
+        // ─── Forgot password ───────────────────────────────────────────────
+        document.getElementById('forgot-link').addEventListener('click', () => {
+            const email = document.getElementById('signin-email').value.trim();
+            if (!email) {
+                showMessage("Enter your email address first, then click 'Forgot password?'", 'error');
+                document.getElementById('signin-email').focus();
+                return;
+            }
+            auth.sendPasswordResetEmail(email)
+                .then(() => showMessage("Reset link sent. Check your inbox (and spam folder).", 'success'))
+                .catch((err) => {
+                    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email') {
+                        showMessage("If an account exists for that email, a reset link has been sent.", 'success');
+                    } else {
+                        showMessage("Could not send reset email. Try again.", 'error');
+                    }
+                });
+        });
+
+        // ─── Sign in ───────────────────────────────────────────────────────
+        document.getElementById('signin-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            authMessage.classList.add('hidden');
+            showMessage("Signing in...", 'success');
+
+            const email    = document.getElementById('signin-email').value.trim();
+            const password = document.getElementById('signin-password').value;
+
+            auth.signInWithEmailAndPassword(email, password)
+                .catch((err) => {
+                    if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                        showMessage("Incorrect email or password. Please try again.", 'error');
+                    } else if (err.code === 'auth/too-many-requests') {
+                        showMessage("Too many attempts. Please wait a few minutes.", 'error');
+                    } else {
+                        showMessage("Sign in failed: " + err.message, 'error');
+                    }
+                });
+        });
+
+        // ─── Sign out ──────────────────────────────────────────────────────
+        document.getElementById('signout-btn').addEventListener('click', () => {
+            auth.signOut();
+        });
+
+        // ─── Auth state + dashboard population ────────────────────────────
+        auth.onAuthStateChanged(async (user) => {
+            loadingPanel.classList.add('hidden');
+
+            if (!user) {
+                loginPanel.classList.remove('hidden');
+                dashboardPanel.classList.add('hidden');
+                return;
+            }
+
+            // User is signed in
+            loginPanel.classList.add('hidden');
+            dashboardPanel.classList.remove('hidden');
+
+            // Populate welcome header
+            document.getElementById('member-email-display').textContent = user.email;
+
+            // Fetch member record from Firestore
+            try {
+                const doc = await db.collection('members').doc(user.uid).get();
+                const data = doc.exists ? doc.data() : {};
+
+                // Welcome name
+                const displayName = data.name ? `Welcome back, ${data.name}` : 'Welcome back';
+                document.getElementById('welcome-name').textContent = displayName;
+
+                // Membership status
+                const statusEl   = document.getElementById('membership-status');
+                const loadingEl  = document.getElementById('membership-loading');
+                const hintEl     = document.getElementById('membership-hint');
+
+                loadingEl.classList.add('hidden');
+                statusEl.classList.remove('hidden');
+                hintEl.classList.remove('hidden');
+
+                // The field 'membershipFormSubmitted' is set to true by admin after
+                // reviewing the KerekeHub join request for this member.
+                if (data.membershipFormSubmitted === true) {
+                    statusEl.innerHTML = `
+                        <span class="status-badge-submitted">
+                            <i class="fas fa-check-circle"></i> Membership Form Submitted
+                        </span>`;
+                    hintEl.textContent = "Your form has been received. The church team will be in touch if any follow-up is needed.";
+                } else {
+                    statusEl.innerHTML = `
+                        <span class="status-badge-pending">
+                            <i class="fas fa-clock"></i> Form Not Yet Submitted
+                        </span>`;
+                    hintEl.innerHTML = `Please <a href="members-zone.html" class="text-kfwc-blue font-semibold underline">complete your membership form</a> so the church team can process your record.`;
+                }
+
+            } catch (err) {
+                console.error("Error fetching member data:", err);
+                document.getElementById('welcome-name').textContent = 'Welcome back';
+                document.getElementById('membership-loading').classList.add('hidden');
+                document.getElementById('membership-status').innerHTML = '<span class="text-sm text-gray-400">Could not load status</span>';
+                document.getElementById('membership-status').classList.remove('hidden');
+            }
+        });
+    </script>
+
+    <script src="cookie-banner.js" defer></script>
+</body>
+</html>
