@@ -105,8 +105,23 @@ const DEFAULT_CELL_REGIONS: string[] = [];
 const DEFAULT_MINISTRY_GROUPS = ["Youth", "Mens Fellowship", "Womens Ministry", "Seniors"];
 const DEFAULT_CHURCH_ROLES: string[] = ["Elder", "Deacon", "Deaconess", "Trustee"];
 
+// Southern African country codes (default ZA)
+const COUNTRY_CODES = [
+  { code: "27",  label: "ZA", name: "South Africa" },
+  { code: "263", label: "ZW", name: "Zimbabwe" },
+  { code: "260", label: "ZM", name: "Zambia" },
+  { code: "267", label: "BW", name: "Botswana" },
+  { code: "264", label: "NA", name: "Namibia" },
+  { code: "258", label: "MZ", name: "Mozambique" },
+  { code: "266", label: "LS", name: "Lesotho" },
+  { code: "268", label: "SZ", name: "Eswatini" },
+  { code: "44",  label: "UK", name: "United Kingdom" },
+  { code: "1",   label: "US", name: "United States" },
+];
+
 const emptyPerson = () => ({
   firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
+  countryCode: "27",
   maritalStatus: "", cellRegion: "", ministryGroup: "", churchRole: "",
   address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
   bornAgain: "", waterBaptized: "", membershipType: "", ministries: [] as string[],
@@ -170,9 +185,10 @@ function assignMinistryGroup(dob: string, gender: string, maritalStatus: string)
   return isMale ? "Mighty Men" : "Women of Faith";
 }
 
-function fmtPhone(raw: string): string {
-  const c = raw.trim().replace(/\s+/g, "");
-  return c.startsWith("0") ? "27" + c.substring(1) : c;
+function fmtPhone(raw: string, countryCode: string = "27"): string {
+  const c = raw.trim().replace(/\s+/g, "").replace(/^\+/, "");
+  if (c.startsWith("0")) return countryCode + c.substring(1);
+  return c;
 }
 
 function parseDobParts(dob: string): { mm: number; dd: number } | null {
@@ -310,7 +326,18 @@ function MemberBlock({
         <input type="email" value={data.email} onChange={e => set("email", e.target.value)} placeholder="e.g. jane@gmail.com (optional)" className={inp} />
       </F>
       <F label="Contact Number" req={!ageRestricted}>
-        <input type="tel" value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="e.g. 0812345678" className={inp} required={!ageRestricted} />
+        <div className="flex gap-2">
+          <select
+            value={data.countryCode || "27"}
+            onChange={e => set("countryCode", e.target.value)}
+            className="border p-2 rounded text-sm text-gray-700 bg-white focus:outline-blue-500 w-24 shrink-0"
+          >
+            {COUNTRY_CODES.map(c => (
+              <option key={c.code} value={c.code}>{c.label} +{c.code}</option>
+            ))}
+          </select>
+          <input type="tel" value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="e.g. 0812345678" className={`${inp} flex-1`} required={!ageRestricted} />
+        </div>
       </F>
       {(fc.address?.enabled !== false) && (
         <F label={fc.address?.label || "Residential Address"} req={fc.address?.required}>
@@ -480,7 +507,12 @@ export default function ManageMembershipPage() {
   const [importRows, setImportRows] = useState<any[]>([]);
   const [importParsing, setImportParsing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importCountryCode, setImportCountryCode] = useState("27");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Duplicate detection
+  interface DuplicateFlag { rowIndex: number; importName: string; importDob: string; existingName: string; }
+  const [duplicateWarning, setDuplicateWarning] = useState<{ dups: DuplicateFlag[]; total: number } | null>(null);
 
   // ─── Load ───────────────────────────────────────────────────────────────────
 
@@ -702,7 +734,7 @@ export default function ManageMembershipPage() {
         tenantId: appUser.tenantId,
         fullName: `${primary.firstName.trim()} ${primary.lastName.trim()}`,
         firstName: primary.firstName.trim(), lastName: primary.lastName.trim(),
-        email: primary.email.trim().toLowerCase(), phone: fmtPhone(primary.phone),
+        email: primary.email.trim().toLowerCase(), phone: fmtPhone(primary.phone, primary.countryCode || "27"),
         dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus,
         address: primary.address, role: primary.role, cellRegion: primary.cellRegion.trim(), ministryGroup: primary.ministryGroup.trim(),
         churchRole: primary.churchRole?.trim() || "",
@@ -721,7 +753,7 @@ export default function ManageMembershipPage() {
       triggerMemberWorkflows(
         primaryRef.id,
         `${primary.firstName.trim()} ${primary.lastName.trim()}`,
-        fmtPhone(primary.phone),
+        fmtPhone(primary.phone, primary.countryCode || "27"),
       );
 
       // 3. Spouse as member — second member document
@@ -731,7 +763,7 @@ export default function ManageMembershipPage() {
           tenantId: appUser.tenantId,
           fullName: `${spouse.firstName.trim()} ${spouse.lastName.trim()}`,
           firstName: spouse.firstName.trim(), lastName: spouse.lastName.trim(),
-          email: spouse.email.trim().toLowerCase(), phone: fmtPhone(spouse.phone),
+          email: spouse.email.trim().toLowerCase(), phone: fmtPhone(spouse.phone, spouse.countryCode || "27"),
           dob: spouse.dob, gender: spouse.gender, maritalStatus: "Married",
           address: spouse.address, role: spouse.role, cellRegion: spouse.cellRegion.trim(), ministryGroup: spouse.ministryGroup.trim(),
           churchRole: spouse.churchRole?.trim() || "",
@@ -868,7 +900,7 @@ export default function ManageMembershipPage() {
         firstName: primary.firstName.trim(),
         lastName: primary.lastName.trim(),
         email: primary.email.trim().toLowerCase(),
-        phone: fmtPhone(primary.phone),
+        phone: fmtPhone(primary.phone, primary.countryCode || "27"),
         dob: primary.dob,
         gender: primary.gender,
         maritalStatus: primary.maritalStatus,
@@ -938,8 +970,48 @@ export default function ManageMembershipPage() {
     finally { setImportParsing(false); }
   };
 
-  const handleImport = async () => {
+  // ─── Duplicate check ─────────────────────────────────────────────────────────
+
+  const runDuplicateCheck = (): DuplicateFlag[] => {
+    const norm = (v: any) => String(v ?? "").trim().toLowerCase();
+    const dups: DuplicateFlag[] = [];
+    importRows.forEach((row, rowIndex) => {
+      const firstName = norm(row["First Name"] || row.firstName || row.name);
+      const lastName = norm(row["Last Name"] || row.lastName || row.surname);
+      const dob = normalizeDob(row["Date of Birth"] || row.dob || row["Date of birth"]);
+      if (!firstName && !lastName) return;
+      // Only flag when DOB is also present — avoids false positives on name-only matches
+      if (!dob) return;
+      const match = members.find(m =>
+        (m.firstName || "").trim().toLowerCase() === firstName &&
+        (m.lastName || "").trim().toLowerCase() === lastName &&
+        (m.dob || "") === dob
+      );
+      if (match) {
+        dups.push({
+          rowIndex,
+          importName: `${row["First Name"] || row.firstName || ""} ${row["Last Name"] || row.lastName || ""}`.trim(),
+          importDob: dob,
+          existingName: match.fullName,
+        });
+      }
+    });
+    return dups;
+  };
+
+  const handleImportClick = () => {
+    setDuplicateWarning(null);
+    const dups = runDuplicateCheck();
+    if (dups.length > 0) {
+      setDuplicateWarning({ dups, total: importRows.length });
+    } else {
+      handleImport(new Set());
+    }
+  };
+
+  const handleImport = async (skipIndices: Set<number>) => {
     if (!appUser || !importRows.length) return;
+    setDuplicateWarning(null);
     setImporting(true); let count = 0;
 
     const s = (v: any) => String(v ?? "").trim();
@@ -950,7 +1022,9 @@ export default function ManageMembershipPage() {
     };
 
     try {
-      for (const row of importRows) {
+      for (let rowIndex = 0; rowIndex < importRows.length; rowIndex++) {
+        if (skipIndices.has(rowIndex)) continue;
+        const row = importRows[rowIndex];
         const firstName = s(row["First Name"] || row.firstName || row.name);
         const lastName = s(row["Last Name"] || row.lastName || row.surname);
         const fullName = s(row["Full Name"] || row.fullName || `${firstName} ${lastName}`);
@@ -1014,7 +1088,7 @@ export default function ManageMembershipPage() {
           tenantId: appUser.tenantId,
           fullName, firstName, lastName,
           email: s(row["Email"] || row.email).toLowerCase(),
-          phone: s(row["Phone"] || row.phone || row["Contact Number"]) ? fmtPhone(s(row["Phone"] || row.phone || row["Contact Number"])) : "",
+          phone: s(row["Phone"] || row.phone || row["Contact Number"]) ? fmtPhone(s(row["Phone"] || row.phone || row["Contact Number"]), importCountryCode) : "",
           dob: normalizeDob(row["Date of Birth"] || row.dob || row["Date of birth"]),
           gender: s(row["Gender"] || row.gender),
           maritalStatus: s(row["Marital Status"] || row.maritalStatus),
@@ -1053,7 +1127,7 @@ export default function ManageMembershipPage() {
               fullName: `${spFirst} ${spLast}`.trim(),
               firstName: spFirst, lastName: spLast,
               email: s(row["Spouse Email"] || row["Email.1"]).toLowerCase(),
-              phone: s(row["Spouse Phone"] || row["Contact Number.1"]) ? fmtPhone(s(row["Spouse Phone"] || row["Contact Number.1"])) : "",
+              phone: s(row["Spouse Phone"] || row["Contact Number.1"]) ? fmtPhone(s(row["Spouse Phone"] || row["Contact Number.1"]), importCountryCode) : "",
               dob: normalizeDob(row["Spouse DOB"]),
               gender: s(row["Spouse Gender"]),
               maritalStatus: "Married",
@@ -1648,6 +1722,19 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /> Reading file...
             </div>
           )}
+          <div className="border-t border-gray-100 pt-3 flex items-center gap-3">
+            <label className="text-xs font-semibold text-gray-500 whitespace-nowrap">Phone country</label>
+            <select
+              value={importCountryCode}
+              onChange={e => setImportCountryCode(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {COUNTRY_CODES.map(c => (
+                <option key={c.code} value={c.code}>{c.label} +{c.code} ({c.name})</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400">Used to format phone numbers starting with 0 in the file.</p>
+          </div>
         </div>
 
         {/* Preview */}
@@ -1676,12 +1763,57 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               </table>
               {importRows.length > 8 && <p className="p-3 text-center text-xs text-gray-400">...and {importRows.length - 8} more rows</p>}
             </div>
-            <div className="p-4 border-t bg-gray-50">
-              <button onClick={handleImport} disabled={importing}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2 px-6 rounded-lg text-sm flex items-center gap-2">
-                {importing && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {importing ? "Importing..." : `Import ${importRows.length} Member${importRows.length !== 1 ? "s" : ""}`}
-              </button>
+            <div className="p-4 border-t bg-gray-50 flex flex-col gap-3">
+              {/* Duplicate warning panel */}
+              {duplicateWarning && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-3">
+                  <p className="text-sm font-bold text-amber-800">
+                    {duplicateWarning.dups.length} potential duplicate{duplicateWarning.dups.length !== 1 ? "s" : ""} found
+                  </p>
+                  <p className="text-xs text-amber-700">
+                    The following rows match an existing member by first name, last name, and date of birth. Please review before importing.
+                  </p>
+                  <ul className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                    {duplicateWarning.dups.map((d, i) => (
+                      <li key={i} className="text-xs text-amber-800 bg-white border border-amber-100 rounded-lg px-3 py-2">
+                        <span className="font-semibold">{d.importName}</span>
+                        <span className="text-amber-500 mx-1">DOB: {d.importDob}</span>
+                        <span className="text-amber-600">matches existing member: <span className="font-semibold">{d.existingName}</span></span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex gap-3 flex-wrap">
+                    <button
+                      onClick={() => handleImport(new Set(duplicateWarning.dups.map(d => d.rowIndex)))}
+                      disabled={importing}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2 px-4 rounded-lg text-sm"
+                    >
+                      Skip duplicates — import {duplicateWarning.total - duplicateWarning.dups.length} new record{duplicateWarning.total - duplicateWarning.dups.length !== 1 ? "s" : ""}
+                    </button>
+                    <button
+                      onClick={() => handleImport(new Set())}
+                      disabled={importing}
+                      className="bg-white hover:bg-gray-50 disabled:opacity-50 border border-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg text-sm"
+                    >
+                      Import all {duplicateWarning.total} anyway
+                    </button>
+                    <button
+                      onClick={() => setDuplicateWarning(null)}
+                      className="text-sm text-gray-500 hover:text-gray-700 font-medium px-2"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!duplicateWarning && (
+                <button onClick={handleImportClick} disabled={importing}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2 px-6 rounded-lg text-sm flex items-center gap-2 self-start">
+                  {importing && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {importing ? "Importing..." : `Import ${importRows.length} Member${importRows.length !== 1 ? "s" : ""}`}
+                </button>
+              )}
             </div>
           </div>
         )}

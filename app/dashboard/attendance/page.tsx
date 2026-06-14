@@ -68,6 +68,9 @@ export default function AttendancePage() {
   const [configCellRegions, setConfigCellRegions] = useState<string[]>([]);
   const [configMinistryGroups, setConfigMinistryGroups] = useState<string[]>([]);
 
+  // Tracking start date lock
+  const [trackingStartDate, setTrackingStartDate] = useState("");
+
   // QR modal state
   const [showQR, setShowQR] = useState(false);
 
@@ -89,6 +92,7 @@ export default function AttendancePage() {
         const td = tenantSnap.data() || {};
         const loaded: ServiceSession[] = td.serviceSessions || [];
         setSessions(loaded);
+        setTrackingStartDate(td.trackingStartDate || "");
         setConfigCellRegions(td.cellRegions || []);
         setConfigMinistryGroups(td.ministryGroups || []);
 
@@ -153,6 +157,17 @@ export default function AttendancePage() {
   // ─── Handle date change ─────────────────────────────────────────────────────
 
   const handleDateChange = (newDate: string) => {
+    // Block dates before the church's tracking start date
+    if (trackingStartDate && newDate < trackingStartDate) {
+      const formatted = new Date(trackingStartDate + "T00:00:00").toLocaleDateString("en-GB", {
+        day: "numeric", month: "long", year: "numeric",
+      });
+      setDateError(`This date is before your church's tracking start date. Please select a date from ${formatted} onwards.`);
+      setSelectedDate(newDate);
+      setActiveSession(null);
+      return;
+    }
+
     const match = getSessionForDate(newDate);
 
     if (!match) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 
 interface ProfileData {
@@ -77,6 +77,16 @@ export default function ProfilePage() {
   const [newSessionDay, setNewSessionDay] = useState("Sunday");
   const [newSessionName, setNewSessionName] = useState("");
 
+  // Tracking start date
+  const [trackingStartDate, setTrackingStartDate] = useState("");
+  const [trackingDateSaving, setTrackingDateSaving] = useState(false);
+  const [trackingDateSaved, setTrackingDateSaved] = useState(false);
+  const [trackingDateError, setTrackingDateError] = useState("");
+
+  // Phone number migration
+  const [migrating, setMigrating] = useState(false);
+  const [migrateResult, setMigrateResult] = useState<string | null>(null);
+
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (!user) { setLoading(false); return; }
@@ -93,6 +103,7 @@ export default function ProfilePage() {
           const td = tenantDoc.data() || {};
           churchName = td.name || "";
           loadedSessions = td.serviceSessions || [];
+          setTrackingStartDate(td.trackingStartDate || "");
           setBankDetails({
             bankName: td.bankName || "",
             bankAccountName: td.bankAccountName || "",
@@ -153,6 +164,52 @@ export default function ProfilePage() {
       setSessionsError("Could not save. Check permissions and try again.");
     } finally {
       setSessionsSaving(false);
+    }
+  };
+
+  const handleSaveTrackingDate = async () => {
+    if (!profile?.tenantId) return;
+    setTrackingDateSaving(true);
+    setTrackingDateError("");
+    setTrackingDateSaved(false);
+    try {
+      await updateDoc(doc(db, "tenants", profile.tenantId), {
+        trackingStartDate: trackingStartDate || null,
+      });
+      setTrackingDateSaved(true);
+      setTimeout(() => setTrackingDateSaved(false), 3000);
+    } catch (err) {
+      console.error("Save tracking date failed:", err);
+      setTrackingDateError("Could not save. Check permissions and try again.");
+    } finally {
+      setTrackingDateSaving(false);
+    }
+  };
+
+  const handleMigratePhones = async () => {
+    if (!profile?.tenantId) return;
+    if (!confirm("This will update all member phones starting with 0 (10 digits) to the +27 format. This is safe to run more than once. Continue?")) return;
+    setMigrating(true);
+    setMigrateResult(null);
+    try {
+      const q = query(collection(db, "members"), where("tenantId", "==", profile.tenantId));
+      const snap = await getDocs(q);
+      let count = 0;
+      const updates: Promise<void>[] = [];
+      snap.forEach(d => {
+        const phone: string = d.data().phone || "";
+        if (/^0\d{9}$/.test(phone)) {
+          updates.push(updateDoc(doc(db, "members", d.id), { phone: "27" + phone.substring(1) }));
+          count++;
+        }
+      });
+      await Promise.all(updates);
+      setMigrateResult(`Done. Updated ${count} phone number${count !== 1 ? "s" : ""} to +27 format.`);
+    } catch (err) {
+      console.error("Phone migration failed:", err);
+      setMigrateResult("Migration failed. Check the console for details.");
+    } finally {
+      setMigrating(false);
     }
   };
 
@@ -460,6 +517,85 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Tracking Settings — owner/admin only */}
+      {canEditSessions && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          <div>
+            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Tracking Settings</h2>
+            <p className="text-xs text-gray-400 mt-1">
+              Set a start date to prevent markers from accidentally recording attendance before your church began using Kereke Hub. Dates before this will be blocked on the attendance page.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tracking Start Date</label>
+            <div className="flex gap-3 items-center">
+              <input
+                type="date"
+                value={trackingStartDate}
+                onChange={e => setTrackingStartDate(e.target.value)}
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
+              {trackingStartDate && (
+                <button
+                  type="button"
+                  onClick={() => setTrackingStartDate("")}
+                  className="text-xs text-gray-400 hover:text-gray-600 font-medium"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-1.5">Leave blank to allow any historical date.</p>
+          </div>
+
+          {trackingDateError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{trackingDateError}</p>
+          )}
+          {trackingDateSaved && (
+            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">Tracking start date saved.</p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveTrackingDate}
+              disabled={trackingDateSaving}
+              className="px-8 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition disabled:opacity-50"
+            >
+              {trackingDateSaving ? "Saving..." : "Save Tracking Date"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Phone Number Migration — owner/admin only */}
+      {canEditSessions && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          <div>
+            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Phone Number Format</h2>
+            <p className="text-xs text-gray-400 mt-1">
+              All phone numbers are stored in international format (e.g. 27821234567). If you have existing members whose numbers still start with 0 (e.g. 0821234567), run this once to convert them to +27 format.
+            </p>
+          </div>
+
+          {migrateResult && (
+            <p className={`text-sm px-4 py-3 rounded-xl border ${migrateResult.startsWith("Done") ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-red-600 bg-red-50 border-red-200"}`}>
+              {migrateResult}
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleMigratePhones}
+              disabled={migrating}
+              className="px-8 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {migrating ? "Migrating..." : "Migrate Existing Numbers to +27"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Banking Details — owner/admin only */}
       {canEditSessions && (
