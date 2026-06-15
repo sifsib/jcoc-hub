@@ -22,6 +22,8 @@ import {
 interface Member {
   id: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   role: string;
   cellRegion?: string;
   ministryGroup?: string;
@@ -347,8 +349,10 @@ export default function AttendancePage() {
         absenceReported = rec.reported ? "Yes" : "No";
         absenceReason = rec.absenceReason || "-";
       }
+      const parts = (m.fullName || "").trim().split(/\s+/);
       return {
-        fullName: m.fullName,
+        firstName: m.firstName || parts[0] || "",
+        lastName: m.lastName || parts.slice(1).join(" ") || "",
         role: m.role || "-",
         cellRegion: m.cellRegion || "-",
         ministryGroup: m.ministryGroup || "-",
@@ -367,7 +371,8 @@ export default function AttendancePage() {
   })();
 
   const attendanceExportColumns = [
-    { key: "fullName" as const, label: "Full Name" },
+    { key: "firstName" as const, label: "First Name" },
+    { key: "lastName" as const, label: "Last Name" },
     { key: "role" as const, label: "Role" },
     { key: "cellRegion" as const, label: "Cell Region" },
     { key: "ministryGroup" as const, label: "Ministry Group" },
