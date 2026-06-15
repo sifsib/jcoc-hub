@@ -580,6 +580,24 @@ export default function ManageMembershipPage() {
         const list: Member[] = [];
         snap.forEach(d => list.push({ id: d.id, ...d.data() } as Member));
         list.sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
+
+        // ── One-time backfill: write firstName/lastName into any Firestore doc that
+        //    only has fullName stored (legacy records). Runs silently; no-ops once
+        //    every member has proper dedicated fields.
+        const needsBackfill = list.filter(m => !m.firstName || !m.lastName);
+        if (needsBackfill.length > 0) {
+          await Promise.all(needsBackfill.map(m => {
+            const parts = (m.fullName || "").trim().split(/\s+/);
+            const first = m.firstName || parts[0] || "";
+            const last  = m.lastName  || parts.slice(1).join(" ") || "";
+            // Update local state so the export reflects the fix immediately
+            m.firstName = first;
+            m.lastName  = last;
+            // Persist to Firestore
+            return updateDoc(doc(db, "members", m.id), { firstName: first, lastName: last });
+          }));
+        }
+
         setMembers(list);
       } catch (e) { console.error("Load error:", e); }
       finally { setLoading(false); }
