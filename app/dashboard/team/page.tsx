@@ -113,6 +113,16 @@ export default function TeamPage() {
   // Remove state
   const [removeLoading, setRemoveLoading] = useState<string | null>(null);
 
+  // Promote congregation member state
+  const [promoteSearch, setPromoteSearch] = useState("");
+  const [promoteResults, setPromoteResults] = useState<TeamMember[]>([]);
+  const [promotingUid, setPromotingUid] = useState<string | null>(null);
+  const [promoteRole, setPromoteRole] = useState<AssignableRole>("cell_leader");
+  const [promoteCellRegion, setPromoteCellRegion] = useState("");
+  const [promoteLoading, setPromoteLoading] = useState(false);
+  const [promoteError, setPromoteError] = useState("");
+  const [allCongregationMembers, setAllCongregationMembers] = useState<TeamMember[]>([]);
+
   // Reactivate state
   const [reactivateLoading, setReactivateLoading] = useState<string | null>(null);
   const [reactivateResult, setReactivateResult] = useState<{ uid: string; inviteUrl: string | null; emailSent: boolean } | null>(null);
@@ -153,20 +163,62 @@ export default function TeamPage() {
     const snap = await getDocs(
       query(collection(db, "users"), where("tenantId", "==", tid))
     );
-    setMembers(
-      snap.docs
-        .filter((d) => d.id !== currentUid) // exclude self
-        .map((d) => ({
-          uid: d.id,
-          email: d.data().email || "-",
-          displayName: d.data().displayName || d.data().email || "-",
-          role: d.data().role || "viewer",
-          status: d.data().status || "active",
-          branchId: d.data().branchId || null,
-          assignedCellRegion: d.data().assignedCellRegion || null,
-          createdAt: d.data().createdAt || "",
-        }))
+    const all = snap.docs
+      .filter((d) => d.id !== currentUid)
+      .map((d) => ({
+        uid: d.id,
+        email: d.data().email || "-",
+        displayName: d.data().displayName || d.data().name || d.data().email || "-",
+        role: d.data().role || "viewer",
+        status: d.data().status || "active",
+        branchId: d.data().branchId || null,
+        assignedCellRegion: d.data().assignedCellRegion || null,
+        createdAt: d.data().createdAt || "",
+      }));
+
+    // Team members = everyone except congregation_member
+    setMembers(all.filter((m) => m.role !== "congregation_member"));
+    // Congregation members stored separately for the promote search
+    setAllCongregationMembers(all.filter((m) => m.role === "congregation_member"));
+  }
+
+  function handlePromoteSearch(term: string) {
+    setPromoteSearch(term);
+    if (!term.trim()) { setPromoteResults([]); return; }
+    const lower = term.toLowerCase();
+    setPromoteResults(
+      allCongregationMembers
+        .filter((m) => m.displayName.toLowerCase().includes(lower) || m.email.toLowerCase().includes(lower))
+        .slice(0, 8)
     );
+  }
+
+  async function handlePromote(targetUid: string) {
+    if (promoteRole === "cell_leader" && !promoteCellRegion.trim()) {
+      setPromoteError("Select a cell region for this leader.");
+      return;
+    }
+    setPromoteLoading(true);
+    setPromoteError("");
+    const newRegion = promoteRole === "cell_leader" ? promoteCellRegion.trim() : null;
+    try {
+      await updateDoc(doc(db, "users", targetUid), { role: promoteRole, assignedCellRegion: newRegion });
+      // Move from congregation list to team list
+      const promoted = allCongregationMembers.find((m) => m.uid === targetUid);
+      if (promoted) {
+        setMembers((prev) => [...prev, { ...promoted, role: promoteRole, assignedCellRegion: newRegion }]);
+        setAllCongregationMembers((prev) => prev.filter((m) => m.uid !== targetUid));
+      }
+      setPromotingUid(null);
+      setPromoteSearch("");
+      setPromoteResults([]);
+      setPromoteCellRegion("");
+    } catch (err) {
+      console.error(err);
+      setPromoteError("Could not save. Please try again.");
+    } finally {
+      setPromoteLoading(false);
+    }
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -649,6 +701,103 @@ export default function TeamPage() {
           </div>
         </div>
       )}
+
+      {/* Promote a congregation member */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 flex flex-col gap-4">
+        <div>
+          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Promote a Congregation Member</h2>
+          <p className="text-xs text-gray-400 mt-1">
+            Search for a member who already has a member portal account and give them a team role.
+          </p>
+        </div>
+
+        <div className="relative">
+          <input
+            type="text"
+            value={promoteSearch}
+            onChange={(e) => handlePromoteSearch(e.target.value)}
+            placeholder="Search by name or email..."
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+          />
+          {promoteResults.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+              {promoteResults.map((m) => (
+                <button
+                  key={m.uid}
+                  onClick={() => { setPromotingUid(m.uid); setPromoteRole("cell_leader"); setPromoteCellRegion(""); setPromoteError(""); setPromoteSearch(""); setPromoteResults([]); }}
+                  className="w-full text-left px-4 py-3 text-sm hover:bg-emerald-50 border-b border-gray-100 last:border-0 flex items-center justify-between"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-800">{m.displayName}</p>
+                    <p className="text-xs text-gray-400">{m.email}</p>
+                  </div>
+                  <span className="text-xs text-emerald-600 font-semibold">Select</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {promoteSearch.length > 1 && promoteResults.length === 0 && (
+            <p className="mt-2 text-xs text-gray-400 italic">
+              No congregation members found with a portal account matching that name. They need to be invited first if they do not have an account yet.
+            </p>
+          )}
+        </div>
+
+        {/* Role picker for selected member */}
+        {promotingUid && (() => {
+          const target = allCongregationMembers.find((m) => m.uid === promotingUid) ?? null;
+          if (!target) return null;
+          return (
+            <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{target.displayName}</p>
+                  <p className="text-xs text-gray-500">{target.email}</p>
+                </div>
+                <button onClick={() => setPromotingUid(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1.5">New Role</label>
+                <select
+                  value={promoteRole}
+                  onChange={(e) => setPromoteRole(e.target.value as AssignableRole)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {(Object.entries(ROLE_META) as [AssignableRole, typeof ROLE_META[AssignableRole]][]).map(([key, meta]) => (
+                    <option key={key} value={key}>{meta.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">{ROLE_META[promoteRole].description}</p>
+              </div>
+
+              {promoteRole === "cell_leader" && cellRegions.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1.5">Cell Region</label>
+                  <select
+                    value={promoteCellRegion}
+                    onChange={(e) => setPromoteCellRegion(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Select a region...</option>
+                    {cellRegions.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {promoteError && <p className="text-xs text-red-600">{promoteError}</p>}
+
+              <button
+                onClick={() => handlePromote(promotingUid)}
+                disabled={promoteLoading}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition disabled:opacity-50"
+              >
+                {promoteLoading ? "Saving..." : `Promote to ${ROLE_META[promoteRole].label}`}
+              </button>
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 }
