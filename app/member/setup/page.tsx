@@ -51,7 +51,10 @@ function MemberSetupContent() {
             <p className="text-gray-600 font-medium">
               {status === "loading" ? "Verifying your invitation..." : "Taking you to set your password..."}
             </p>
-            <p className="text-gray-400 text-sm mt-2">This will only take a moment.</p>
+            <p className="text-gray-400 text-sm mt-2">
+              After setting your password, come back and sign in at{" "}
+              <strong>hub.kerekehub.co.za/member/login</strong>
+            </p>
           </div>
         )}
 

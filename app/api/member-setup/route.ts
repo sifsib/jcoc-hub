@@ -45,12 +45,12 @@ export async function GET(req: NextRequest) {
 
   let resetUrl: string;
   try {
-    resetUrl = await adminAuth.generatePasswordResetLink(invite.email, {
-      url: `${APP_URL}/member/login`,
-      handleCodeInApp: false,
-    });
-  } catch (err) {
-    console.error("generatePasswordResetLink error:", err);
+    // No actionCodeSettings — mirrors the working admin invite flow exactly.
+    // Firebase's password reset page shows a "Back" link after the user sets
+    // their password; the member setup page instructs them where to go next.
+    resetUrl = await adminAuth.generatePasswordResetLink(invite.email);
+  } catch (err: any) {
+    console.error("generatePasswordResetLink error:", err?.message || err);
     return NextResponse.json(
       { error: "Could not generate a password reset link. Please contact support." },
       { status: 500 }
