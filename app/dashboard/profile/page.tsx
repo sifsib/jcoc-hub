@@ -83,6 +83,14 @@ export default function ProfilePage() {
   const [trackingDateSaved, setTrackingDateSaved] = useState(false);
   const [trackingDateError, setTrackingDateError] = useState("");
 
+  // Member Portal slug
+  const [slug, setSlug] = useState("");
+  const [slugInput, setSlugInput] = useState("");
+  const [slugSaving, setSlugSaving] = useState(false);
+  const [slugSaved, setSlugSaved] = useState(false);
+  const [slugError, setSlugError] = useState("");
+  const [slugCopied, setSlugCopied] = useState(false);
+
   // Phone number migration
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
@@ -104,6 +112,9 @@ export default function ProfilePage() {
           churchName = td.name || "";
           loadedSessions = td.serviceSessions || [];
           setTrackingStartDate(td.trackingStartDate || "");
+          const loadedSlug = td.slug || "";
+          setSlug(loadedSlug);
+          setSlugInput(loadedSlug);
           setBankDetails({
             bankName: td.bankName || "",
             bankAccountName: td.bankAccountName || "",
@@ -138,6 +149,45 @@ export default function ProfilePage() {
   }, []);
 
   const canEditSessions = profile?.role === "owner" || profile?.role === "admin" || profile?.role === "super_admin";
+
+  // ── Slug helpers ─────────────────────────────────────────────────────────────
+  function autoSlug(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+  }
+
+  const handleSaveSlug = async () => {
+    setSlugError("");
+    setSlugSaved(false);
+    setSlugSaving(true);
+    try {
+      const res = await fetch("/api/set-tenant-slug", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: slugInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSlugError(data.error || "Could not save.");
+      } else {
+        setSlug(data.slug);
+        setSlugInput(data.slug);
+        setSlugSaved(true);
+        setTimeout(() => setSlugSaved(false), 3000);
+      }
+    } catch {
+      setSlugError("Network error. Please try again.");
+    } finally {
+      setSlugSaving(false);
+    }
+  };
+
+  const copyPortalLink = () => {
+    const link = `https://hub.kerekehub.co.za/member/${slug}/home`;
+    navigator.clipboard.writeText(link).then(() => {
+      setSlugCopied(true);
+      setTimeout(() => setSlugCopied(false), 2000);
+    });
+  };
 
   const handleAddSession = () => {
     if (!newSessionName.trim()) return;
@@ -594,6 +644,79 @@ export default function ProfilePage() {
               {migrating ? "Migrating..." : "Migrate Existing Numbers to +27"}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Member Portal — owner/admin only */}
+      {canEditSessions && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          <div>
+            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Member Portal</h2>
+            <p className="text-xs text-gray-400 mt-1">
+              Set a short URL for your church members to access their portal. Once set, share the link below with your congregation.
+            </p>
+          </div>
+
+          {/* Current portal link (only shown if slug is saved) */}
+          {slug && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-emerald-700 mb-0.5">Your member portal link</p>
+                <p className="text-sm text-emerald-900 font-mono">
+                  hub.kerekehub.co.za/member/<strong>{slug}</strong>/home
+                </p>
+              </div>
+              <button
+                onClick={copyPortalLink}
+                className="shrink-0 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition"
+              >
+                {slugCopied ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+          )}
+
+          {/* Slug editor */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Church URL Slug</label>
+            <div className="flex gap-3 items-start">
+              <div className="flex-1">
+                <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent transition">
+                  <span className="px-3 py-2.5 text-xs text-gray-400 bg-gray-50 border-r border-gray-200 whitespace-nowrap">
+                    /member/
+                  </span>
+                  <input
+                    type="text"
+                    value={slugInput}
+                    onChange={(e) => setSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                    placeholder={profile.churchName ? autoSlug(profile.churchName) : "kingdom-faith-worship-centre"}
+                    className="flex-1 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none bg-white"
+                  />
+                  <span className="px-3 py-2.5 text-xs text-gray-400 bg-gray-50 border-l border-gray-200 whitespace-nowrap">
+                    /home
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Lowercase letters, numbers, and hyphens only. Min 3 characters.
+                </p>
+              </div>
+              <button
+                onClick={handleSaveSlug}
+                disabled={slugSaving || !slugInput || slugInput === slug}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition disabled:opacity-50 shrink-0"
+              >
+                {slugSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {slugError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{slugError}</p>
+          )}
+          {slugSaved && (
+            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+              Portal URL saved. Share the link above with your members.
+            </p>
+          )}
         </div>
       )}
 

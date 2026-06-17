@@ -58,7 +58,12 @@ export default function MemberLoginPage() {
         return;
       }
 
-      router.push(`/member/${tenantId}/home`);
+      // Prefer slug-based URL if the church has set a slug
+      const tenantSnap = await getDoc(doc(db, "tenants", tenantId));
+      const tenantSlug = tenantSnap.data()?.slug;
+      const portalBase = tenantSlug ? `/member/${tenantSlug}` : `/member/${tenantId}`;
+
+      router.push(`${portalBase}/home`);
       router.refresh();
     } catch (err: any) {
       console.error("Member login error:", err);
