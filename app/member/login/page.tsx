@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { sendPasswordResetEmail } from "firebase/auth";
 
-export default function MemberLoginPage() {
+function MemberLoginInner() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -209,5 +209,13 @@ export default function MemberLoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function MemberLoginPage() {
+  return (
+    <Suspense>
+      <MemberLoginInner />
+    </Suspense>
   );
 }
