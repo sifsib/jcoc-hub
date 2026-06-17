@@ -348,11 +348,12 @@ service cloud.firestore {
                   && tenantAllowed(resource)
                   && canReadFinance();
 
-      // Congregation members can read transactions from their own tenant
-      // (client query already filters to memberId == their own id)
+      // Congregation members can read their own linked transactions.
+      // Query uses where("memberId","==",mid) so Firestore can prove
+      // resource.data.memberId == userData().memberId at query-plan time.
       allow read: if isSignedIn()
                   && isCongregationMember()
-                  && resource.data.tenantId == userTenantId();
+                  && resource.data.memberId == userData().memberId;
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
@@ -895,10 +896,12 @@ service cloud.firestore {
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
 
-      // Congregation member can read their own check-ins
+      // Congregation member can read their own check-ins.
+      // Query constrains uid == request.auth.uid so Firestore can prove
+      // resource.data.uid == request.auth.uid at query-plan time.
+      // Do NOT add tenantId check here — it's not in the query's WHERE clause.
       allow read: if isSignedIn()
                   && isCongregationMember()
-                  && resource.data.tenantId == userTenantId()
                   && resource.data.uid == request.auth.uid;
 
       // Congregation member can create a check-in for themselves
