@@ -122,11 +122,12 @@ export default function BrandingPage() {
     setError("");
     setSaved(false);
     try {
+      const hasAnyBankingData = Object.values(banking).some(v => v.trim() !== "");
       await updateDoc(doc(db, "tenants", tenantId), {
         name: branding.name,
         primaryColor: branding.primaryColor,
         logoUrl: branding.logoUrl,
-        bankingDetails: banking,
+        ...(hasAnyBankingData && { bankingDetails: banking }),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
