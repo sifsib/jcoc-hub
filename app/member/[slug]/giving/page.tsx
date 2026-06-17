@@ -70,10 +70,10 @@ export default function MemberGivingPage() {
           setMemberName(mSnap.data()?.fullName || user.displayName || "");
 
           // Load transactions linked to this member
+          // Single-field query avoids composite index requirement
           const snap = await getDocs(
             query(
               collection(db, "transactions"),
-              where("tenantId", "==", tid),
               where("memberId", "==", mid)
             )
           );
