@@ -110,7 +110,7 @@ export default function MemberHomeSlugPage() {
       <div className="px-4 pb-6 grid grid-cols-2 gap-3">
         {[
           { label: "My Profile", icon: "👤", href: `/member/${slug}/profile`, ready: true },
-          { label: "Events", icon: "📅", href: "#", ready: false },
+          { label: "Events", icon: "📅", href: `/member/${slug}/events`, ready: true },
           { label: "Giving", icon: "💛", href: "#", ready: false },
           { label: "Groups", icon: "👥", href: "#", ready: false },
           { label: "Announcements", icon: "📢", href: `/member/${slug}/announcements`, ready: true },
