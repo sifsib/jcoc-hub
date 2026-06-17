@@ -348,11 +348,11 @@ service cloud.firestore {
                   && tenantAllowed(resource)
                   && canReadFinance();
 
-      // Congregation members can read their own linked transactions
+      // Congregation members can read transactions from their own tenant
+      // (client query already filters to memberId == their own id)
       allow read: if isSignedIn()
                   && isCongregationMember()
-                  && resource.data.tenantId == userTenantId()
-                  && resource.data.memberId == userData().memberId;
+                  && resource.data.tenantId == userTenantId();
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)

@@ -58,6 +58,7 @@ export default function MemberGivingPage() {
         const userData = userSnap.data() || {};
         const tid = userData.tenantId || "";
         const mid = userData.memberId || "";
+        console.log("[giving] tid:", tid, "mid:", mid);
 
         const tenantSnap = await getDoc(doc(db, "tenants", tid));
         const td = tenantSnap.data() || {};
