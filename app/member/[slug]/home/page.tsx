@@ -113,7 +113,7 @@ export default function MemberHomeSlugPage() {
           { label: "Events", icon: "📅", href: "#", ready: false },
           { label: "Giving", icon: "💛", href: "#", ready: false },
           { label: "Groups", icon: "👥", href: "#", ready: false },
-          { label: "Announcements", icon: "📢", href: "#", ready: false },
+          { label: "Announcements", icon: "📢", href: `/member/${slug}/announcements`, ready: true },
           { label: "Attendance", icon: "✅", href: "#", ready: false },
         ].map((item) => (
           <a
