@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { sendPasswordResetEmail } from "firebase/auth";
 
 export default function MemberLoginPage() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -62,8 +63,9 @@ export default function MemberLoginPage() {
       const tenantSnap = await getDoc(doc(db, "tenants", tenantId));
       const tenantSlug = tenantSnap.data()?.slug;
       const portalBase = tenantSlug ? `/member/${tenantSlug}` : `/member/${tenantId}`;
+      const redirect = searchParams.get("redirect");
 
-      router.push(`${portalBase}/home`);
+      router.push(redirect || `${portalBase}/home`);
       router.refresh();
     } catch (err: any) {
       console.error("Member login error:", err);

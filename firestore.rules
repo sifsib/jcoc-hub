@@ -879,6 +879,40 @@ service cloud.firestore {
 
 
     // ============================================
+    // EVENT CHECK-INS
+    // Congregation members can create their own check-ins and read them.
+    // Admins/managers can read all check-ins for their church.
+    // ============================================
+    match /event_checkins/{id} {
+      // Admin access
+      allow read: if isSignedIn()
+                  && (isSuperAdmin() || (tenantAllowed(resource)
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
+
+      // Congregation member can read their own check-ins
+      allow read: if isSignedIn()
+                  && isCongregationMember()
+                  && resource.data.tenantId == userTenantId()
+                  && resource.data.uid == request.auth.uid;
+
+      // Congregation member can create a check-in for themselves
+      allow create: if isSignedIn()
+                    && isCongregationMember()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.tenantId == userTenantId();
+
+      // Admins can create check-ins (manual override)
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+
+      allow delete: if isSignedIn()
+                    && (isSuperAdmin() || (tenantAllowed(resource)
+                    && (hasRole('owner') || hasRole('admin'))));
+    }
+
+
+    // ============================================
     // PUSH SUBSCRIPTIONS (per uid)
     // ============================================
     match /push_subscriptions/{uid} {
