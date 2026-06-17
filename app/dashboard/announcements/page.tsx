@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
 import {
-  collection, query, where, orderBy, getDocs,
+  collection, query, where, getDocs,
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -48,13 +48,19 @@ export default function AnnouncementsPage() {
   }, []);
 
   const loadAnnouncements = async (tid: string) => {
+    // No orderBy — sort client-side to avoid requiring a composite index
     const q = query(
       collection(db, "announcements"),
-      where("tenantId", "==", tid),
-      orderBy("createdAt", "desc")
+      where("tenantId", "==", tid)
     );
     const snap = await getDocs(q);
-    setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement)));
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement));
+    docs.sort((a, b) => {
+      const ta = a.createdAt?.toMillis?.() ?? 0;
+      const tb = b.createdAt?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    setAnnouncements(docs);
   };
 
   const openCreate = () => {
