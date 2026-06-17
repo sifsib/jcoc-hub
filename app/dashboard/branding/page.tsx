@@ -23,12 +23,24 @@ interface BrandingData {
   logoUrl: string;
 }
 
+interface BankingDetails {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branchCode: string;
+  accountType: string;
+  payfastLink: string;
+}
+
 export default function BrandingPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [branding, setBranding] = useState<BrandingData>({
     name: "",
     primaryColor: "#059669",
     logoUrl: "",
+  });
+  const [banking, setBanking] = useState<BankingDetails>({
+    bankName: "", accountName: "", accountNumber: "", branchCode: "", accountType: "Cheque/Current", payfastLink: "",
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -53,6 +65,15 @@ export default function BrandingPage() {
           name: data.name || "",
           primaryColor: data.primaryColor || "#059669",
           logoUrl: data.logoUrl || "",
+        });
+        const bd = data.bankingDetails || {};
+        setBanking({
+          bankName: bd.bankName || "",
+          accountName: bd.accountName || "",
+          accountNumber: bd.accountNumber || "",
+          branchCode: bd.branchCode || "",
+          accountType: bd.accountType || "Cheque/Current",
+          payfastLink: bd.payfastLink || "",
         });
       } catch (err) {
         console.error("Failed to load branding:", err);
@@ -105,6 +126,7 @@ export default function BrandingPage() {
         name: branding.name,
         primaryColor: branding.primaryColor,
         logoUrl: branding.logoUrl,
+        bankingDetails: banking,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -283,6 +305,61 @@ export default function BrandingPage() {
               Active
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Banking Details */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+        <div>
+          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Banking Details</h2>
+          <p className="text-xs text-gray-400 mt-1">Members will see these on their Giving page when making EFT contributions.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {([
+            { label: "Bank Name", key: "bankName", placeholder: "e.g. Standard Bank" },
+            { label: "Account Name", key: "accountName", placeholder: "e.g. Grace Community Church" },
+            { label: "Account Number", key: "accountNumber", placeholder: "e.g. 123456789" },
+            { label: "Branch Code", key: "branchCode", placeholder: "e.g. 051001" },
+          ] as { label: string; key: keyof BankingDetails; placeholder: string }[]).map(({ label, key, placeholder }) => (
+            <div key={key}>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">{label}</label>
+              <input
+                type="text"
+                value={banking[key]}
+                onChange={e => setBanking(prev => ({ ...prev, [key]: e.target.value }))}
+                placeholder={placeholder}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
+            </div>
+          ))}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Account Type</label>
+            <select
+              value={banking.accountType}
+              onChange={e => setBanking(prev => ({ ...prev, accountType: e.target.value }))}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            >
+              <option>Cheque/Current</option>
+              <option>Savings</option>
+              <option>Transmission</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+            PayFast Payment Link <span className="font-normal text-gray-400">(optional)</span>
+          </label>
+          <input
+            type="url"
+            value={banking.payfastLink}
+            onChange={e => setBanking(prev => ({ ...prev, payfastLink: e.target.value }))}
+            placeholder="https://www.payfast.co.za/donate/go/..."
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+          />
+          <p className="text-xs text-gray-400 mt-1">If provided, members will see a direct PayFast button on their Giving page.</p>
         </div>
       </div>
 

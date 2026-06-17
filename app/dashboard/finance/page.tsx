@@ -15,7 +15,6 @@ import {
   addDoc,
   query,
   where,
-  orderBy,
   getDocs,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -274,11 +273,13 @@ export default function FinancePage() {
     if (tab === 'add' && appUser) {
       fetchCustomCategories(appUser.tenantId);
       if (allRosterMembers.length === 0) {
-        getDocs(query(collection(db, 'members'), where('tenantId', '==', appUser.tenantId), orderBy('firstName'))).then(snap => {
-          setAllRosterMembers(snap.docs.map(d => {
+        getDocs(query(collection(db, 'members'), where('tenantId', '==', appUser.tenantId))).then(snap => {
+          const list = snap.docs.map(d => {
             const data = d.data();
-            return { id: d.id, name: `${data.firstName || ''} ${data.lastName || ''}`.trim() };
-          }));
+            const name = data.fullName || `${data.firstName || ''} ${data.lastName || ''}`.trim();
+            return { id: d.id, name };
+          }).filter(m => m.name).sort((a, b) => a.name.localeCompare(b.name));
+          setAllRosterMembers(list);
         }).catch(() => {});
       }
     }

@@ -15,6 +15,15 @@ interface Contribution {
   otherDescription?: string;
 }
 
+interface BankingDetails {
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  branchCode?: string;
+  accountType?: string;
+  payfastLink?: string;
+}
+
 const fmt = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -35,6 +44,7 @@ export default function MemberGivingPage() {
   const [churchName, setChurchName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#1A5C38");
   const [memberName, setMemberName] = useState("");
+  const [banking, setBanking] = useState<BankingDetails>({});
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [loading, setLoading] = useState(true);
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear());
@@ -53,6 +63,7 @@ export default function MemberGivingPage() {
         const td = tenantSnap.data() || {};
         setChurchName(td.name || "My Church");
         setPrimaryColor(td.primaryColor || "#1A5C38");
+        setBanking(td.bankingDetails || {});
 
         if (mid) {
           const mSnap = await getDoc(doc(db, "members", mid));
@@ -124,6 +135,46 @@ export default function MemberGivingPage() {
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-4">
+
+        {/* How to Give */}
+        {(banking.bankName || banking.payfastLink) && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">How to Give</p>
+
+            {banking.payfastLink && (
+              <a
+                href={banking.payfastLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-sm text-white mb-3"
+                style={{ backgroundColor: primaryColor }}
+              >
+                💳 Give Online via PayFast
+              </a>
+            )}
+
+            {banking.bankName && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2.5">EFT / Bank Transfer</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Bank", value: banking.bankName },
+                    { label: "Account Name", value: banking.accountName },
+                    { label: "Account Number", value: banking.accountNumber },
+                    { label: "Branch Code", value: banking.branchCode },
+                    { label: "Account Type", value: banking.accountType },
+                  ].filter(r => r.value).map(row => (
+                    <div key={row.label} className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-gray-500">{row.label}</span>
+                      <span className="text-xs font-bold text-gray-900 text-right">{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-3">Use your name as the payment reference so your admin can link it to your profile.</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {contributions.length === 0 ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-200 p-10 text-center mt-4">
