@@ -33,20 +33,28 @@ export default async function MemberSlugLayout({
       redirect("/member/login");
     }
 
-    // Resolve slug → tenantId via Firestore query (uses Admin SDK, bypasses security rules)
+    // Dual lookup: try slug first, then fall back to raw tenantId
+    // This keeps old tenantId-based URLs working while new slug URLs also work.
+    let resolvedTenantId: string;
+
     const slugQuery = await adminDb
       .collection("tenants")
       .where("slug", "==", slug)
       .limit(1)
       .get();
 
-    if (slugQuery.empty) {
-      redirect("/member/login");
+    if (!slugQuery.empty) {
+      resolvedTenantId = slugQuery.docs[0].id;
+    } else {
+      // Fallback: treat the URL param as a raw Firestore tenantId
+      const tenantDoc = await adminDb.collection("tenants").doc(slug).get();
+      if (!tenantDoc.exists) {
+        redirect("/member/login");
+      }
+      resolvedTenantId = tenantDoc.id;
     }
 
-    const resolvedTenantId = slugQuery.docs[0].id;
-
-    // Ensure the resolved tenantId matches this user's church
+    // Ensure resolved tenantId matches this user's church
     if (userData.tenantId !== resolvedTenantId) {
       redirect("/member/login");
     }
