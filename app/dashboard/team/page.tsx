@@ -100,7 +100,7 @@ export default function TeamPage() {
   const [inviteBranch, setInviteBranch] = useState("");
   const [inviteCellRegion, setInviteCellRegion] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteResult, setInviteResult] = useState<{ resetLink: string } | null>(null);
+  const [inviteResult, setInviteResult] = useState<{ emailSent: boolean; inviteUrl: string | null } | null>(null);
   const [inviteError, setInviteError] = useState("");
 
   // Role-change state
@@ -112,6 +112,10 @@ export default function TeamPage() {
 
   // Remove state
   const [removeLoading, setRemoveLoading] = useState<string | null>(null);
+
+  // Reactivate state
+  const [reactivateLoading, setReactivateLoading] = useState<string | null>(null);
+  const [reactivateResult, setReactivateResult] = useState<{ uid: string; inviteUrl: string | null; emailSent: boolean } | null>(null);
 
   const [copied, setCopied] = useState(false);
 
@@ -186,7 +190,7 @@ export default function TeamPage() {
       const data = await res.json();
       if (!res.ok) { setInviteError(data.error || "Something went wrong."); return; }
 
-      setInviteResult({ resetLink: data.resetLink });
+      setInviteResult({ emailSent: data.emailSent, inviteUrl: data.inviteUrl || null });
       // Refresh the list
       const user = auth.currentUser;
       if (user) await loadTeam(tenantId, user.uid);
@@ -243,6 +247,33 @@ export default function TeamPage() {
       console.error(err);
     } finally {
       setRemoveLoading(null);
+    }
+  }
+
+  async function handleReactivate(targetUid: string) {
+    if (!confirm("This will restore their access and send them a new invitation email. Continue?")) return;
+    setReactivateLoading(targetUid);
+    try {
+      const res = await fetch("/api/reactivate-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUid }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMembers((prev) =>
+          prev.map((m) => (m.uid === targetUid ? { ...m, status: "invited" } : m))
+        );
+        setReactivateResult({
+          uid: targetUid,
+          inviteUrl: data.inviteUrl || null,
+          emailSent: data.emailSent,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReactivateLoading(null);
     }
   }
 
@@ -408,24 +439,35 @@ export default function TeamPage() {
                 </form>
               </>
             ) : (
-              /* Show the invite link after success */
+              /* Show result after invite */
               <div className="flex flex-col gap-4">
                 <div className="w-12 h-12 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-2xl mx-auto">✓</div>
                 <div className="text-center">
-                  <h2 className="text-lg font-bold text-gray-900">User Created</h2>
-                  <p className="text-sm text-gray-500 mt-1">Share this link with <strong>{inviteEmail}</strong> so they can set their password and log in.</p>
+                  <h2 className="text-lg font-bold text-gray-900">User Invited</h2>
+                  {inviteResult.emailSent ? (
+                    <p className="text-sm text-gray-500 mt-1">
+                      An invitation email has been sent to <strong>{inviteEmail}</strong>. The link expires in 24 hours.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-500 mt-1">
+                      User created. Email could not be sent automatically. Share this link manually with <strong>{inviteEmail}</strong>:
+                    </p>
+                  )}
                 </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                  <p className="text-xs font-bold text-gray-500 mb-1.5">INVITE LINK</p>
-                  <p className="text-xs text-gray-700 break-all leading-relaxed">{inviteResult.resetLink}</p>
-                </div>
-                <button
-                  onClick={() => copyLink(inviteResult.resetLink)}
-                  className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition"
-                >
-                  {copied ? "Copied!" : "Copy Link"}
-                </button>
-                <p className="text-xs text-gray-400 text-center">This link expires after 1 hour. You can regenerate it from the Firebase console if needed.</p>
+                {!inviteResult.emailSent && inviteResult.inviteUrl && (
+                  <>
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <p className="text-xs font-bold text-gray-500 mb-1.5">INVITE LINK (expires in 24 hours)</p>
+                      <p className="text-xs text-gray-700 break-all leading-relaxed">{inviteResult.inviteUrl}</p>
+                    </div>
+                    <button
+                      onClick={() => copyLink(inviteResult.inviteUrl!)}
+                      className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition"
+                    >
+                      {copied ? "Copied!" : "Copy Link"}
+                    </button>
+                  </>
+                )}
                 <button onClick={resetInviteForm} className="text-sm text-gray-500 hover:text-gray-700 underline text-center">
                   Done
                 </button>
@@ -549,6 +591,31 @@ export default function TeamPage() {
         )}
       </div>
 
+      {/* Reactivation result notice */}
+      {reactivateResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col gap-2">
+          <p className="text-sm font-semibold text-emerald-800">
+            {reactivateResult.emailSent
+              ? "User reactivated and invitation email sent."
+              : "User reactivated. Email could not be sent. Share this link manually:"}
+          </p>
+          {!reactivateResult.emailSent && reactivateResult.inviteUrl && (
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-600 break-all flex-1">{reactivateResult.inviteUrl}</p>
+              <button
+                onClick={() => copyLink(reactivateResult.inviteUrl!)}
+                className="shrink-0 text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          )}
+          <button onClick={() => setReactivateResult(null)} className="text-xs text-gray-400 hover:text-gray-600 underline self-start">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Inactive users (collapsed) */}
       {inactiveMembers.length > 0 && (
         <div className="bg-gray-50 border border-gray-200 rounded-xl shadow-sm overflow-hidden">
@@ -559,13 +626,22 @@ export default function TeamPage() {
             <table className="w-full text-sm">
               <tbody className="divide-y divide-gray-100">
                 {inactiveMembers.map((m) => (
-                  <tr key={m.uid} className="opacity-60">
+                  <tr key={m.uid} className="opacity-70">
                     <td className="px-6 py-3">
                       <p className="font-medium text-gray-700">{m.displayName}</p>
                       <p className="text-xs text-gray-400">{m.email}</p>
                     </td>
                     <td className="px-6 py-3">{roleBadge(m.role)}</td>
                     <td className="px-6 py-3">{statusBadge(m.status)}</td>
+                    <td className="px-6 py-3 text-right">
+                      <button
+                        onClick={() => handleReactivate(m.uid)}
+                        disabled={reactivateLoading === m.uid}
+                        className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                      >
+                        {reactivateLoading === m.uid ? "..." : "Reactivate"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

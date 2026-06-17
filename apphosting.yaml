@@ -10,3 +10,16 @@ env:
 
   - variable: FIREBASE_ADMIN_PRIVATE_KEY
     secret: FIREBASE_ADMIN_PRIVATE_KEY
+
+  # Platform Brevo credentials for system emails (invites, reactivations)
+  - variable: BREVO_API_KEY
+    secret: BREVO_API_KEY
+
+  - variable: BREVO_SENDER_EMAIL
+    secret: BREVO_SENDER_EMAIL
+
+  - variable: BREVO_SENDER_NAME
+    secret: BREVO_SENDER_NAME
+
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://hub.kerekehub.co.za
