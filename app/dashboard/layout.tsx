@@ -171,6 +171,8 @@ export default async function DashboardLayout({
               churchName={churchName}
               primaryColor={primaryColor}
               userRole={userRole}
+              tenantSlug={tenantSlug}
+              userMemberId={userMemberId}
             />
             <div className="text-lg font-semibold text-gray-800">Dashboard</div>
           </div>
