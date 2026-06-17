@@ -179,11 +179,10 @@ export default async function DashboardLayout({
 
           <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
             {/* Member App shortcut — visible on mobile only, always in the header */}
+            {/* No target="_blank" on mobile: keeps PWA context and avoids exiting the app */}
             {tenantSlug && userMemberId && (
               <a
                 href={`/member/${tenantSlug}/home`}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold"
               >
                 📱 App

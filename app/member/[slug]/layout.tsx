@@ -27,9 +27,15 @@ export default async function MemberSlugLayout({
 
     const userData = userDoc.data()!;
 
-    // Allow congregation members OR admins (so admins can preview the portal)
-    const allowedRoles = ["congregation_member", "owner", "admin"];
-    if (!allowedRoles.includes(userData.role)) {
+    // Allow access if the user is a congregation_member OR has a linked member
+    // profile (memberId set). This covers all team roles — owner, admin,
+    // cell_leader, finance, member_manager, viewer — who have linked themselves
+    // to a roster record via Profile > My Church Profile.
+    const hasAccess =
+      userData.role === "congregation_member" ||
+      (typeof userData.memberId === "string" && userData.memberId.length > 0);
+
+    if (!hasAccess) {
       redirect("/member/login");
     }
 

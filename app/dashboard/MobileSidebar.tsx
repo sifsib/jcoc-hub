@@ -114,8 +114,6 @@ export default function MobileSidebar({
             {userMemberId ? (
               <a
                 href={`/member/${tenantSlug}/home`}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition w-full"
                 onClick={() => setOpen(false)}
               >
