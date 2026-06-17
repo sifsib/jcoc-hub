@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { auth, db } from "../../../../lib/firebase";
 import {
   collection, query, where, getDocs,
-  doc, getDoc, setDoc, serverTimestamp,
+  doc, getDoc, setDoc, updateDoc, increment, serverTimestamp,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -131,10 +131,21 @@ export default function MemberEventsPage() {
     if (!uid || !tenantId) return;
     setRsvpLoading(p => ({ ...p, [event.id]: true }));
     try {
+      const prevStatus = rsvpMap[event.id];
       await setDoc(doc(db, "event_rsvps", `${event.id}_${uid}`), {
         eventId: event.id, tenantId, uid, memberId, memberName,
         status, respondedAt: serverTimestamp(),
       }, { merge: true });
+
+      // Update rsvpCount atomically
+      const wasAttending = prevStatus === "attending";
+      const nowAttending = status === "attending";
+      if (!wasAttending && nowAttending) {
+        await updateDoc(doc(db, "events", event.id), { rsvpCount: increment(1) });
+      } else if (wasAttending && !nowAttending) {
+        await updateDoc(doc(db, "events", event.id), { rsvpCount: increment(-1) });
+      }
+
       setRsvpMap(p => ({ ...p, [event.id]: status }));
     } catch (err) {
       console.error("RSVP failed:", err);

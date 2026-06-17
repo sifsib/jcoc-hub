@@ -111,7 +111,7 @@ export default function MemberHomeSlugPage() {
         {[
           { label: "My Profile", icon: "👤", href: `/member/${slug}/profile`, ready: true },
           { label: "Events", icon: "📅", href: `/member/${slug}/events`, ready: true },
-          { label: "Giving", icon: "💛", href: "#", ready: false },
+          { label: "Giving", icon: "💛", href: `/member/${slug}/giving`, ready: true },
           { label: "Groups", icon: "👥", href: "#", ready: false },
           { label: "Announcements", icon: "📢", href: `/member/${slug}/announcements`, ready: true },
           { label: "Attendance", icon: "✅", href: "#", ready: false },

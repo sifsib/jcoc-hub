@@ -144,6 +144,14 @@ export default function FinancePage() {
   const [formSuccess, setFormSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Member linkage for income recording
+  const [memberQuery, setMemberQuery] = useState('');
+  const [memberResults, setMemberResults] = useState<{ id: string; name: string }[]>([]);
+  const [allRosterMembers, setAllRosterMembers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [selectedMemberName, setSelectedMemberName] = useState('');
+  const [showMemberDrop, setShowMemberDrop] = useState(false);
+
   // ledger filters
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
@@ -261,10 +269,18 @@ export default function FinancePage() {
     fetchCustomCategories(appUser.tenantId);
   }, [appUser, userLoading]);
 
-  // Refresh categories when Add tab is opened
+  // Refresh categories + load roster when Add tab is opened
   useEffect(() => {
     if (tab === 'add' && appUser) {
       fetchCustomCategories(appUser.tenantId);
+      if (allRosterMembers.length === 0) {
+        getDocs(query(collection(db, 'members'), where('tenantId', '==', appUser.tenantId), orderBy('firstName'))).then(snap => {
+          setAllRosterMembers(snap.docs.map(d => {
+            const data = d.data();
+            return { id: d.id, name: `${data.firstName || ''} ${data.lastName || ''}`.trim() };
+          }));
+        }).catch(() => {});
+      }
     }
   }, [tab, appUser]);
 
@@ -325,6 +341,7 @@ export default function FinancePage() {
         ...(category === 'Other' && txType === 'income' && { otherDescription: otherDesc.trim() }),
         ...(category === 'Miscellaneous' && txType === 'expense' && { miscDescription: miscDesc.trim() }),
         ...(invoiceUrl && { invoiceUrl }),
+        ...(txType === 'income' && selectedMemberId && { memberId: selectedMemberId, memberName: selectedMemberName }),
         createdAt: serverTimestamp(),
       });
 
@@ -336,6 +353,10 @@ export default function FinancePage() {
       setMiscDesc('');
       setInvoiceFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      setMemberQuery('');
+      setSelectedMemberId('');
+      setSelectedMemberName('');
+      setShowMemberDrop(false);
 
       setFormSuccess(`${txType === 'income' ? 'Income' : 'Expense'} recorded successfully.`);
       setTimeout(() => setFormSuccess(''), 4000);
@@ -787,6 +808,51 @@ export default function FinancePage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Specify Other Income</label>
                 <input type="text" value={otherDesc} onChange={(e) => setOtherDesc(e.target.value)} placeholder="Describe the income source" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+            )}
+
+            {/* Member linkage — income only, optional */}
+            {txType === 'income' && (
+              <div className="relative">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Member <span className="text-gray-400 font-normal">(optional — link this income to a member)</span>
+                </label>
+                {selectedMemberId ? (
+                  <div className="flex items-center justify-between border border-emerald-300 bg-emerald-50 rounded-lg px-3 py-2">
+                    <span className="text-sm font-medium text-emerald-800">{selectedMemberName}</span>
+                    <button type="button" onClick={() => { setSelectedMemberId(''); setSelectedMemberName(''); setMemberQuery(''); }} className="text-xs text-emerald-500 hover:text-red-500 font-semibold ml-2">✕ Remove</button>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={memberQuery}
+                    onChange={e => {
+                      const q = e.target.value;
+                      setMemberQuery(q);
+                      setShowMemberDrop(true);
+                      if (q.trim().length > 0) {
+                        setMemberResults(allRosterMembers.filter(m => m.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8));
+                      } else {
+                        setMemberResults([]);
+                      }
+                    }}
+                    onFocus={() => { if (memberQuery) setShowMemberDrop(true); }}
+                    onBlur={() => setTimeout(() => setShowMemberDrop(false), 200)}
+                    placeholder="Search member name..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                )}
+                {showMemberDrop && memberResults.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                    {memberResults.map(m => (
+                      <button key={m.id} type="button"
+                        onMouseDown={() => { setSelectedMemberId(m.id); setSelectedMemberName(m.name); setMemberQuery(''); setShowMemberDrop(false); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 text-gray-800">
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {txType === 'expense' && category === 'Miscellaneous' && (
