@@ -33,6 +33,14 @@ service cloud.firestore {
       return userData().role == 'congregation_member';
     }
 
+    // True for any user who has a linked member profile — this includes
+    // congregation members AND admin/team users who have linked themselves
+    // to a roster record via the Profile page. Use this instead of
+    // isCongregationMember() for all "member can read/write their own data" rules.
+    function hasLinkedMemberProfile() {
+      return userData().memberId is string && userData().memberId.size() > 0;
+    }
+
     // Returns true if the signed-in congregation member owns the given resource
     // (their member doc has their authUid stored on it)
     function isOwnMemberDoc(resource) {
@@ -57,7 +65,7 @@ service cloud.firestore {
     }
 
     function canReadMembers() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer') || hasRole('cell_leader');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer') || hasRole('cell_leader') || hasRole('finance') || hasRole('finance_viewer');
     }
 
     function canManageAttendance() {
@@ -291,9 +299,9 @@ service cloud.firestore {
     // ============================================
     match /households/{id} {
 
-      // Congregation member can read their own household
+      // Any user with a linked member profile can read their own household
       allow read: if isSignedIn()
-                  && isCongregationMember()
+                  && hasLinkedMemberProfile()
                   && resource.data.tenantId == userTenantId();
 
       allow read: if isSignedIn()
@@ -350,9 +358,10 @@ service cloud.firestore {
 
       // Congregation members can read their own linked transactions.
       // Query uses where("memberId","==",mid) so Firestore can prove
-      // resource.data.memberId == userData().memberId at query-plan time.
+      // Any user with a linked member profile can read their own transactions.
+      // Works for congregation_member AND promoted/team users who have linked their profile.
       allow read: if isSignedIn()
-                  && isCongregationMember()
+                  && hasLinkedMemberProfile()
                   && resource.data.memberId == userData().memberId;
 
       allow create: if isSignedIn()
@@ -584,9 +593,9 @@ service cloud.firestore {
       // Public can read active events so the RSVP link page can render event details
       allow read: if resource.data.active == true;
 
-      // Congregation members can read all events for their church
+      // Any user with a linked member profile can read events for their church
       allow read: if isSignedIn()
-                  && isCongregationMember()
+                  && hasLinkedMemberProfile()
                   && resource.data.tenantId == userTenantId();
 
       allow read: if isSignedIn()
@@ -637,9 +646,9 @@ service cloud.firestore {
     // GROUPS
     // ============================================
     match /groups/{id} {
-      // Congregation members can read groups in their church
+      // Any user with a linked member profile can read groups in their church
       allow read: if isSignedIn()
-                  && isCongregationMember()
+                  && hasLinkedMemberProfile()
                   && resource.data.tenantId == userTenantId();
 
       allow read: if isSignedIn()
@@ -821,15 +830,15 @@ service cloud.firestore {
     // ============================================
     match /event_rsvps/{id} {
       allow read: if isSignedIn()
-                  && isCongregationMember()
+                  && hasLinkedMemberProfile()
                   && resource.data.tenantId == userTenantId();
 
       allow create: if isSignedIn()
-                    && isCongregationMember()
+                    && hasLinkedMemberProfile()
                     && request.resource.data.tenantId == userTenantId();
 
       allow update: if isSignedIn()
-                    && isCongregationMember()
+                    && hasLinkedMemberProfile()
                     && resource.data.tenantId == userTenantId()
                     && resource.data.uid == request.auth.uid;
     }
@@ -840,7 +849,7 @@ service cloud.firestore {
     // ============================================
     match /group_members/{id} {
       allow read: if isSignedIn()
-                  && isCongregationMember()
+                  && hasLinkedMemberProfile()
                   && resource.data.tenantId == userTenantId();
     }
 
@@ -852,7 +861,7 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && (isSuperAdmin()
                       || (resource.data.tenantId == userTenantId()
-                          && (canManageCommunications() || isCongregationMember())));
+                          && (canManageCommunications() || hasLinkedMemberProfile())));
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
@@ -872,7 +881,7 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && tenantId == userTenantId()
                   && (hasRole('owner') || hasRole('admin') || isSuperAdmin()
-                      || (isCongregationMember()
+                      || (hasLinkedMemberProfile()
                           && userData().memberId in resource.data.assignedMembers));
 
       allow create, update: if isSignedIn()
@@ -899,9 +908,10 @@ service cloud.firestore {
       // Congregation member can read their own check-ins.
       // Query constrains uid == request.auth.uid so Firestore can prove
       // resource.data.uid == request.auth.uid at query-plan time.
+      // Any user with a linked member profile can read their own check-ins.
       // Do NOT add tenantId check here — it's not in the query's WHERE clause.
       allow read: if isSignedIn()
-                  && isCongregationMember()
+                  && hasLinkedMemberProfile()
                   && resource.data.uid == request.auth.uid;
 
       // Any authenticated tenant user (congregation member OR admin with linked profile)
