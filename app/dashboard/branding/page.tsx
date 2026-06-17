@@ -32,6 +32,26 @@ interface BankingDetails {
   payfastLink: string;
 }
 
+interface SocialLinks {
+  youtube: string;
+  instagram: string;
+  facebook: string;
+  tiktok: string;
+  x: string;
+  linkedin: string;
+  spotify: string;
+}
+
+const SOCIAL_FIELDS: { key: keyof SocialLinks; label: string; placeholder: string }[] = [
+  { key: "youtube",   label: "YouTube",   placeholder: "https://youtube.com/@yourchannel" },
+  { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/yourhandle" },
+  { key: "facebook",  label: "Facebook",  placeholder: "https://facebook.com/yourpage" },
+  { key: "tiktok",    label: "TikTok",    placeholder: "https://tiktok.com/@yourhandle" },
+  { key: "x",         label: "X (Twitter)", placeholder: "https://x.com/yourhandle" },
+  { key: "linkedin",  label: "LinkedIn",  placeholder: "https://linkedin.com/company/yourchurch" },
+  { key: "spotify",   label: "Spotify",   placeholder: "https://open.spotify.com/show/..." },
+];
+
 export default function BrandingPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [branding, setBranding] = useState<BrandingData>({
@@ -41,6 +61,9 @@ export default function BrandingPage() {
   });
   const [banking, setBanking] = useState<BankingDetails>({
     bankName: "", accountName: "", accountNumber: "", branchCode: "", accountType: "Cheque/Current", payfastLink: "",
+  });
+  const [social, setSocial] = useState<SocialLinks>({
+    youtube: "", instagram: "", facebook: "", tiktok: "", x: "", linkedin: "", spotify: "",
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -74,6 +97,12 @@ export default function BrandingPage() {
           branchCode: bd.branchCode || "",
           accountType: bd.accountType || "Cheque/Current",
           payfastLink: bd.payfastLink || "",
+        });
+        const sl = data.socialLinks || {};
+        setSocial({
+          youtube: sl.youtube || "", instagram: sl.instagram || "",
+          facebook: sl.facebook || "", tiktok: sl.tiktok || "",
+          x: sl.x || "", linkedin: sl.linkedin || "", spotify: sl.spotify || "",
         });
       } catch (err) {
         console.error("Failed to load branding:", err);
@@ -123,11 +152,13 @@ export default function BrandingPage() {
     setSaved(false);
     try {
       const hasAnyBankingData = Object.values(banking).some(v => v.trim() !== "");
+      const hasAnySocialData = Object.values(social).some(v => v.trim() !== "");
       await updateDoc(doc(db, "tenants", tenantId), {
         name: branding.name,
         primaryColor: branding.primaryColor,
         logoUrl: branding.logoUrl,
         ...(hasAnyBankingData && { bankingDetails: banking }),
+        ...(hasAnySocialData && { socialLinks: social }),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -361,6 +392,28 @@ export default function BrandingPage() {
             className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
           />
           <p className="text-xs text-gray-400 mt-1">If provided, members will see a direct PayFast button on their Giving page.</p>
+        </div>
+      </div>
+
+      {/* Social Media Links */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+        <div>
+          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Social Media and Community</h2>
+          <p className="text-xs text-gray-400 mt-1">Members will see buttons on their home page linking to whichever platforms you fill in.</p>
+        </div>
+        <div className="flex flex-col gap-4">
+          {SOCIAL_FIELDS.map(({ key, label, placeholder }) => (
+            <div key={key}>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">{label}</label>
+              <input
+                type="url"
+                value={social[key]}
+                onChange={e => setSocial(prev => ({ ...prev, [key]: e.target.value }))}
+                placeholder={placeholder}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
+            </div>
+          ))}
         </div>
       </div>
 
