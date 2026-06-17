@@ -904,13 +904,13 @@ service cloud.firestore {
                   && isCongregationMember()
                   && resource.data.uid == request.auth.uid;
 
-      // Congregation member can create a check-in for themselves
+      // Any authenticated tenant user (congregation member OR admin with linked profile)
+      // can create a check-in for themselves.
       allow create: if isSignedIn()
-                    && isCongregationMember()
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.tenantId == userTenantId();
 
-      // Admins can create check-ins (manual override)
+      // Admins can also create check-ins on behalf of members (manual override)
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));

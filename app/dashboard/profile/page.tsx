@@ -95,6 +95,14 @@ export default function ProfilePage() {
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
 
+  // My member profile link
+  const [linkedMemberId, setLinkedMemberId] = useState("");
+  const [linkedMemberName, setLinkedMemberName] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberResults, setMemberResults] = useState<{ id: string; name: string }[]>([]);
+  const [memberLinking, setMemberLinking] = useState(false);
+  const [memberLinkSaved, setMemberLinkSaved] = useState(false);
+
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (!user) { setLoading(false); return; }
@@ -138,6 +146,14 @@ export default function ProfilePage() {
         setProfile(p);
         setEditName(p.name);
         setSessions(loadedSessions);
+
+        // Load linked member profile
+        const mid = data.memberId || "";
+        setLinkedMemberId(mid);
+        if (mid) {
+          const mSnap = await getDoc(doc(db, "members", mid));
+          setLinkedMemberName(mSnap.data()?.fullName || "Unknown member");
+        }
       } catch (err) {
         console.error("Failed to load profile:", err);
         setError("Could not load profile.");
@@ -307,6 +323,50 @@ export default function ProfilePage() {
       setPayfastError("Could not save. Check permissions and try again.");
     } finally {
       setPayfastSaving(false);
+    }
+  };
+
+  const handleMemberSearch = async (term: string) => {
+    setMemberSearch(term);
+    if (!term.trim() || !profile?.tenantId) { setMemberResults([]); return; }
+    const snap = await getDocs(query(collection(db, "members"), where("tenantId", "==", profile.tenantId)));
+    const lower = term.toLowerCase();
+    const results = snap.docs
+      .map(d => ({ id: d.id, name: d.data().fullName || "" }))
+      .filter(m => m.name.toLowerCase().includes(lower))
+      .slice(0, 8);
+    setMemberResults(results);
+  };
+
+  const handleLinkMember = async (memberId: string, memberName: string) => {
+    if (!auth.currentUser) return;
+    setMemberLinking(true);
+    try {
+      await updateDoc(doc(db, "users", auth.currentUser.uid), { memberId });
+      setLinkedMemberId(memberId);
+      setLinkedMemberName(memberName);
+      setMemberSearch("");
+      setMemberResults([]);
+      setMemberLinkSaved(true);
+      setTimeout(() => setMemberLinkSaved(false), 3000);
+    } catch (err) {
+      console.error("Link member failed:", err);
+    } finally {
+      setMemberLinking(false);
+    }
+  };
+
+  const handleUnlinkMember = async () => {
+    if (!auth.currentUser || !confirm("Remove your member profile link?")) return;
+    setMemberLinking(true);
+    try {
+      await updateDoc(doc(db, "users", auth.currentUser.uid), { memberId: "" });
+      setLinkedMemberId("");
+      setLinkedMemberName("");
+    } catch (err) {
+      console.error("Unlink failed:", err);
+    } finally {
+      setMemberLinking(false);
     }
   };
 
@@ -482,6 +542,72 @@ export default function ProfilePage() {
         {saved && (
           <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
             Name updated successfully.
+          </p>
+        )}
+      </div>
+
+      {/* My Church Profile */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+        <div>
+          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">My Church Profile</h2>
+          <p className="text-xs text-gray-400 mt-1">
+            Link your admin account to your member record so you can access the member app and check in to events.
+          </p>
+        </div>
+
+        {linkedMemberId ? (
+          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-base font-bold text-emerald-700">
+                {linkedMemberName.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">{linkedMemberName}</p>
+                <p className="text-xs text-emerald-700 font-medium">Member profile linked</p>
+              </div>
+            </div>
+            <button
+              onClick={handleUnlinkMember}
+              disabled={memberLinking}
+              className="text-xs text-red-500 hover:text-red-700 font-semibold disabled:opacity-50"
+            >
+              Unlink
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+              No member profile linked yet. Search your roster below to find yourself.
+            </p>
+            <div className="relative">
+              <input
+                type="text"
+                value={memberSearch}
+                onChange={e => handleMemberSearch(e.target.value)}
+                placeholder="Search by name..."
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
+              {memberResults.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  {memberResults.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => handleLinkMember(m.id, m.name)}
+                      disabled={memberLinking}
+                      className="w-full text-left px-4 py-3 text-sm text-gray-800 hover:bg-emerald-50 hover:text-emerald-800 transition border-b border-gray-100 last:border-0"
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {memberLinkSaved && (
+          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+            Member profile linked. You can now access the member app from the sidebar.
           </p>
         )}
       </div>

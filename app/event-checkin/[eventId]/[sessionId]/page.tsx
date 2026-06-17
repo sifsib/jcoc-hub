@@ -70,7 +70,9 @@ export default function EventCheckinPage() {
         const userSnap = await getDoc(doc(db, "users", user.uid));
         const userData = userSnap.data();
 
-        if (!userData || userData.role !== "congregation_member") {
+        // Allow any user with a linked member profile, not just congregation_member role.
+        // Admin users who have linked their member record in Profile can check in too.
+        if (!userData || !userData.memberId) {
           setState("signed_out");
           return;
         }

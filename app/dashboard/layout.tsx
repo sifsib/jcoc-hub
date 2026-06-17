@@ -49,6 +49,8 @@ export default async function DashboardLayout({
 
   const churchName = tenantData?.name || "KerekeHub";
   const primaryColor = tenantData?.primaryColor || "#059669";
+  const tenantSlug = tenantData?.slug || "";
+  const userMemberId = userDocData?.memberId || "";
 
   const allNavigation = [
     { name: "Church Overview", href: "/dashboard/analytics", icon: "📊", roles: ["owner", "admin", "viewer", "finance", "member_manager"] },
@@ -130,6 +132,31 @@ export default async function DashboardLayout({
             )}
           </ul>
         </nav>
+
+        {tenantSlug && (
+          <div className="px-4 pb-2 border-t border-gray-100 pt-3">
+            {userMemberId ? (
+              <a
+                href={`/member/${tenantSlug}/home`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition w-full"
+              >
+                <span className="text-base">📱</span>
+                Member App
+                <span className="ml-auto text-[10px] text-emerald-500 font-medium">↗</span>
+              </a>
+            ) : (
+              <Link
+                href="/dashboard/profile"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition w-full"
+              >
+                <span className="text-base">📱</span>
+                Link Member Profile
+              </Link>
+            )}
+          </div>
+        )}
 
         <div className="p-4 border-t border-gray-200">
           <LogoutButton />
