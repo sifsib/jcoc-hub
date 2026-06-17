@@ -44,6 +44,8 @@ interface Member {
   churchRole?: string;
   source?: string;
   absenceException?: AbsenceException | null;
+  portalStatus?: "not_invited" | "invited" | "active";
+  authUid?: string;
 }
 
 interface ChildInput {
@@ -457,6 +459,10 @@ function MemberBlock({
 export default function ManageMembershipPage() {
   const { appUser, loading: userLoading } = useAppUser();
 
+  const [invitingMemberId, setInvitingMemberId] = useState<string | null>(null);
+  const [inviteResult, setInviteResult] = useState<{ id: string; ok: boolean; msg: string } | null>(null);
+  const [bulkInviting, setBulkInviting] = useState(false);
+  const [bulkInviteResult, setBulkInviteResult] = useState<{ invited: number; skipped: number; failed: number } | null>(null);
   const [view, setView] = useState<"list" | "form" | "import" | "configure" | "pending">("list");
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
@@ -678,6 +684,51 @@ export default function ManageMembershipPage() {
     snap.forEach(d => list.push({ id: d.id, ...d.data() } as Member));
     list.sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
     setMembers(list);
+  };
+
+  // ─── Portal invite ───────────────────────────────────────────────────────────
+
+  const inviteMemberToPortal = async (memberId: string) => {
+    setInvitingMemberId(memberId);
+    setInviteResult(null);
+    try {
+      const res = await fetch("/api/invite-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setInviteResult({ id: memberId, ok: false, msg: data.error || "Failed to send invite." });
+      } else {
+        setInviteResult({ id: memberId, ok: true, msg: data.emailSent ? "Invite sent." : "Account created. Copy link to share manually." });
+        // Optimistically update local state
+        setMembers(prev => prev.map(m => m.id === memberId ? { ...m, portalStatus: "invited" } : m));
+      }
+    } catch {
+      setInviteResult({ id: memberId, ok: false, msg: "Network error." });
+    } finally {
+      setInvitingMemberId(null);
+    }
+  };
+
+  const bulkInviteMembers = async () => {
+    if (!confirm("Send portal invites to all members who have an email address and have not yet been invited?")) return;
+    setBulkInviting(true);
+    setBulkInviteResult(null);
+    try {
+      const res = await fetch("/api/bulk-invite-members", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setBulkInviteResult({ invited: data.invited, skipped: data.skipped, failed: data.failed });
+        // Refresh member list to pick up updated portalStatus fields
+        setMembers(prev => prev.map(m => m.email ? { ...m, portalStatus: m.portalStatus || "invited" } : m));
+      }
+    } catch {
+      setBulkInviteResult({ invited: 0, skipped: 0, failed: 1 });
+    } finally {
+      setBulkInviting(false);
+    }
   };
 
   // ─── Trigger member_added workflows ─────────────────────────────────────────
@@ -2173,6 +2224,23 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
           >
             Share Join Link
           </button>
+          {/* Bulk Portal Invite */}
+          {(appUser?.role === "owner" || appUser?.role === "admin") && (
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={bulkInviteMembers}
+                disabled={bulkInviting}
+                className="px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-lg hover:bg-emerald-100 transition disabled:opacity-50"
+              >
+                {bulkInviting ? "Sending invites..." : "Invite All to Portal"}
+              </button>
+              {bulkInviteResult && (
+                <p className="text-[10px] text-gray-500">
+                  {bulkInviteResult.invited} sent, {bulkInviteResult.skipped} skipped, {bulkInviteResult.failed} failed
+                </p>
+              )}
+            </div>
+          )}
           <button onClick={() => { reset(); setView("form"); }}
             className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
             + Add Member
@@ -2375,7 +2443,28 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                       </td>
                       <td className="px-5 py-4 text-right">
                         {appUser?.role !== "cell_leader" && (
-                          <div className="flex items-center justify-end gap-3">
+                          <div className="flex items-center justify-end gap-3 flex-wrap">
+                            {/* Portal invite status + button */}
+                            {m.email && (
+                              m.portalStatus === "active" ? (
+                                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">Portal Active</span>
+                              ) : m.portalStatus === "invited" ? (
+                                <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-medium">Invite Sent</span>
+                              ) : (
+                                <button
+                                  onClick={() => inviteMemberToPortal(m.id)}
+                                  disabled={invitingMemberId === m.id}
+                                  className="text-[10px] bg-gray-50 text-gray-600 border border-gray-200 px-1.5 py-0.5 rounded font-medium hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition disabled:opacity-50"
+                                >
+                                  {invitingMemberId === m.id ? "Inviting..." : "Invite to Portal"}
+                                </button>
+                              )
+                            )}
+                            {inviteResult?.id === m.id && (
+                              <span className={`text-[10px] ${inviteResult.ok ? "text-emerald-600" : "text-red-500"}`}>
+                                {inviteResult.msg}
+                              </span>
+                            )}
                             <button onClick={() => openEdit(m)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
                             <button onClick={() => handleDelete(m.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
                           </div>

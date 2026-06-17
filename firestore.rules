@@ -29,6 +29,17 @@ service cloud.firestore {
       return userData().role == 'super_admin';
     }
 
+    function isCongregationMember() {
+      return userData().role == 'congregation_member';
+    }
+
+    // Returns true if the signed-in congregation member owns the given resource
+    // (their member doc has their authUid stored on it)
+    function isOwnMemberDoc(resource) {
+      return isCongregationMember()
+          && resource.data.authUid == request.auth.uid;
+    }
+
     function isOwner() {
       return isSuperAdmin() || hasRole('owner');
     }
@@ -138,9 +149,17 @@ service cloud.firestore {
     // ============================================
     match /members/{memberId} {
 
+      // Admin access
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadMembers();
+
+      // Congregation member can read and update their own doc only
+      allow read: if isSignedIn() && isOwnMemberDoc(resource);
+      allow update: if isSignedIn()
+                    && isOwnMemberDoc(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && request.resource.data.authUid == resource.data.authUid;
 
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
@@ -271,6 +290,11 @@ service cloud.firestore {
     // HOUSEHOLDS COLLECTION
     // ============================================
     match /households/{id} {
+
+      // Congregation member can read their own household
+      allow read: if isSignedIn()
+                  && isCongregationMember()
+                  && resource.data.tenantId == userTenantId();
 
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
@@ -553,6 +577,11 @@ service cloud.firestore {
       // Public can read active events so the RSVP link page can render event details
       allow read: if resource.data.active == true;
 
+      // Congregation members can read all events for their church
+      allow read: if isSignedIn()
+                  && isCongregationMember()
+                  && resource.data.tenantId == userTenantId();
+
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
@@ -601,6 +630,11 @@ service cloud.firestore {
     // GROUPS
     // ============================================
     match /groups/{id} {
+      // Congregation members can read groups in their church
+      allow read: if isSignedIn()
+                  && isCongregationMember()
+                  && resource.data.tenantId == userTenantId();
+
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader') || hasRole('viewer'))));
@@ -771,6 +805,84 @@ service cloud.firestore {
     // ============================================
     match /signups/{id} {
       allow read, write: if isSignedIn() && isSuperAdmin();
+    }
+
+
+    // ============================================
+    // CONGREGATION MEMBER RSVP
+    // Logged-in congregation members can create/update their own RSVPs
+    // ============================================
+    match /event_rsvps/{id} {
+      allow read: if isSignedIn()
+                  && isCongregationMember()
+                  && resource.data.tenantId == userTenantId();
+
+      allow create: if isSignedIn()
+                    && isCongregationMember()
+                    && request.resource.data.tenantId == userTenantId();
+
+      allow update: if isSignedIn()
+                    && isCongregationMember()
+                    && resource.data.tenantId == userTenantId()
+                    && resource.data.uid == request.auth.uid;
+    }
+
+
+    // ============================================
+    // GROUP MEMBERS — congregation member can read own memberships
+    // ============================================
+    match /group_members/{id} {
+      allow read: if isSignedIn()
+                  && isCongregationMember()
+                  && resource.data.tenantId == userTenantId();
+    }
+
+
+    // ============================================
+    // ANNOUNCEMENTS
+    // ============================================
+    match /announcements/{id} {
+      allow read: if isSignedIn()
+                  && (isSuperAdmin()
+                      || (resource.data.tenantId == userTenantId()
+                          && (canManageCommunications() || isCongregationMember())));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageCommunications();
+
+      allow update, delete: if isSignedIn()
+                            && tenantAllowed(resource)
+                            && canManageCommunications();
+    }
+
+
+    // ============================================
+    // WORSHIP SETLISTS (subcollection of tenant)
+    // Congregation members can read setlists they are assigned to
+    // ============================================
+    match /tenants/{tenantId}/setlists/{id} {
+      allow read: if isSignedIn()
+                  && tenantId == userTenantId()
+                  && (hasRole('owner') || hasRole('admin') || isSuperAdmin()
+                      || (isCongregationMember()
+                          && userData().memberId in resource.data.assignedMembers));
+
+      allow create, update: if isSignedIn()
+                            && tenantId == userTenantId()
+                            && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
+
+      allow delete: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
+    }
+
+
+    // ============================================
+    // PUSH SUBSCRIPTIONS (per uid)
+    // ============================================
+    match /push_subscriptions/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
 

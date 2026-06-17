@@ -2,7 +2,9 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import * as nodemailer from "nodemailer";
+import * as crypto from "crypto";
 
 // ─────────────────────────────────────────────────────────────
 // SYSTEM-LEVEL GMAIL SECRETS
@@ -158,6 +160,96 @@ export const onMemberCreated = onDocumentCreated(
       }
     } catch (err) {
       console.error(`[onMemberCreated] Error:`, err);
+    }
+
+    // ── Auto-provision member portal account ─────────────────
+    // If the member has an email, create a Firebase Auth account and
+    // send a portal invite so they can access their profile immediately.
+    try {
+      const memberId = event.params.memberId;
+      const memberEmail = email.trim().toLowerCase();
+      const auth = getAuth();
+      const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hub.kerekehub.co.za";
+      const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
+
+      let authUid: string;
+      try {
+        const newUser = await auth.createUser({
+          email: memberEmail,
+          displayName: member.fullName || memberEmail,
+          emailVerified: false,
+          password: crypto.randomBytes(12).toString("base64") + "Kh1!",
+        });
+        authUid = newUser.uid;
+      } catch (authErr: any) {
+        if (authErr.code === "auth/email-already-exists") {
+          const existingUser = await auth.getUserByEmail(memberEmail);
+          authUid = existingUser.uid;
+        } else {
+          throw authErr;
+        }
+      }
+
+      // Write users doc for the congregation member
+      await db.collection("users").doc(authUid).set({
+        email: memberEmail,
+        displayName: member.fullName || memberEmail,
+        role: "congregation_member",
+        tenantId,
+        memberId,
+        status: "invited",
+        createdAt: new Date().toISOString(),
+        invitedBy: "system",
+      }, { merge: true });
+
+      // Link auth account back to member doc
+      await db.collection("members").doc(memberId).update({
+        authUid,
+        portalStatus: "invited",
+        portalInvitedAt: new Date().toISOString(),
+      });
+
+      // Create invite token
+      const inviteToken = crypto.randomUUID();
+      await db.collection("invites").doc(inviteToken).set({
+        uid: authUid,
+        email: memberEmail,
+        tenantId,
+        memberId,
+        type: "member",
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + INVITE_EXPIRY_MS).toISOString(),
+        used: false,
+      });
+
+      // Send invite email via Brevo if key is available
+      if (BREVO_API_KEY) {
+        const inviteUrl = `${APP_URL}/member/setup?token=${inviteToken}`;
+        const tenantSnap2 = await db.doc(`tenants/${tenantId}`).get();
+        const churchName2 = tenantSnap2.data()?.name || "your church";
+        const recipientName = member.fullName || memberEmail;
+
+        await fetch("https://api.brevo.com/v3/smtp/email", {
+          method: "POST",
+          headers: {
+            "api-key": BREVO_API_KEY,
+            "content-type": "application/json",
+            accept: "application/json",
+          },
+          body: JSON.stringify({
+            sender: { name: "Kereke Hub", email: process.env.BREVO_SENDER_EMAIL || "noreply@kerekehub.co.za" },
+            to: [{ email: memberEmail, name: recipientName }],
+            subject: `${churchName2} has set up your member profile`,
+            htmlContent: `<p>Hi ${recipientName},</p><p>${churchName2} has created your member portal account on Kereke Hub. <a href="${inviteUrl}">Click here to set your password and access your profile</a>. This link expires in 7 days.</p><p>Powered by Kereke Hub &mdash; kerekehub.co.za</p>`,
+          }),
+        });
+      }
+
+      console.log(`[onMemberCreated] Portal account provisioned for ${memberEmail}`);
+    } catch (portalErr) {
+      // Non-fatal — log but don't fail the function
+      console.error(`[onMemberCreated] Portal provisioning error:`, portalErr);
     }
   }
 );

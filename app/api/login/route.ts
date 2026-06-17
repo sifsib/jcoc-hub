@@ -49,6 +49,21 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // If this is a congregation member's first login (status still "invited"), mark them active
+    if (userSnap.exists) {
+      const userData = userSnap.data();
+      if (userData?.role === "congregation_member" && userData?.status === "invited") {
+        const updates: Record<string, any> = { status: "active" };
+        // Also update portalStatus on their member doc
+        if (userData.memberId) {
+          adminDb.collection("members").doc(userData.memberId).update({
+            portalStatus: "active",
+          }).catch(() => {});
+        }
+        await userRef.update(updates);
+      }
+    }
+
     // Set the session cookie — httpOnly so JS can't touch it
     const response = NextResponse.json({ success: true });
     response.cookies.set("session", sessionCookie, {
