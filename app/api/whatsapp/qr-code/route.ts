@@ -2,20 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import QRCode from "qrcode";
 import {
   cleanString,
-  evolutionError,
   extractQrBase64,
   extractQrCode,
-  getEvolutionConfig,
+  getWhatsAppServiceConfig,
   objectValue,
-  readEvolutionJson,
+  readWhatsAppJson,
+  whatsappHeaders,
+  whatsappServiceError,
 } from "../_utils";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const config = getEvolutionConfig();
+  const config = getWhatsAppServiceConfig();
   if (!config) {
-    return NextResponse.json({ error: "Evolution API credentials are not configured." }, { status: 500 });
+    return NextResponse.json({ error: "WhatsApp service URL is not configured." }, { status: 500 });
   }
 
   const instanceName = cleanString(req.nextUrl.searchParams.get("instanceName"));
@@ -24,14 +25,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(`${config.baseUrl}/instance/connect/${encodeURIComponent(instanceName)}`, {
+    const url = `${config.baseUrl}/auth/qr?sessionName=${encodeURIComponent(instanceName)}`;
+    const res = await fetch(url, {
       cache: "no-store",
-      headers: { apikey: config.apiKey },
+      headers: whatsappHeaders(config),
     });
-    const data = await readEvolutionJson(res);
+    const data = await readWhatsAppJson(res);
 
     if (!res.ok) {
-      return NextResponse.json({ ...data, error: evolutionError(data, res.status) }, { status: res.status });
+      return NextResponse.json({ ...data, error: whatsappServiceError(data, res.status) }, { status: res.status });
     }
 
     const base64 = extractQrBase64(data);
@@ -52,6 +54,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("WhatsApp QR code error:", error);
-    return NextResponse.json({ error: "Could not reach Evolution API." }, { status: 502 });
+    return NextResponse.json({ error: "Could not reach WhatsApp service." }, { status: 502 });
   }
 }

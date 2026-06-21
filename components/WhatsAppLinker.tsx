@@ -19,7 +19,7 @@ export function WhatsAppLinker() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   };
 
-  // Get the tenant ID (used as the Evolution API instance name)
+  // Use the tenant ID as the WhatsApp session name.
   const getTenantId = async (): Promise<string> => {
     const user = getAuth().currentUser;
     if (!user) throw new Error('Not logged in');
@@ -38,7 +38,7 @@ export function WhatsAppLinker() {
       const tenantId = await getTenantId();
       instanceRef.current = tenantId;
 
-      // Create (or recreate) the Evolution API instance for this tenant
+      // Start the Railway WhatsApp session for this tenant.
       const res = await fetch('/api/whatsapp/create-instance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -52,7 +52,7 @@ export function WhatsAppLinker() {
 
       const data = await res.json();
 
-      // Evolution API sometimes returns the QR immediately on create
+      // The service can return the QR immediately when the session starts.
       if (data.qrBase64) {
         setQrBase64(data.qrBase64);
         setState('scanning');
@@ -106,7 +106,7 @@ export function WhatsAppLinker() {
       const res  = await fetch(`/api/whatsapp/status?instanceName=${encodeURIComponent(instanceName)}`, { cache: 'no-store' });
       const data = await res.json();
 
-      // Evolution API returns state: "open" when connected
+      // The service returns state "open" when connected.
       if (data.instance?.state === 'open' || data.state === 'open') {
         setPhoneNumber(data.instance?.ownerJid?.split('@')[0] ?? null);
         setState('connected');
@@ -159,10 +159,10 @@ export function WhatsAppLinker() {
 
   if (state === 'connected') {
     return (
-      <div className="rounded-lg bg-green-50 p-6 border border-green-200">
-        <h3 className="text-lg font-semibold text-green-900 mb-2">WhatsApp Connected</h3>
-        {phoneNumber && <p className="text-green-800 mb-4">Number: +{phoneNumber}</p>}
-        <button onClick={disconnect} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-800 dark:bg-emerald-950/40">
+        <h3 className="text-lg font-semibold text-emerald-950 mb-2 dark:text-emerald-100">WhatsApp connected</h3>
+        {phoneNumber && <p className="text-emerald-800 mb-4 dark:text-emerald-200">Number: +{phoneNumber}</p>}
+        <button onClick={disconnect} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600">
           Disconnect
         </button>
       </div>
@@ -171,9 +171,9 @@ export function WhatsAppLinker() {
 
   if (state === 'scanning' && qrBase64) {
     return (
-      <div className="rounded-lg bg-blue-50 p-6 border border-blue-200">
-        <h3 className="text-lg font-semibold text-blue-900 mb-4">Scan QR Code</h3>
-        <p className="text-blue-800 mb-4">
+      <div className="rounded-lg border border-sky-200 bg-sky-50 p-6 dark:border-sky-800 dark:bg-sky-950/40">
+        <h3 className="text-lg font-semibold text-sky-950 mb-4 dark:text-sky-100">Scan QR code</h3>
+        <p className="text-sky-800 mb-4 dark:text-sky-200">
           Open WhatsApp on your phone, tap <strong>Settings &gt; Linked Devices &gt; Link a Device</strong>, then scan this code.
         </p>
         <div className="flex justify-center my-4">
@@ -182,31 +182,31 @@ export function WhatsAppLinker() {
             alt="WhatsApp QR Code"
             width={256}
             height={256}
-            className="rounded"
+            className="rounded border border-slate-200 bg-white p-2"
           />
         </div>
-        <p className="text-sm text-blue-700 text-center">Waiting for scan...</p>
+        <p className="text-sm text-sky-700 text-center dark:text-sky-200">Waiting for scan...</p>
       </div>
     );
   }
 
   if (state === 'polling_qr' || state === 'starting') {
     return (
-      <div className="rounded-lg bg-gray-50 p-6 border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Connecting...</h3>
-        <p className="text-gray-600">Generating QR code, please wait.</p>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h3 className="text-lg font-semibold text-slate-950 mb-2 dark:text-slate-100">Connecting...</h3>
+        <p className="text-slate-600 dark:text-slate-300">Generating QR code, please wait.</p>
       </div>
     );
   }
 
   if (state === 'error') {
     return (
-      <div className="rounded-lg bg-red-50 p-6 border border-red-200">
-        <h3 className="text-lg font-semibold text-red-900 mb-2">Something went wrong</h3>
-        <p className="text-red-800 mb-4">{error}</p>
+      <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-950/40">
+        <h3 className="text-lg font-semibold text-red-950 mb-2 dark:text-red-100">Something went wrong</h3>
+        <p className="text-red-800 mb-4 dark:text-red-200">{error}</p>
         <button
           onClick={() => { setState('idle'); setError(null); }}
-          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
         >
           Try Again
         </button>
@@ -215,10 +215,10 @@ export function WhatsAppLinker() {
   }
 
   return (
-    <div className="rounded-lg bg-gray-50 p-6 border border-gray-200">
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect WhatsApp</h3>
-      <p className="text-gray-700 mb-4">Link your church WhatsApp number to send messages directly from the hub.</p>
-      <button onClick={startAuth} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900">
+      <h3 className="text-lg font-semibold text-slate-950 mb-2 dark:text-slate-100">Connect WhatsApp</h3>
+      <p className="text-slate-700 mb-4 dark:text-slate-300">Link your church WhatsApp number to send messages directly from the hub.</p>
+      <button onClick={startAuth} className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">
         Connect WhatsApp
       </button>
     </div>

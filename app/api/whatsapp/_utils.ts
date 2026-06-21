@@ -1,38 +1,53 @@
-type EvolutionResponse = Record<string, unknown>;
+type WhatsAppServiceResponse = Record<string, unknown>;
 
-export function getEvolutionConfig() {
-  const baseUrl = process.env.NEXT_PUBLIC_EVOLUTION_API_URL?.replace(/\/+$/, "");
-  const apiKey = process.env.EVOLUTION_API_KEY;
+interface WhatsAppServiceConfig {
+  baseUrl: string;
+  serviceKey: string | null;
+}
 
-  if (!baseUrl || !apiKey) {
+export function getWhatsAppServiceConfig(): WhatsAppServiceConfig | null {
+  const baseUrl = (
+    process.env.RAILWAY_WHATSAPP_URL
+    || process.env.WHATSAPP_SERVICE_URL
+  )?.replace(/\/+$/, "");
+  const serviceKey = process.env.RAILWAY_SERVICE_KEY || process.env.WHATSAPP_SERVICE_KEY || null;
+
+  if (!baseUrl) {
     return null;
   }
 
-  return { baseUrl, apiKey };
+  return { baseUrl, serviceKey };
+}
+
+export function whatsappHeaders(config: WhatsAppServiceConfig, withJson = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (withJson) headers["Content-Type"] = "application/json";
+  if (config.serviceKey) headers["X-Service-Key"] = config.serviceKey;
+  return headers;
 }
 
 export function cleanString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function objectValue(data: EvolutionResponse, key: string) {
+export function objectValue(data: WhatsAppServiceResponse, key: string) {
   const value = data[key];
-  return value && typeof value === "object" && !Array.isArray(value) ? value as EvolutionResponse : null;
+  return value && typeof value === "object" && !Array.isArray(value) ? value as WhatsAppServiceResponse : null;
 }
 
-function stringValue(data: EvolutionResponse, key: string) {
+function stringValue(data: WhatsAppServiceResponse, key: string) {
   const value = data[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export async function readEvolutionJson(res: Response): Promise<EvolutionResponse> {
+export async function readWhatsAppJson(res: Response): Promise<WhatsAppServiceResponse> {
   const text = await res.text();
   if (!text.trim()) return {};
 
   try {
     const value = JSON.parse(text);
     if (value && typeof value === "object" && !Array.isArray(value)) {
-      return value as EvolutionResponse;
+      return value as WhatsAppServiceResponse;
     }
     return { message: String(value) };
   } catch {
@@ -47,35 +62,42 @@ function textValues(value: unknown): string[] {
   return [];
 }
 
-export function evolutionMessage(data: EvolutionResponse) {
+export function whatsappMessage(data: WhatsAppServiceResponse) {
   return textValues(data).join(" ").trim();
 }
 
-export function isAlreadyExistsResponse(data: EvolutionResponse) {
-  const message = evolutionMessage(data).toLowerCase();
+export function isAlreadyExistsResponse(data: WhatsAppServiceResponse) {
+  const message = whatsappMessage(data).toLowerCase();
   return message.includes("already") && message.includes("exist");
 }
 
-export function evolutionError(data: EvolutionResponse, status: number) {
-  const message = evolutionMessage(data);
-  return message ? `Evolution API error (${status}): ${message.slice(0, 200)}` : `Evolution API error (${status}).`;
+export function whatsappServiceError(data: WhatsAppServiceResponse, status: number) {
+  const message = whatsappMessage(data);
+  return message ? `WhatsApp service error (${status}): ${message.slice(0, 200)}` : `WhatsApp service error (${status}).`;
 }
 
-export function extractQrBase64(data: EvolutionResponse) {
+export function extractQrBase64(data: WhatsAppServiceResponse) {
   const qrcode = objectValue(data, "qrcode");
   const qr = objectValue(data, "qr");
+  const image = objectValue(data, "image");
 
   return stringValue(data, "base64")
     ?? stringValue(data, "qrBase64")
+    ?? stringValue(data, "data")
     ?? (qrcode ? stringValue(qrcode, "base64") : null)
-    ?? (qr ? stringValue(qr, "base64") : null);
+    ?? (qrcode ? stringValue(qrcode, "data") : null)
+    ?? (qr ? stringValue(qr, "base64") : null)
+    ?? (image ? stringValue(image, "base64") : null)
+    ?? (image ? stringValue(image, "data") : null);
 }
 
-export function extractQrCode(data: EvolutionResponse) {
+export function extractQrCode(data: WhatsAppServiceResponse) {
   const qrcode = objectValue(data, "qrcode");
   const qr = objectValue(data, "qr");
 
   return stringValue(data, "code")
+    ?? stringValue(data, "value")
     ?? (qrcode ? stringValue(qrcode, "code") : null)
+    ?? (qrcode ? stringValue(qrcode, "value") : null)
     ?? (qr ? stringValue(qr, "code") : null);
 }

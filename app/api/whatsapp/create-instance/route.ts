@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   cleanString,
-  evolutionError,
   extractQrBase64,
-  getEvolutionConfig,
-  isAlreadyExistsResponse,
-  readEvolutionJson,
+  getWhatsAppServiceConfig,
+  readWhatsAppJson,
+  whatsappHeaders,
+  whatsappServiceError,
 } from "../_utils";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const config = getEvolutionConfig();
+  const config = getWhatsAppServiceConfig();
   if (!config) {
-    return NextResponse.json({ error: "Evolution API credentials are not configured." }, { status: 500 });
+    return NextResponse.json({ error: "WhatsApp service URL is not configured." }, { status: 500 });
   }
 
   let body: Record<string, unknown>;
@@ -28,32 +28,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Instance name is required." }, { status: 400 });
   }
 
-  // Delete any existing instance first to avoid stuck state
   try {
-    await fetch(`${config.baseUrl}/instance/delete/${encodeURIComponent(instanceName)}`, {
-      method: "DELETE",
-      headers: { apikey: config.apiKey },
-    });
-  } catch { /* ignore — instance may not exist */ }
-
-  try {
-    const res = await fetch(`${config.baseUrl}/instance/create`, {
+    const res = await fetch(`${config.baseUrl}/auth/start`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", apikey: config.apiKey },
-      body: JSON.stringify({ instanceName, qrcode: true, integration: "WHATSAPP-BAILEYS" }),
+      headers: whatsappHeaders(config, true),
+      body: JSON.stringify({ sessionName: instanceName }),
     });
-    const data = await readEvolutionJson(res);
+    const data = await readWhatsAppJson(res);
 
-    if (!res.ok && !isAlreadyExistsResponse(data)) {
+    if (!res.ok) {
       return NextResponse.json(
-        { error: evolutionError(data, res.status) },
+        { error: whatsappServiceError(data, res.status) },
         { status: res.status >= 500 ? 502 : 400 }
       );
     }
 
-    return NextResponse.json({ success: true, qrBase64: extractQrBase64(data) });
+    return NextResponse.json({ ...data, success: true, qrBase64: extractQrBase64(data) });
   } catch (error) {
-    console.error("WhatsApp instance create error:", error);
-    return NextResponse.json({ error: "Could not reach Evolution API." }, { status: 502 });
+    console.error("WhatsApp auth start error:", error);
+    return NextResponse.json({ error: "Could not reach WhatsApp service." }, { status: 502 });
   }
 }

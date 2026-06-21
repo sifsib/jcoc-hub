@@ -35,23 +35,23 @@ class WhatsAppService {
   }
 
   async startAuth() {
-    return this.call('POST', '/auth/start');
+    return this.call('POST', '/auth/start', { sessionName: this.tenantId });
   }
 
   async getQRCode() {
-    return this.call('GET', '/auth/qr');
+    return this.call('GET', `/auth/qr?sessionName=${encodeURIComponent(this.tenantId)}`);
   }
 
   async getStatus() {
-    return this.call('GET', '/auth/status');
+    return this.call('GET', `/auth/status?sessionName=${encodeURIComponent(this.tenantId)}`);
   }
 
   async sendMessage(phoneNumber: string, message: string) {
-    return this.call('POST', '/message/send', { phoneNumber, message });
+    return this.call('POST', '/message/send', { sessionName: this.tenantId, phone: phoneNumber, message });
   }
 
   async disconnect() {
-    return this.call('POST', '/auth/disconnect');
+    return this.call('POST', '/auth/disconnect', { sessionName: this.tenantId });
   }
 
   async health() {

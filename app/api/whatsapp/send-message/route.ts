@@ -1,15 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
-const BASE_URL = process.env.NEXT_PUBLIC_EVOLUTION_API_URL!;
-const API_KEY = process.env.EVOLUTION_API_KEY!;
+import {
+  cleanString,
+  getWhatsAppServiceConfig,
+  readWhatsAppJson,
+  whatsappHeaders,
+  whatsappServiceError,
+} from "../_utils";
+
+export const runtime = "nodejs";
+
 export async function POST(req: NextRequest) {
-  const { instanceName, to, message } = await req.json();
-  const number = to.replace(/\D/g, "");
-  const res = await fetch(`${BASE_URL}/message/sendText/${instanceName}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: API_KEY },
-    body: JSON.stringify({ number, text: message }),
-  });
-  const data = await res.json();
-  if (!res.ok) return NextResponse.json({ error: data.message ?? "Failed to send" }, { status: 400 });
-  return NextResponse.json(data);
+  const config = getWhatsAppServiceConfig();
+  if (!config) {
+    return NextResponse.json({ error: "WhatsApp service URL is not configured." }, { status: 500 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const instanceName = cleanString(body.instanceName);
+  const phone = cleanString(body.to).replace(/\D/g, "");
+  const message = cleanString(body.message);
+
+  if (!instanceName || !phone || !message) {
+    return NextResponse.json({ error: "Instance name, phone number, and message are required." }, { status: 400 });
+  }
+
+  try {
+    const res = await fetch(`${config.baseUrl}/message/send`, {
+      method: "POST",
+      headers: whatsappHeaders(config, true),
+      body: JSON.stringify({ sessionName: instanceName, phone, message }),
+    });
+    const data = await readWhatsAppJson(res);
+
+    if (!res.ok) {
+      return NextResponse.json({ error: whatsappServiceError(data, res.status) }, { status: res.status >= 500 ? 502 : 400 });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("WhatsApp send message error:", error);
+    return NextResponse.json({ error: "Could not reach WhatsApp service." }, { status: 502 });
+  }
 }

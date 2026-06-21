@@ -1,98 +1,83 @@
 # WAHA WhatsApp Server Proxy
 
-A simple Express server that proxies to WAHA (WhatsApp HTTP API) for session management and message sending.
+This Express service is intended to run on Railway. It proxies Kereke Hub requests to WAHA and exposes the routes the dashboard calls for WhatsApp QR linking, status checks, disconnect, and message sending.
 
-## Prerequisites
+## Environment
 
-You need WAHA running locally. Install Docker, then run:
+Set these variables on Railway:
 
 ```bash
-docker run -it -p 3000:3000 devlikeapro/waha:latest
+WAHA_API_URL=https://your-waha-service-url
+WAHA_API_KEY=optional-waha-api-key
+RAILWAY_SERVICE_KEY=shared-secret-sent-by-kereke-hub
+PORT=3001
 ```
 
-This starts WAHA on port 3000. Leave it running in a separate terminal.
+`RAILWAY_SERVICE_KEY` is optional for local testing. If set, every route except `GET /health` must include `X-Service-Key`.
 
-## Setup
+## Dashboard Routes
 
-1. Install dependencies:
+```bash
+GET  /health
+POST /auth/start
+GET  /auth/qr?sessionName=tenant-id
+GET  /auth/status?sessionName=tenant-id
+POST /auth/disconnect
+POST /message/send
+```
+
+Start a session:
+
+```bash
+curl -X POST http://localhost:3001/auth/start \
+  -H "Content-Type: application/json" \
+  -H "X-Service-Key: shared-secret-sent-by-kereke-hub" \
+  -d "{\"sessionName\":\"tenant-id\"}"
+```
+
+Get the QR code:
+
+```bash
+curl "http://localhost:3001/auth/qr?sessionName=tenant-id" \
+  -H "X-Service-Key: shared-secret-sent-by-kereke-hub"
+```
+
+Check status:
+
+```bash
+curl "http://localhost:3001/auth/status?sessionName=tenant-id" \
+  -H "X-Service-Key: shared-secret-sent-by-kereke-hub"
+```
+
+Send a message:
+
+```bash
+curl -X POST http://localhost:3001/message/send \
+  -H "Content-Type: application/json" \
+  -H "X-Service-Key: shared-secret-sent-by-kereke-hub" \
+  -d "{\"sessionName\":\"tenant-id\",\"phone\":\"27123456789\",\"message\":\"Hello from Kereke Hub\"}"
+```
+
+## Local Run
+
+Install the subproject dependencies:
+
 ```bash
 npm install
 ```
 
-2. Start the proxy server:
+Start the proxy:
+
 ```bash
 npm start
 ```
 
-The proxy will run on `http://localhost:3001` and forward requests to WAHA at `http://localhost:3000`.
+Run the focused tests:
 
-## How It Works
-
-WAHA wraps WhatsApp Web and exposes HTTP endpoints. Our Express proxy:
-1. Receives requests from Vercel (in production)
-2. Forwards them to WAHA
-3. Returns responses back to the client
-
-## Testing
-
-### 1. Check Proxy Health
 ```bash
-curl http://localhost:3001/health
+node --test index.test.js
 ```
 
-### 2. Check WAHA Connection
-```bash
-curl http://localhost:3001/waha/health
-```
+## Notes
 
-If this fails, WAHA isn't running or isn't reachable.
-
-### 3. Start a Session
-```bash
-curl -X POST http://localhost:3001/session/start \
-  -H "Content-Type: application/json" \
-  -d '{"sessionName": "kerekehub"}'
-```
-
-WAHA will generate a QR code. You'll see it in the WAHA terminal. Scan it with your WhatsApp phone.
-
-### 4. Check Session Status
-```bash
-curl http://localhost:3001/session/kerekehub
-```
-
-### 5. Send a Test Message
-Once authenticated:
-```bash
-curl -X POST http://localhost:3001/message/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sessionName": "kerekehub",
-    "phone": "27123456789",
-    "message": "Hello from WAHA!"
-  }'
-```
-
-### 6. List Sessions
-```bash
-curl http://localhost:3001/sessions
-```
-
-### 7. Stop a Session
-```bash
-curl -X POST http://localhost:3001/session/kerekehub/stop
-```
-
-## Troubleshooting
-
-- **WAHA health check fails:** Make sure Docker container is running
-- **Port 3000 in use:** Change WAHA port or stop conflicting process
-- **"Module not found":** Run `npm install` again
-- **Phone number format:** Use without + (e.g., 27123456789 for South Africa)
-
-## Next Steps
-
-Once this works locally:
-1. Deploy WAHA to Hetzner VPS (via Docker)
-2. Deploy this proxy to a Node.js host (or Vercel as a function)
-3. Update Vercel routes to call this proxy instead of Evolution API
+Kereke Hub should point `RAILWAY_WHATSAPP_URL` at this service URL. If `RAILWAY_SERVICE_KEY` is set here, set the same value in the Kereke Hub app environment.

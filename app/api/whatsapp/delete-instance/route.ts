@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cleanString, getEvolutionConfig, readEvolutionJson } from "../_utils";
+import {
+  cleanString,
+  getWhatsAppServiceConfig,
+  readWhatsAppJson,
+  whatsappHeaders,
+} from "../_utils";
 
 export const runtime = "nodejs";
 
 export async function DELETE(req: NextRequest) {
-  const config = getEvolutionConfig();
+  const config = getWhatsAppServiceConfig();
   if (!config) {
-    return NextResponse.json({ error: "Evolution API credentials are not configured." }, { status: 500 });
+    return NextResponse.json({ error: "WhatsApp service URL is not configured." }, { status: 500 });
   }
 
   let body: Record<string, unknown>;
@@ -22,14 +27,15 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(`${config.baseUrl}/instance/delete/${encodeURIComponent(instanceName)}`, {
-      method: "DELETE",
-      headers: { apikey: config.apiKey },
+    const res = await fetch(`${config.baseUrl}/auth/disconnect`, {
+      method: "POST",
+      headers: whatsappHeaders(config, true),
+      body: JSON.stringify({ sessionName: instanceName }),
     });
-    const data = await readEvolutionJson(res);
+    const data = await readWhatsAppJson(res);
     return NextResponse.json(data, { status: res.status });
   } catch (error) {
-    console.error("WhatsApp delete instance error:", error);
-    return NextResponse.json({ error: "Could not reach Evolution API." }, { status: 502 });
+    console.error("WhatsApp disconnect error:", error);
+    return NextResponse.json({ error: "Could not reach WhatsApp service." }, { status: 502 });
   }
 }
