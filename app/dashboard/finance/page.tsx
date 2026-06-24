@@ -643,7 +643,7 @@ export default function FinancePage() {
       </div>
 
       {/* Quick tools */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <Link
           href="/dashboard/finance/payslip"
           className="flex items-center gap-3 bg-white border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 rounded-xl px-4 py-3.5 transition group"
@@ -662,6 +662,16 @@ export default function FinancePage() {
           <div>
             <p className="text-sm font-bold text-gray-800 group-hover:text-emerald-700">Invoice Generator</p>
             <p className="text-xs text-gray-400">Invoice clients for church services</p>
+          </div>
+        </Link>
+        <Link
+          href="/dashboard/finance/staff"
+          className="flex items-center gap-3 bg-white border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 rounded-xl px-4 py-3.5 transition group"
+        >
+          <span className="text-2xl">👤</span>
+          <div>
+            <p className="text-sm font-bold text-gray-800 group-hover:text-emerald-700">Staff Register</p>
+            <p className="text-xs text-gray-400">Save worker details for payslips</p>
           </div>
         </Link>
       </div>
