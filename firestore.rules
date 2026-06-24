@@ -1012,6 +1012,30 @@ service cloud.firestore {
 
 
     // ============================================
+    // PASTORAL CARE LOGS (sensitive — owner and admin only)
+    // ============================================
+    match /care_logs/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (isSuperAdmin() || hasRole('owner') || hasRole('admin'));
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && (isSuperAdmin() || hasRole('owner') || hasRole('admin'));
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && (isSuperAdmin() || hasRole('owner') || hasRole('admin'));
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && (isSuperAdmin() || hasRole('owner') || hasRole('admin'));
+    }
+
+
+    // ============================================
     // EVERYTHING ELSE: deny by default
     // ============================================
   }
