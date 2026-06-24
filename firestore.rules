@@ -940,6 +940,78 @@ service cloud.firestore {
 
 
     // ============================================
+    // STAFF MEMBERS (church workers for payslip generation)
+    // ============================================
+    match /staff_members/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageFinance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageFinance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageFinance();
+    }
+
+
+    // ============================================
+    // PAYSLIP RECORDS (generated payslip history)
+    // ============================================
+    match /payslip_records/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageFinance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageFinance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageFinance();
+    }
+
+
+    // ============================================
+    // INVOICE RECORDS (generated invoice history + status tracking)
+    // ============================================
+    match /invoice_records/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageFinance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageFinance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageFinance();
+    }
+
+
+    // ============================================
     // EVERYTHING ELSE: deny by default
     // ============================================
   }
