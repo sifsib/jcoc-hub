@@ -684,6 +684,26 @@ export default function FinancePage() {
             <p className="text-xs text-gray-400">Annual statements for member tax records</p>
           </div>
         </Link>
+        <Link
+          href="/dashboard/finance/import"
+          className="flex items-center gap-3 bg-white border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 rounded-xl px-4 py-3.5 transition group"
+        >
+          <span className="text-2xl">📥</span>
+          <div>
+            <p className="text-sm font-bold text-gray-800 group-hover:text-emerald-700">Import Statement</p>
+            <p className="text-xs text-gray-400">Upload a CSV, Excel or PDF bank statement</p>
+          </div>
+        </Link>
+        <Link
+          href="/dashboard/finance/review"
+          className="flex items-center gap-3 bg-white border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 rounded-xl px-4 py-3.5 transition group"
+        >
+          <span className="text-2xl">✅</span>
+          <div>
+            <p className="text-sm font-bold text-gray-800 group-hover:text-emerald-700">Review Imports</p>
+            <p className="text-xs text-gray-400">Allocate categories to imported rows</p>
+          </div>
+        </Link>
       </div>
 
       <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
