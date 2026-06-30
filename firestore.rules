@@ -380,6 +380,32 @@ service cloud.firestore {
 
 
     // ============================================
+    // STAGED TRANSACTIONS (imported statement rows awaiting review)
+    // Same tenant isolation and finance permissions as transactions.
+    // No member self-read: these are provisional and only finance staff touch them.
+    // ============================================
+    match /staged_transactions/{id} {
+
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && canReadFinance();
+
+      allow create: if isSignedIn()
+                    && tenantAllowedWrite(request.resource.data)
+                    && canManageFinance();
+
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canManageFinance();
+
+      allow delete: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageFinance();
+    }
+
+
+    // ============================================
     // SYSTEM ADMINS COLLECTION
     // ============================================
     match /system_admins/{id} {
