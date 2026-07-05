@@ -64,6 +64,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Sign-in audit trail ──────────────────────────────────────────────
+    // Record who signed in and when. Written server-side with the admin SDK so
+    // it cannot be tampered with from the browser. We read the freshest user doc
+    // to capture their tenant and role at the moment of sign-in.
+    try {
+      const freshUser = (await userRef.get()).data() || {};
+      const fwd = req.headers.get("x-forwarded-for") || "";
+      const ip = fwd.split(",")[0].trim() || "unknown";
+      await adminDb.collection("login_audit").add({
+        uid,
+        email: freshUser.email ?? decodedToken.email ?? "",
+        displayName: freshUser.displayName ?? decodedToken.name ?? "",
+        role: freshUser.role ?? "unknown",
+        tenantId: freshUser.tenantId ?? null,
+        userAgent: req.headers.get("user-agent") || "unknown",
+        ip,
+        at: FieldValue.serverTimestamp(),
+      });
+    } catch (auditErr) {
+      // Never block a valid login just because the audit write failed.
+      console.error("[POST /api/login] Audit write failed:", auditErr);
+    }
+
     // Set the session cookie — httpOnly so JS can't touch it
     const response = NextResponse.json({ success: true });
     response.cookies.set("session", sessionCookie, {

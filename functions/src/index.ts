@@ -991,3 +991,8 @@ export const brevoBirthdayEmails = onSchedule(
     console.log(`[brevoBirthdayEmails] Done. ${totalSent} birthday email(s) sent.`);
   }
 );
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULED: DAILY WHATSAPP SUMMARY (see ./dailySummary.ts)
+// ─────────────────────────────────────────────────────────────
+export { dailySummary } from "./dailySummary";

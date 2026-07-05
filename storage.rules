@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// Kereke Hub - Firebase Storage security rules
+// Every church file is namespaced under tenants/{tenantId}/... (logos, invoices,
+// receipts). These rules enforce that a signed-in user can only touch files that
+// belong to their OWN tenant, matching the multi-tenant isolation in firestore.rules.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Reads the caller's user document from Firestore to resolve their tenant/role.
+    function userDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userTenantId() {
+      return userDoc().tenantId;
+    }
+
+    function isSuperAdmin() {
+      return userDoc().role == 'super_admin';
+    }
+
+    // Uploaded files must be a reasonable size and an expected type (image or PDF).
+    // Invoices/receipts accept image/* and application/pdf; logos are images.
+    function isAllowedUpload() {
+      return request.resource.size < 10 * 1024 * 1024
+             && request.resource.contentType.matches('image/.*|application/pdf');
+    }
+
+    // All tenant-scoped files.
+    match /tenants/{tenantId}/{allPaths=**} {
+      allow read: if isSignedIn()
+                  && (isSuperAdmin() || tenantId == userTenantId());
+
+      allow create, update: if isSignedIn()
+                            && (isSuperAdmin() || tenantId == userTenantId())
+                            && isAllowedUpload();
+
+      allow delete: if isSignedIn()
+                    && (isSuperAdmin() || tenantId == userTenantId());
+    }
+
+    // Default deny: anything not explicitly matched above is blocked.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

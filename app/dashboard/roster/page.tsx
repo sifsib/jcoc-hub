@@ -611,6 +611,22 @@ export default function ManageMembershipPage() {
     load();
   }, [appUser, userLoading]);
 
+  // ── Restore the register scroll position ──────────────────────────────────
+  // When you open a member and come back, jump to where you were instead of the
+  // top of the list. We only restore once the members have actually rendered,
+  // otherwise the page is still short and the browser has nowhere to scroll to.
+  useEffect(() => {
+    if (loading || view !== "list" || members.length === 0) return;
+    const saved = sessionStorage.getItem("rosterScrollY");
+    if (saved) {
+      // Wait a tick so the list rows are painted before we scroll.
+      requestAnimationFrame(() => {
+        window.scrollTo(0, parseInt(saved, 10));
+        sessionStorage.removeItem("rosterScrollY");
+      });
+    }
+  }, [loading, view, members.length]);
+
   // ─── Pending membership requests ─────────────────────────────────────────────
 
   const loadPending = async () => {
@@ -2397,7 +2413,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                     <tr key={m.id} className="hover:bg-gray-50/70 transition-colors">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Link href={`/dashboard/roster/${m.id}`} className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
+                          <Link href={`/dashboard/roster/${m.id}`} onClick={() => sessionStorage.setItem("rosterScrollY", String(window.scrollY))} className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
                             {m.fullName}
                           </Link>
                           {days !== null && days <= 10 && (

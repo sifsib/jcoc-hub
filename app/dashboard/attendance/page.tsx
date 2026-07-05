@@ -28,6 +28,7 @@ interface Member {
   cellRegion?: string;
   ministryGroup?: string;
   absenceException?: { tag: string } | null;
+  createdAt?: { toDate: () => Date } | null; // Firestore Timestamp
 }
 
 interface AttendanceRecord {
@@ -323,7 +324,28 @@ export default function AttendancePage() {
 
   // ─── Filter helpers ────────────────────────────────────────────────────────
 
+  // A member should not be counted on Sundays that happened before they were
+  // captured, otherwise the historical numbers get inflated. Rule: the earliest
+  // service a member may be marked for is the Sunday immediately on/before the
+  // day they were captured (that is "1 Sunday back"). Anything earlier hides them.
+  const earliestEligibleDate = (m: Member): string | null => {
+    if (!m.createdAt || typeof m.createdAt.toDate !== "function") return null; // legacy members: always eligible
+    const captured = m.createdAt.toDate();
+    // Walk back to the most recent Sunday on/before the capture date.
+    const sunday = new Date(captured);
+    sunday.setHours(0, 0, 0, 0);
+    sunday.setDate(sunday.getDate() - sunday.getDay()); // getDay() 0 = Sunday
+    // Format as YYYY-MM-DD to compare against selectedDate strings.
+    const y = sunday.getFullYear();
+    const mo = String(sunday.getMonth() + 1).padStart(2, "0");
+    const d = String(sunday.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${d}`;
+  };
+
   const filteredMembers = members.filter(m => {
+    // Hide members from services that pre-date their capture.
+    const eligibleFrom = earliestEligibleDate(m);
+    if (eligibleFrom && selectedDate && selectedDate < eligibleFrom) return false;
     if (filterType === "cellRegion") return m.cellRegion === filterValue;
     if (filterType === "ministryGroup") return m.ministryGroup === filterValue;
     return true;

@@ -13,6 +13,9 @@ import { useAppUser } from '../../../lib/useAppUser';
 import {
   collection,
   addDoc,
+  doc,
+  updateDoc,
+  arrayUnion,
   query,
   where,
   orderBy,
@@ -66,6 +69,20 @@ type Transaction = {
   invoiceUrl?: string;
   tenantId: string;
   createdAt: unknown;
+  // Amendment audit trail. The transaction stays in place; every correction is
+  // logged here so nothing is silently overwritten.
+  amended?: boolean;
+  lastAmendedBy?: string;
+  lastAmendedAt?: string;
+  amendments?: Amendment[];
+};
+
+type AmendmentChange = { field: string; from: string; to: string };
+type Amendment = {
+  at: string;        // ISO timestamp of the correction
+  by: string;        // email of the person who amended
+  reason: string;    // why it was changed
+  changes: AmendmentChange[];
 };
 
 type GivingRecord = {
@@ -160,6 +177,90 @@ export default function FinancePage() {
   // export
   const [exportYear, setExportYear] = useState(new Date().getFullYear());
   const [exporting, setExporting] = useState(false);
+
+  // amend (correct a captured transaction) + history viewer
+  const [amendTx, setAmendTx] = useState<Transaction | null>(null);
+  const [amendDate, setAmendDate] = useState('');
+  const [amendDescription, setAmendDescription] = useState('');
+  const [amendAmount, setAmendAmount] = useState('');
+  const [amendCategory, setAmendCategory] = useState('');
+  const [amendReason, setAmendReason] = useState('');
+  const [amendError, setAmendError] = useState('');
+  const [amendSaving, setAmendSaving] = useState(false);
+  const [historyTx, setHistoryTx] = useState<Transaction | null>(null);
+
+  const openAmend = (tx: Transaction) => {
+    setAmendTx(tx);
+    setAmendDate(tx.date);
+    setAmendDescription(tx.description);
+    setAmendAmount(String(tx.amount));
+    setAmendCategory(tx.category);
+    setAmendReason('');
+    setAmendError('');
+  };
+
+  const saveAmendment = async () => {
+    if (!amendTx || !appUser) return;
+    setAmendError('');
+
+    const newAmount = parseFloat(amendAmount);
+    if (!amendDescription.trim()) { setAmendError('Description cannot be empty.'); return; }
+    if (isNaN(newAmount) || newAmount <= 0) { setAmendError('Enter a valid amount.'); return; }
+    if (!amendCategory) { setAmendError('Please choose a category.'); return; }
+    if (amendReason.trim().length < 3) { setAmendError('Please give a short reason for the change.'); return; }
+
+    // Work out exactly what changed so we only log real differences.
+    const changes: AmendmentChange[] = [];
+    if (amendDate !== amendTx.date) changes.push({ field: 'Date', from: amendTx.date, to: amendDate });
+    if (amendDescription.trim() !== amendTx.description) changes.push({ field: 'Description', from: amendTx.description, to: amendDescription.trim() });
+    if (newAmount !== amendTx.amount) changes.push({ field: 'Amount', from: fmt(amendTx.amount), to: fmt(newAmount) });
+    if (amendCategory !== amendTx.category) changes.push({ field: 'Category', from: amendTx.category, to: amendCategory });
+
+    if (changes.length === 0) { setAmendError('Nothing was changed.'); return; }
+
+    setAmendSaving(true);
+    const nowIso = new Date().toISOString();
+    const amendment: Amendment = {
+      at: nowIso,
+      by: appUser.email,
+      reason: amendReason.trim(),
+      changes,
+    };
+
+    try {
+      await updateDoc(doc(db, 'transactions', amendTx.id), {
+        date: amendDate,
+        description: amendDescription.trim(),
+        amount: newAmount,
+        category: amendCategory,
+        amended: true,
+        lastAmendedBy: appUser.email,
+        lastAmendedAt: nowIso,
+        amendments: arrayUnion(amendment),
+      });
+
+      // Reflect the change locally without a full refetch.
+      setTransactions((prev) => prev.map((t) => t.id === amendTx.id
+        ? {
+            ...t,
+            date: amendDate,
+            description: amendDescription.trim(),
+            amount: newAmount,
+            category: amendCategory,
+            amended: true,
+            lastAmendedBy: appUser.email,
+            lastAmendedAt: nowIso,
+            amendments: [...(t.amendments || []), amendment],
+          }
+        : t));
+      setAmendTx(null);
+    } catch (err) {
+      console.error('Amendment failed:', err);
+      setAmendError('Could not save the amendment. You may not have permission, or your connection dropped.');
+    } finally {
+      setAmendSaving(false);
+    }
+  };
 
   // --- Fetch transactions ---
 
@@ -1006,6 +1107,7 @@ export default function FinancePage() {
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Amount</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Balance</th>
                       <th className="px-4 py-3 text-xs font-semibold text-gray-500">Invoice</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -1016,6 +1118,11 @@ export default function FinancePage() {
                           {tx.description}
                           {tx.otherDescription && <span className="text-gray-400 text-xs block">{tx.otherDescription}</span>}
                           {tx.miscDescription && <span className="text-gray-400 text-xs block">{tx.miscDescription}</span>}
+                          {tx.amended && (
+                            <span className="text-amber-600 text-xs block mt-0.5">
+                              Amended by {tx.lastAmendedBy} on {formatDate((tx.lastAmendedAt || '').split('T')[0])}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-gray-600">{tx.category}</td>
                         <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-700' : 'text-red-600'}`}>
@@ -1029,6 +1136,22 @@ export default function FinancePage() {
                             <a href={tx.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-600 hover:text-emerald-800">View</a>
                           ) : (
                             <span className="text-gray-300 text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center whitespace-nowrap">
+                          <button
+                            onClick={() => openAmend(tx)}
+                            className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                          >
+                            Amend
+                          </button>
+                          {tx.amended && tx.amendments && tx.amendments.length > 0 && (
+                            <button
+                              onClick={() => setHistoryTx(tx)}
+                              className="text-xs font-semibold text-amber-600 hover:text-amber-800 ml-3"
+                            >
+                              History
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -1191,6 +1314,92 @@ export default function FinancePage() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Amend transaction modal ── */}
+      {amendTx && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Amend transaction</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                The original stays on record. Your correction is logged with your name, the date, and the reason, and can be viewed under History.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Date</label>
+              <DateInput value={amendDate} onChange={setAmendDate} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+              <input type="text" value={amendDescription} onChange={(e) => setAmendDescription(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Amount (R)</label>
+              <input type="number" step="0.01" value={amendAmount} onChange={(e) => setAmendAmount(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+              <select value={amendCategory} onChange={(e) => setAmendCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="">Choose a category</option>
+                {(amendTx.type === 'income' ? incomeCategories : expenseCategories).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Reason for change <span className="text-red-500">*</span></label>
+              <textarea value={amendReason} onChange={(e) => setAmendReason(e.target.value)} rows={2} placeholder="e.g. Captured R500 instead of R5000 by mistake" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+
+            {amendError && <p className="text-sm text-red-600">{amendError}</p>}
+
+            <div className="flex gap-3 justify-end pt-1">
+              <button onClick={() => setAmendTx(null)} disabled={amendSaving} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900">Cancel</button>
+              <button onClick={saveAmendment} disabled={amendSaving} className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-60">
+                {amendSaving ? 'Saving...' : 'Save amendment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Amendment history modal ── */}
+      {historyTx && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Amendment history</h2>
+                <p className="text-xs text-gray-500 mt-1">{historyTx.description}</p>
+              </div>
+              <button onClick={() => setHistoryTx(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+
+            <ol className="space-y-4">
+              {[...(historyTx.amendments || [])].reverse().map((a, i) => (
+                <li key={i} className="border-l-2 border-amber-300 pl-3">
+                  <p className="text-xs text-gray-500">
+                    {formatDate((a.at || '').split('T')[0])} by <span className="font-semibold text-gray-700">{a.by}</span>
+                  </p>
+                  <p className="text-sm text-gray-800 mt-0.5">Reason: {a.reason}</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {a.changes.map((c, j) => (
+                      <li key={j} className="text-xs text-gray-600">
+                        <span className="font-medium">{c.field}:</span> {c.from} &rarr; {c.to}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ol>
+
+            <div className="flex justify-end pt-1">
+              <button onClick={() => setHistoryTx(null)} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200">Close</button>
+            </div>
           </div>
         </div>
       )}

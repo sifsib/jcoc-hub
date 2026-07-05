@@ -53,15 +53,16 @@ export default async function DashboardLayout({
   const userMemberId = userDocData?.memberId || "";
 
   const allNavigation = [
-    { name: "Church Overview", href: "/dashboard/analytics", icon: "📊", roles: ["owner", "admin", "viewer", "finance", "member_manager"] },
+    { name: "Church Overview", href: "/dashboard/analytics", icon: "📊", roles: ["owner", "admin", "viewer", "finance", "member_manager", "member_viewer"] },
     { name: "Church Profile", href: "/dashboard/profile", icon: "⛪", roles: ["owner", "admin"] },
-    { name: "Membership Management", href: "/dashboard/roster", icon: "👥", roles: ["owner", "admin", "member_manager", "cell_leader"] },
+    { name: "Membership Management", href: "/dashboard/roster", icon: "👥", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader"] },
     { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝", roles: ["owner", "admin", "member_manager", "cell_leader"] },
-    { name: "Attendance Report", href: "/dashboard/attendance/report", icon: "📊", roles: ["owner", "admin", "member_manager", "cell_leader"] },
-    { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋", roles: ["owner", "admin", "member_manager"] },
+    { name: "Attendance Report", href: "/dashboard/attendance/report", icon: "📊", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader"] },
+    { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋", roles: ["owner", "admin", "member_manager", "member_viewer"] },
     { name: "Financials", href: "/dashboard/finance", icon: "💰", roles: ["owner", "admin", "finance"] },
     { name: "Pastoral Care", href: "/dashboard/pastoral", icon: "🫶", roles: ["owner", "admin"] },
     { name: "Communications", href: "/dashboard/communications", icon: "💬", roles: ["owner", "admin", "member_manager"] },
+    { name: "Daily Summary", href: "/dashboard/daily-summary", icon: "🔔", roles: ["owner", "admin"] },
     { name: "Forms", href: "/dashboard/forms", icon: "📋", roles: ["owner", "admin", "member_manager"] },
     { name: "Groups", href: "/dashboard/groups", icon: "🫂", roles: ["owner", "admin", "member_manager", "cell_leader"] },
     { name: "Events", href: "/dashboard/events", icon: "🗓️", roles: ["owner", "admin", "member_manager"] },
@@ -73,6 +74,7 @@ export default async function DashboardLayout({
     { name: "Church Settings", href: "/dashboard/church-settings", icon: "⚙️", roles: ["owner", "admin"] },
     { name: "Branding", href: "/dashboard/branding", icon: "🎨", roles: ["owner", "admin"] },
     { name: "Billing", href: "/dashboard/billing", icon: "🧾", roles: ["owner"] },
+    { name: "Sign-in History", href: "/dashboard/sign-in-history", icon: "🔐", roles: ["owner", "admin"] },
     { name: "Support", href: "/dashboard/support", icon: "🎧", roles: ["owner", "admin", "member_manager", "finance", "viewer", "cell_leader"] },
   ];
 

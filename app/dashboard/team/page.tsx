@@ -31,7 +31,7 @@ interface TenantBranch {
   name: string;
 }
 
-type AssignableRole = "admin" | "viewer" | "finance" | "member_manager" | "cell_leader";
+type AssignableRole = "admin" | "viewer" | "finance" | "member_manager" | "member_viewer" | "cell_leader";
 
 const ROLE_META: Record<AssignableRole, { label: string; description: string; color: string }> = {
   admin: {
@@ -53,6 +53,11 @@ const ROLE_META: Record<AssignableRole, { label: string; description: string; co
     label: "Membership Manager",
     description: "Access to members, attendance, and visitors. No financial data.",
     color: "bg-amber-50 text-amber-700 border border-amber-200",
+  },
+  member_viewer: {
+    label: "Membership Viewer",
+    description: "Read-only view of members, attendance, and visitors. Cannot edit anything and cannot see financials.",
+    color: "bg-sky-50 text-sky-700 border border-sky-200",
   },
   cell_leader: {
     label: "Cell Leader",

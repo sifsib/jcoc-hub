@@ -122,8 +122,9 @@ export default function CheckInPage() {
   const addToBasket = (member: Member) => {
     if (basket.find((m) => m.id === member.id)) return;
     setBasket((prev) => [...prev, member]);
-    setQuery_("");
-    setSearchResults([]);
+    // Keep the typed name in the box so families with the same surname stay
+    // fast to add. The added person still shows as "Added" in the dropdown.
+    // The steward can clear the box themselves when moving to a new surname.
   };
 
   const removeFromBasket = (memberId: string) => {
@@ -266,6 +267,16 @@ export default function CheckInPage() {
             />
             {searching && (
               <div className="absolute right-3 top-3 w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+            )}
+            {!searching && query_.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setQuery_(""); setSearchResults([]); }}
+                className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 text-xl leading-none"
+                aria-label="Clear search"
+              >
+                &times;
+              </button>
             )}
           </div>
 

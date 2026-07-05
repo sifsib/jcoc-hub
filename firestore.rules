@@ -1,134 +1,122 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
     // ============================================
     // HELPER FUNCTIONS
     // ============================================
-
     function isSignedIn() {
       return request.auth != null;
     }
-
     function userData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-
     function userTenantId() {
       return userData().tenantId;
     }
-
     // Handles both a single 'role' string field and a 'roles' array field.
     function hasRole(role) {
       return (userData().roles != null && role in userData().roles)
           || (userData().role == role);
     }
-
     function isSuperAdmin() {
       return userData().role == 'super_admin';
     }
-
     function isCongregationMember() {
       return userData().role == 'congregation_member';
     }
-
-    // True for any user who has a linked member profile — this includes
+    // True for any user who has a linked member profile - this includes
     // congregation members AND admin/team users who have linked themselves
     // to a roster record via the Profile page. Use this instead of
     // isCongregationMember() for all "member can read/write their own data" rules.
     function hasLinkedMemberProfile() {
       return userData().memberId is string && userData().memberId.size() > 0;
     }
-
     // Returns true if the signed-in congregation member owns the given resource
     // (their member doc has their authUid stored on it)
     function isOwnMemberDoc(resource) {
       return isCongregationMember()
           && resource.data.authUid == request.auth.uid;
     }
-
     function isOwner() {
       return isSuperAdmin() || hasRole('owner');
     }
-
     function canManageUsers() {
       return isOwner();
     }
-
     function canEditChurchProfile() {
       return isOwner() || hasRole('admin');
     }
-
     function canManageMembers() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager');
     }
-
     function canReadMembers() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer') || hasRole('cell_leader') || hasRole('finance') || hasRole('finance_viewer');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('member_viewer') || hasRole('viewer') || hasRole('cell_leader') || hasRole('finance') || hasRole('finance_viewer');
     }
-
     function canManageAttendance() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader');
     }
-
     function canReadAttendance() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer') || hasRole('cell_leader');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('member_viewer') || hasRole('viewer') || hasRole('cell_leader');
     }
-
     function canManageFinance() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance');
     }
-
     function canReadFinance() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance') || hasRole('finance_viewer') || hasRole('viewer');
     }
-
     function canManageCommunications() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin');
     }
-
     function sameTenant(resource) {
       return resource.data.tenantId == userTenantId();
     }
-
     function settingOwnTenant(newData) {
       return newData.tenantId == userTenantId();
     }
-
     function tenantAllowed(resource) {
       return isSuperAdmin() || sameTenant(resource);
     }
-
     function tenantAllowedWrite(newData) {
       return isSuperAdmin() || settingOwnTenant(newData);
     }
 
+    // ============================================
+    // LOGIN AUDIT COLLECTION
+    // ============================================
+    // Written ONLY by the server (/api/login) using the Admin SDK, which bypasses
+    // these rules. Clients may never write here, guaranteeing the trail is tamper
+    // proof. Owners and admins can read their own tenant's sign-in history.
+    match /login_audit/{id} {
+      allow read: if isSignedIn()
+                  && tenantAllowed(resource)
+                  && (isOwner() || hasRole('admin'));
+      allow write: if false;
+    }
 
     // ============================================
     // TENANTS COLLECTION
     // ============================================
     match /tenants/{tenantId} {
-
       allow create: if isSignedIn();
-
       allow read: if isSignedIn()
                   && (isSuperAdmin() || tenantId == userTenantId());
-
       allow update: if isSignedIn()
                     && (isSuperAdmin() || (tenantId == userTenantId() && canEditChurchProfile()));
-
       allow delete: if isSignedIn() && isSuperAdmin();
     }
-
 
     // ============================================
     // USERS COLLECTION
     // ============================================
     match /users/{userId} {
-
-      allow create: if isSignedIn()
-                    && userId == request.auth.uid;
+      // SECURITY: user docs are ONLY ever created server-side via the Admin SDK
+      // (/api/signup creates role:"owner", /api/login creates role:"user",
+      // /api/invite-member + /api/bulk-invite-members create congregation members).
+      // The Admin SDK bypasses these rules, so no client path needs create access.
+      // Denying client create closes the privilege-escalation hole where a signed-in
+      // user could write their own users doc with role:"super_admin"/"viewer" and an
+      // arbitrary tenantId to read another church's data.
+      allow create: if false;
 
       // Read widened to managers so they can see the team list for DRI pickers.
       // Write stays restricted to the owner via canManageUsers() below.
@@ -151,233 +139,182 @@ service cloud.firestore {
                     && (isSuperAdmin() || (sameTenant(resource) && canManageUsers()));
     }
 
-
     // ============================================
     // MEMBERS COLLECTION
     // ============================================
     match /members/{memberId} {
-
       // Admin access
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadMembers();
-
       // Congregation member can read and update their own doc only
       allow read: if isSignedIn() && isOwnMemberDoc(resource);
       allow update: if isSignedIn()
                     && isOwnMemberDoc(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && request.resource.data.authUid == resource.data.authUid;
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageMembers();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageMembers();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageMembers();
     }
-
 
     // ============================================
     // ATTENDANCE COLLECTION
     // ============================================
     match /attendance/{recordId} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadAttendance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageAttendance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageAttendance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageAttendance();
     }
-
 
     // ============================================
     // FINANCE: contributions, expenses, accounts
     // ============================================
     match /contributions/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadFinance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageFinance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageFinance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageFinance();
     }
-
     match /expenses/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadFinance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageFinance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageFinance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageFinance();
     }
-
     match /accounts/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadFinance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageFinance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageFinance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageFinance();
     }
-
 
     // ============================================
     // COMMUNICATIONS COLLECTION
     // ============================================
     match /communications/{docId} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canManageCommunications();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageCommunications();
-
-      // Cloud Function updates status via Admin SDK — no client update needed.
+      // Cloud Function updates status via Admin SDK - no client update needed.
       allow update: if false;
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageCommunications();
     }
-
 
     // ============================================
     // HOUSEHOLDS COLLECTION
     // ============================================
     match /households/{id} {
-
       // Any user with a linked member profile can read their own household
       allow read: if isSignedIn()
                   && hasLinkedMemberProfile()
                   && resource.data.tenantId == userTenantId();
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadMembers();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageMembers();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageMembers();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageMembers();
     }
-
 
     // ============================================
     // VISITORS COLLECTION
     // ============================================
     match /visitors/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadMembers();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageMembers();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageMembers();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageMembers();
     }
-
 
     // ============================================
     // TRANSACTIONS COLLECTION
     // ============================================
     match /transactions/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadFinance();
-
-      // Congregation members can read their own linked transactions.
-      // Query uses where("memberId","==",mid) so Firestore can prove
       // Any user with a linked member profile can read their own transactions.
       // Works for congregation_member AND promoted/team users who have linked their profile.
       allow read: if isSignedIn()
                   && hasLinkedMemberProfile()
                   && resource.data.memberId == userData().memberId;
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageFinance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageFinance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageFinance();
     }
-
 
     // ============================================
     // STAGED TRANSACTIONS (imported statement rows awaiting review)
@@ -385,45 +322,36 @@ service cloud.firestore {
     // No member self-read: these are provisional and only finance staff touch them.
     // ============================================
     match /staged_transactions/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadFinance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageFinance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageFinance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageFinance();
     }
 
-
     // ============================================
     // SYSTEM ADMINS COLLECTION
     // ============================================
     match /system_admins/{id} {
-
       allow read: if isSignedIn() && isSuperAdmin();
       allow write: if isSignedIn() && isSuperAdmin();
     }
-
 
     // ============================================
     // DEMO REQUESTS (public marketing form submissions)
     // ============================================
     match /demo_requests/{id} {
-
       allow create: if true;
       allow read, update, delete: if isSignedIn() && isSuperAdmin();
     }
-
 
     // ============================================
     // SUPPORT TICKETS
@@ -432,19 +360,15 @@ service cloud.firestore {
     // Super admin: full access
     // ============================================
     match /support_tickets/{id} {
-
-      // Anyone can submit — public form and authenticated dashboard users
+      // Anyone can submit - public form and authenticated dashboard users
       allow create: if true;
-
       // Super admin: full access
       allow read, update, delete: if isSignedIn() && isSuperAdmin();
-
       // Tenant owner/admin: read only their own church's tickets
       allow read: if isSignedIn()
                   && resource.data.tenantId == userTenantId()
                   && (hasRole('owner') || hasRole('admin'));
     }
-
 
     // ============================================
     // ONLINE GIVING RECORDS
@@ -453,24 +377,19 @@ service cloud.firestore {
     // Super admin: full access
     // ============================================
     match /giving_records/{id} {
-
       // Public giving form writes without auth
       allow create: if true;
-
       // Super admin full access
       allow read, update, delete: if isSignedIn() && isSuperAdmin();
-
       // Finance roles can read their own church records
       allow read: if isSignedIn()
                   && resource.data.tenantId == userTenantId()
                   && canReadFinance();
-
       // Finance roles can update (e.g. marking EFT as confirmed)
       allow update: if isSignedIn()
                     && resource.data.tenantId == userTenantId()
                     && canManageFinance();
     }
-
 
     // ============================================
     // FINANCE CATEGORIES (configurable per tenant)
@@ -479,86 +398,67 @@ service cloud.firestore {
     // Public giving API: read (via admin SDK, bypasses rules)
     // ============================================
     match /finance_categories/{id} {
-
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (resource.data.tenantId == userTenantId() && canReadFinance()));
-
       allow create: if isSignedIn()
                     && request.resource.data.tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
-
       allow update: if isSignedIn()
                     && resource.data.tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
-
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (resource.data.tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin'))));
     }
 
-
     // ============================================
     // CARE TIER FOLLOW-UP NOTES
     // ============================================
     match /careTierNotes/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadAttendance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageAttendance();
-
       allow update: if false;
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageAttendance();
     }
-
 
     // ============================================
     // FORMS (church-built custom forms)
     // ============================================
     match /forms/{id} {
-
       // Public: anyone can read any form (active check is enforced in app code,
       // so inactive forms show "Form is closed" instead of "not found")
       allow read: if true;
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
     }
 
-
     // ============================================
     // FORM SUBMISSIONS (public form responses)
     // ============================================
     match /form_submissions/{id} {
-
-      // Anyone can submit (public form — no auth required)
+      // Anyone can submit (public form - no auth required)
       allow create: if true;
-
       // Super admin or tenant staff can read form submissions
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (resource.data.tenantId == userTenantId()
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
-
       // No updates or deletes on submissions (immutable audit trail)
       allow update, delete: if isSignedIn() && isSuperAdmin();
     }
-
 
     // ============================================
     // WORKFLOWS (templates)
@@ -575,7 +475,6 @@ service cloud.firestore {
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
     }
-
     match /workflow_steps/{id} {
       allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
@@ -586,7 +485,6 @@ service cloud.firestore {
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
     }
-
     match /workflow_instances/{id} {
       allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
@@ -598,7 +496,6 @@ service cloud.firestore {
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
     }
-
     match /workflow_instance_steps/{id} {
       allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
@@ -611,62 +508,60 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin'))));
     }
 
-
     // ============================================
     // EVENTS
     // ============================================
     match /events/{id} {
       // Public can read active events so the RSVP link page can render event details
       allow read: if resource.data.active == true;
-
       // Any user with a linked member profile can read events for their church
       allow read: if isSignedIn()
                   && hasLinkedMemberProfile()
                   && resource.data.tenantId == userTenantId();
-
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
     }
 
-
     // ============================================
     // EVENT RSVPS
+    // Merged: public RSVP link + tenant staff + linked congregation members.
     // ============================================
     match /event_rsvps/{id} {
-      allow read: if isSignedIn()
-                  && (isSuperAdmin() || (tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
-
       // Public RSVP link: anyone can submit an RSVP without being logged in
       allow create: if true;
-
-      allow create: if isSignedIn()
-                    && tenantAllowedWrite(request.resource.data)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
+      // Read: super admin, tenant staff, or a linked member in the same tenant
+      allow read: if isSignedIn()
+                  && (
+                    isSuperAdmin()
+                    || (tenantAllowed(resource)
+                        && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer')))
+                    || (hasLinkedMemberProfile() && resource.data.tenantId == userTenantId())
+                  );
+      // Update: tenant staff, or a linked member editing their own RSVP
       allow update: if isSignedIn()
-                    && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
+                    && (
+                      (tenantAllowed(resource)
+                        && (hasRole('owner') || hasRole('admin') || hasRole('member_manager')))
+                      || (hasLinkedMemberProfile()
+                          && resource.data.tenantId == userTenantId()
+                          && resource.data.uid == request.auth.uid)
+                    );
+      // Delete: super admin or tenant staff
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
     }
-
 
     // ============================================
     // GROUPS
@@ -676,43 +571,40 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && hasLinkedMemberProfile()
                   && resource.data.tenantId == userTenantId();
-
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader') || hasRole('viewer'))));
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
     }
 
-
     // ============================================
     // GROUP MEMBERS
+    // Merged: tenant staff + linked congregation members (read own memberships).
     // ============================================
     match /group_members/{id} {
       allow read: if isSignedIn()
-                  && (isSuperAdmin() || (tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'))));
-
+                  && (
+                    isSuperAdmin()
+                    || (tenantAllowed(resource)
+                        && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader')))
+                    || (hasLinkedMemberProfile() && resource.data.tenantId == userTenantId())
+                  );
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
     }
-
 
     // ============================================
     // GROUP ATTENDANCE SESSIONS
@@ -721,20 +613,16 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'))));
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
-
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
     }
-
 
     // ============================================
     // GROUP ATTENDANCE RECORDS (per-member per-session)
@@ -743,88 +631,68 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'))));
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader'));
-
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
     }
-
 
     // ============================================
     // WORSHIP: SONG LIBRARY (subcollection of tenant)
     // ============================================
     match /tenants/{tenantId}/songs/{id} {
       allow read: if isSignedIn() && tenantId == userTenantId();
-
       allow create, update: if isSignedIn()
                              && tenantId == userTenantId()
                              && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow delete: if isSignedIn()
                     && tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin'));
     }
-
 
     // ============================================
     // WORSHIP: SETLISTS (subcollection of tenant)
+    // Merged: any tenant user can read; owner/admin/member_manager/super_admin write.
     // ============================================
     match /tenants/{tenantId}/setlists/{id} {
       allow read: if isSignedIn() && tenantId == userTenantId();
-
-      allow create: if isSignedIn()
-                    && tenantId == userTenantId()
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
-      allow update: if isSignedIn()
-                    && tenantId == userTenantId()
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
+      allow create, update: if isSignedIn()
+                             && tenantId == userTenantId()
+                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || isSuperAdmin());
       allow delete: if isSignedIn()
                     && tenantId == userTenantId()
-                    && (hasRole('owner') || hasRole('admin'));
+                    && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
     }
-
 
     // ============================================
     // VOLUNTEER ROLES (subcollection of tenant)
     // ============================================
     match /tenants/{tenantId}/volunteerRoles/{id} {
       allow read: if isSignedIn() && tenantId == userTenantId();
-
       allow create, delete: if isSignedIn()
                             && tenantId == userTenantId()
                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow update: if false;
     }
-
 
     // ============================================
     // VOLUNTEER ASSIGNMENTS (subcollection of tenant)
     // ============================================
     match /tenants/{tenantId}/volunteerAssignments/{id} {
       allow read: if isSignedIn() && tenantId == userTenantId();
-
       allow create: if isSignedIn()
                     && tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow delete: if isSignedIn()
                     && tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow update: if false;
     }
-
 
     // ============================================
     // MEMBER REQUESTS (public self-join form submissions)
@@ -839,7 +707,6 @@ service cloud.firestore {
                                           && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
     }
 
-
     // ============================================
     // SELF-SERVICE SIGNUPS
     // Written by API route (admin SDK) on registration.
@@ -849,37 +716,6 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && isSuperAdmin();
     }
 
-
-    // ============================================
-    // CONGREGATION MEMBER RSVP
-    // Logged-in congregation members can create/update their own RSVPs
-    // ============================================
-    match /event_rsvps/{id} {
-      allow read: if isSignedIn()
-                  && hasLinkedMemberProfile()
-                  && resource.data.tenantId == userTenantId();
-
-      allow create: if isSignedIn()
-                    && hasLinkedMemberProfile()
-                    && request.resource.data.tenantId == userTenantId();
-
-      allow update: if isSignedIn()
-                    && hasLinkedMemberProfile()
-                    && resource.data.tenantId == userTenantId()
-                    && resource.data.uid == request.auth.uid;
-    }
-
-
-    // ============================================
-    // GROUP MEMBERS — congregation member can read own memberships
-    // ============================================
-    match /group_members/{id} {
-      allow read: if isSignedIn()
-                  && hasLinkedMemberProfile()
-                  && resource.data.tenantId == userTenantId();
-    }
-
-
     // ============================================
     // ANNOUNCEMENTS
     // ============================================
@@ -888,37 +724,13 @@ service cloud.firestore {
                   && (isSuperAdmin()
                       || (resource.data.tenantId == userTenantId()
                           && (canManageCommunications() || hasLinkedMemberProfile())));
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageCommunications();
-
       allow update, delete: if isSignedIn()
                             && tenantAllowed(resource)
                             && canManageCommunications();
     }
-
-
-    // ============================================
-    // WORSHIP SETLISTS (subcollection of tenant)
-    // Congregation members can read setlists they are assigned to
-    // ============================================
-    match /tenants/{tenantId}/setlists/{id} {
-      allow read: if isSignedIn()
-                  && tenantId == userTenantId()
-                  && (hasRole('owner') || hasRole('admin') || isSuperAdmin()
-                      || (hasLinkedMemberProfile()
-                          && userData().memberId in resource.data.assignedMembers));
-
-      allow create, update: if isSignedIn()
-                            && tenantId == userTenantId()
-                            && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
-
-      allow delete: if isSignedIn()
-                    && tenantId == userTenantId()
-                    && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
-    }
-
 
     // ============================================
     // EVENT CHECK-INS
@@ -930,32 +742,23 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
-
-      // Congregation member can read their own check-ins.
-      // Query constrains uid == request.auth.uid so Firestore can prove
-      // resource.data.uid == request.auth.uid at query-plan time.
       // Any user with a linked member profile can read their own check-ins.
-      // Do NOT add tenantId check here — it's not in the query's WHERE clause.
+      // Do NOT add tenantId check here - it's not in the query's WHERE clause.
       allow read: if isSignedIn()
                   && hasLinkedMemberProfile()
                   && resource.data.uid == request.auth.uid;
-
-      // Any authenticated tenant user (congregation member OR admin with linked profile)
-      // can create a check-in for themselves.
+      // Any authenticated tenant user can create a check-in for themselves.
       allow create: if isSignedIn()
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.tenantId == userTenantId();
-
       // Admins can also create check-ins on behalf of members (manual override)
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
     }
-
 
     // ============================================
     // PUSH SUBSCRIPTIONS (per uid)
@@ -964,102 +767,81 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
-
     // ============================================
     // STAFF MEMBERS (church workers for payslip generation)
     // ============================================
     match /staff_members/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadFinance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageFinance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageFinance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageFinance();
     }
-
 
     // ============================================
     // PAYSLIP RECORDS (generated payslip history)
     // ============================================
     match /payslip_records/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadFinance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageFinance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageFinance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageFinance();
     }
-
 
     // ============================================
     // INVOICE RECORDS (generated invoice history + status tracking)
     // ============================================
     match /invoice_records/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadFinance();
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageFinance();
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageFinance();
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageFinance();
     }
 
-
     // ============================================
-    // PASTORAL CARE LOGS (sensitive — owner and admin only)
+    // PASTORAL CARE LOGS (sensitive - owner and admin only)
     // ============================================
     match /care_logs/{id} {
-
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && (isSuperAdmin() || hasRole('owner') || hasRole('admin'));
-
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (isSuperAdmin() || hasRole('owner') || hasRole('admin'));
-
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && (isSuperAdmin() || hasRole('owner') || hasRole('admin'));
-
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && (isSuperAdmin() || hasRole('owner') || hasRole('admin'));
     }
-
 
     // ============================================
     // EVERYTHING ELSE: deny by default
