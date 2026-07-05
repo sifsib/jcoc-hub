@@ -220,9 +220,10 @@ export default function FinancePage() {
 
     setAmendSaving(true);
     const nowIso = new Date().toISOString();
+    const actor = appUser.email ?? 'unknown';
     const amendment: Amendment = {
       at: nowIso,
-      by: appUser.email,
+      by: actor,
       reason: amendReason.trim(),
       changes,
     };
@@ -234,7 +235,7 @@ export default function FinancePage() {
         amount: newAmount,
         category: amendCategory,
         amended: true,
-        lastAmendedBy: appUser.email,
+        lastAmendedBy: actor,
         lastAmendedAt: nowIso,
         amendments: arrayUnion(amendment),
       });
@@ -248,7 +249,7 @@ export default function FinancePage() {
             amount: newAmount,
             category: amendCategory,
             amended: true,
-            lastAmendedBy: appUser.email,
+            lastAmendedBy: actor,
             lastAmendedAt: nowIso,
             amendments: [...(t.amendments || []), amendment],
           }
