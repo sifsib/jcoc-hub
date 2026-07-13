@@ -139,22 +139,57 @@ async function addContactToBrevo(
 }
 // ──────────────────────────────────────────────────────────────────────────────
 
-function buildBillingFields(accountType: "internal" | "beta" | "standard", now: Date) {
+// Member-based model:
+//   Free tier  → up to 50 active members, R0, hard block at member 51.
+//   Paid tier  → unlimited members, flat R159/mo.
+// Special account types keep full access as comps:
+//   internal   → full access, free forever.
+//   beta       → full access, free for 6 months, then R159.
+const FREE_MEMBER_LIMIT = 50;
+const STANDARD_RATE = 159;
+
+function buildBillingFields(
+  accountType: "internal" | "beta" | "standard",
+  startTier: "free" | "paid",
+  now: Date
+) {
+  // Internal accounts: full access, comped forever.
   if (accountType === "internal") {
-    return { billingPhase: "free", currentRate: 0, trialEndsAt: null, evaluationEndsAt: null, fullRateStartsAt: null };
+    return {
+      tier: "paid", memberLimit: null, activeMemberCount: 0,
+      billingPhase: "free", currentRate: 0,
+      trialEndsAt: null, evaluationEndsAt: null, fullRateStartsAt: null,
+    };
   }
+  // Beta accounts: full access, free for 6 months, then the standard rate.
   if (accountType === "beta") {
     const freeWindowEnds = addMonths(now, 6);
-    return { billingPhase: "trial", currentRate: 0, trialEndsAt: freeWindowEnds.toISOString(), evaluationEndsAt: null, fullRateStartsAt: freeWindowEnds.toISOString() };
+    return {
+      tier: "paid", memberLimit: null, activeMemberCount: 0,
+      billingPhase: "trial", currentRate: 0,
+      trialEndsAt: freeWindowEnds.toISOString(), evaluationEndsAt: null,
+      fullRateStartsAt: freeWindowEnds.toISOString(),
+    };
   }
-  const trialEnds = addDays(now, 30);
-  const evaluationEnds = addMonths(now, 4);
-  return { billingPhase: "trial", currentRate: 0, trialEndsAt: trialEnds.toISOString(), evaluationEndsAt: evaluationEnds.toISOString(), fullRateStartsAt: evaluationEnds.toISOString() };
+  // Standard, 50 or fewer congregants: free forever with the member cap.
+  if (startTier === "free") {
+    return {
+      tier: "free", memberLimit: FREE_MEMBER_LIMIT, activeMemberCount: 0,
+      billingPhase: "free", currentRate: 0,
+      trialEndsAt: null, evaluationEndsAt: null, fullRateStartsAt: null,
+    };
+  }
+  // Standard, over 50 congregants: paid from the start, unlimited members.
+  return {
+    tier: "paid", memberLimit: null, activeMemberCount: 0,
+    billingPhase: "active", currentRate: STANDARD_RATE,
+    trialEndsAt: null, evaluationEndsAt: null, fullRateStartsAt: null,
+  };
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { churchName, adminName, email, password, accessCode = "" } = await req.json();
+    const { churchName, adminName, email, password, accessCode = "", congregants = "" } = await req.json();
 
     if (!churchName?.trim() || !adminName?.trim() || !email?.trim() || !password) {
       return NextResponse.json({ error: "All fields are required." }, { status: 400 });
@@ -169,7 +204,13 @@ export async function POST(req: NextRequest) {
     const normalizedEmail = email.trim().toLowerCase();
     const now = new Date();
     const accountType = resolveAccountType(normalizedEmail, accessCode);
-    const billing = buildBillingFields(accountType, now);
+    // More than 50 congregants starts on the paid tier; 50 or fewer starts free.
+    // The number here sets the starting plan, but the real limit is always
+    // enforced against the church's actual active member records later.
+    const congregantCount = parseInt(String(congregants), 10);
+    const startTier: "free" | "paid" =
+      !isNaN(congregantCount) && congregantCount > FREE_MEMBER_LIMIT ? "paid" : "free";
+    const billing = buildBillingFields(accountType, startTier, now);
 
     // 1. Create Firebase Auth user
     let newUser;
@@ -198,7 +239,8 @@ export async function POST(req: NextRequest) {
       ownerName: adminName.trim(),
       plan: "small_church",
       accountType,
-      status: "trial",
+      status: billing.billingPhase === "trial" ? "trial" : "active",
+      congregantsAtSignup: isNaN(congregantCount) ? null : congregantCount,
       primaryColor: "#3B9A5F",
       signupSource: "self_service_hub",
       signupDate: now.toISOString(),
