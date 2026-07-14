@@ -11,6 +11,7 @@ export default function SignupPage() {
   const [form, setForm] = useState({
     churchName: "",
     adminName: "",
+    congregants: "",
     email: "",
     password: "",
     accessCode: "",
@@ -120,6 +121,26 @@ export default function SignupPage() {
                 disabled={loading}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Roughly how many congregants?
+              </label>
+              <input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                placeholder="e.g. 45"
+                value={form.congregants}
+                onChange={set("congregants")}
+                required
+                disabled={loading}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                This sets your plan. Free forever under 50 members, then a flat R159 a month for unlimited members. You can grow into the paid plan later.
+              </p>
             </div>
 
             <div>

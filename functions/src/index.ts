@@ -1,7 +1,7 @@
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import * as nodemailer from "nodemailer";
 import * as crypto from "crypto";
 
@@ -996,3 +996,47 @@ export const brevoBirthdayEmails = onSchedule(
 // SCHEDULED: DAILY WHATSAPP SUMMARY (see ./dailySummary.ts)
 // ─────────────────────────────────────────────────────────────
 export { dailySummary } from "./dailySummary";
+
+// ─────────────────────────────────────────────────────────────
+// MEMBER COUNTER
+// Keeps tenants/{tenantId}.activeMemberCount in sync so the free-tier
+// member limit can be checked cheaply (in the app and in security rules)
+// without counting the whole members collection each time.
+//
+// An "active member" is a member document whose status is "active", which
+// matches how the rest of the app counts members. Archived or inactive
+// members (any other status) do not count toward the limit.
+//
+// Fires on every create, update, and delete of a member document and
+// adjusts the tenant's count by the change only.
+// ─────────────────────────────────────────────────────────────
+export const onMemberCountWrite = onDocumentWritten(
+  "members/{memberId}",
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+
+    const wasActive = before?.status === "active";
+    const isActive = after?.status === "active";
+
+    // Nothing that affects the active count changed.
+    if (wasActive === isActive) return;
+
+    const tenantId = after?.tenantId ?? before?.tenantId;
+    if (!tenantId) return;
+
+    const delta = (isActive ? 1 : 0) - (wasActive ? 1 : 0);
+
+    try {
+      await db.doc(`tenants/${tenantId}`).update({
+        activeMemberCount: FieldValue.increment(delta),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error(
+        `[onMemberCountWrite] Failed to update activeMemberCount for tenant ${tenantId}:`,
+        err
+      );
+    }
+  }
+);
