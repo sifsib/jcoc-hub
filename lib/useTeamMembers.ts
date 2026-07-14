@@ -10,6 +10,7 @@ export interface TeamMemberLite {
   name: string; // displayName, falling back to email
   email: string;
   role: string;
+  visitorMinistry?: boolean; // true when this person is on the visitor-ministry team
 }
 
 // Loads all active users in a tenant so they can be assigned as a DRI.
@@ -32,6 +33,7 @@ export function useTeamMembers(tenantId?: string | null) {
               name: x.displayName || x.email || "Unnamed",
               email: x.email || "",
               role: x.role || "",
+              visitorMinistry: x.visitorMinistry === true,
               status: x.status || "active",
             };
           })

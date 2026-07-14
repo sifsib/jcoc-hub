@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { db } from "../../../../lib/firebase";
 import { useAppUser } from "../../../../lib/useAppUser";
 import { useTeamMembers } from "../../../../lib/useTeamMembers";
+import { notifyAssignee } from "../../../../lib/visitorMinistry";
 import NotesPanel from "../../../components/NotesPanel";
 import {
   doc,
@@ -132,6 +133,9 @@ export default function WorkflowBuilderPage() {
   const { team } = useTeamMembers(tenantId);
   // Only owner/admin/managers may assign a DRI.
   const canAssign = ["owner", "admin", "member_manager"].includes(appUser?.role || "");
+  // Lock the DRI list to the Visitor Ministry; fall back to the whole team if none set.
+  const ministryTeam = team.filter((t) => t.visitorMinistry);
+  const assignableTeam = ministryTeam.length > 0 ? ministryTeam : team;
   const router = useRouter();
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -433,6 +437,16 @@ export default function WorkflowBuilderPage() {
       assignedToUid: uid,
       assignedToName,
     });
+    // Email the person now responsible for this workflow.
+    if (uid) {
+      const inst = instances.find((i) => i.id === instanceId);
+      notifyAssignee({
+        assigneeUid: uid,
+        subjectName: inst?.subjectName || "",
+        subjectPhone: inst?.subjectPhone,
+        kind: "workflow",
+      });
+    }
   }
 
   async function saveSettings() {
@@ -758,7 +772,7 @@ export default function WorkflowBuilderPage() {
                               className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                             >
                               <option value="">Unassigned</option>
-                              {team.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                              {assignableTeam.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
                             </select>
                           ) : (
                             <span className={`text-xs font-medium ${inst.assignedToName ? "text-gray-700" : "text-red-500"}`}>

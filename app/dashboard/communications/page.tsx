@@ -82,7 +82,19 @@ export default function CommunicationsPage() {
   const tenantId = appUser?.tenantId ?? null;
 
   // ── Channel ──
-  const [channel, setChannel] = useState<"whatsapp" | "email" | "mailing">("whatsapp");
+  const [channel, setChannel] = useState<"whatsapp" | "email" | "sms" | "mailing">("whatsapp");
+
+  // ── SMS (BulkSMS) state ──
+  const [smsStatus, setSmsStatus] = useState<{ connected: boolean; senderId: string; oneTimeSmsEnabled: boolean; oneTimeSmsMessage: string } | null>(null);
+  const [smsLoading, setSmsLoading] = useState(false);
+  const [smsTokenId, setSmsTokenId] = useState("");
+  const [smsTokenSecret, setSmsTokenSecret] = useState("");
+  const [smsSenderId, setSmsSenderId] = useState("");
+  const [smsOneTimeEnabled, setSmsOneTimeEnabled] = useState(false);
+  const [smsOneTimeMessage, setSmsOneTimeMessage] = useState("");
+  const [savingSms, setSavingSms] = useState(false);
+  const [smsError, setSmsError] = useState("");
+  const [smsSuccess, setSmsSuccess] = useState("");
 
   // ── WhatsApp state ──
   const [waTab, setWaTab] = useState<"compose" | "history">("compose");
@@ -197,6 +209,60 @@ export default function CommunicationsPage() {
       loadMemberEmailCount();
     }
   }, [channel, brevoStatus, loadBrevoStatus, loadMemberEmailCount]);
+
+  // ── Load BulkSMS status when SMS channel opens ──
+  useEffect(() => {
+    if (channel !== "sms" || smsStatus !== null || !tenantId) return;
+    setSmsLoading(true);
+    fetch("/api/tenant/bulksms")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          setSmsStatus(d);
+          setSmsSenderId(d.senderId || "");
+          setSmsOneTimeEnabled(!!d.oneTimeSmsEnabled);
+          setSmsOneTimeMessage(d.oneTimeSmsMessage || "");
+        }
+      })
+      .catch(console.error)
+      .finally(() => setSmsLoading(false));
+  }, [channel, smsStatus, tenantId]);
+
+  async function handleSmsSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSmsError("");
+    setSmsSuccess("");
+    setSavingSms(true);
+    try {
+      const res = await fetch("/api/tenant/bulksms", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tokenId: smsTokenId,
+          tokenSecret: smsTokenSecret,
+          senderId: smsSenderId,
+          oneTimeSmsEnabled: smsOneTimeEnabled,
+          oneTimeSmsMessage: smsOneTimeMessage,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSmsError(data.error || "Something went wrong."); return; }
+      setSmsStatus({
+        connected: smsStatus?.connected || (!!smsTokenId.trim() && !!smsTokenSecret.trim()),
+        senderId: smsSenderId,
+        oneTimeSmsEnabled: smsOneTimeEnabled,
+        oneTimeSmsMessage: smsOneTimeMessage,
+      });
+      setSmsTokenId("");
+      setSmsTokenSecret("");
+      setSmsSuccess("Saved.");
+      setTimeout(() => setSmsSuccess(""), 3000);
+    } catch {
+      setSmsError("Could not reach the server. Please try again.");
+    } finally {
+      setSavingSms(false);
+    }
+  }
 
   // ── Load email history ──
   useEffect(() => {
@@ -395,13 +461,13 @@ export default function CommunicationsPage() {
       <div>
         <h1 className="text-2xl font-semibold text-white">Communications</h1>
         <p className="text-slate-400 text-sm mt-1">
-          Send messages to your congregation via WhatsApp or Email.
+          Send messages to your congregation via WhatsApp, Email, or SMS.
         </p>
       </div>
 
       {/* ── Channel tabs ── */}
       <div className="flex gap-1 border-b border-slate-700">
-        {(["whatsapp", "email", "mailing"] as const).map((ch) => (
+        {(["whatsapp", "email", "sms", "mailing"] as const).map((ch) => (
           <button
             key={ch}
             onClick={() => setChannel(ch)}
@@ -426,6 +492,13 @@ export default function CommunicationsPage() {
                   <polyline points="22,6 12,13 2,6"/>
                 </svg>
                 Email
+              </>
+            ) : ch === "sms" ? (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                SMS
               </>
             ) : (
               <>
@@ -849,6 +922,123 @@ export default function CommunicationsPage() {
         </>
       )}
 
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          SMS CHANNEL (BulkSMS)
+      ══════════════════════════════════════════════════════════════════════ */}
+      {channel === "sms" && (
+        <div className="space-y-5">
+          {smsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <span className="w-5 h-5 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* Status */}
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+                smsStatus?.connected
+                  ? "bg-emerald-900/20 border-emerald-700/50 text-emerald-400"
+                  : "bg-amber-900/20 border-amber-700/50 text-amber-400"
+              }`}>
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${smsStatus?.connected ? "bg-emerald-400" : "bg-amber-400"}`} />
+                <p className="text-sm font-medium">{smsStatus?.connected ? "BulkSMS connected" : "BulkSMS not connected"}</p>
+              </div>
+
+              <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Connect BulkSMS</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    BulkSMS sends text messages to your visitors. Create an API token in your BulkSMS portal
+                    under Settings {'>'} API tokens, then paste the Token ID and Secret below.
+                    Get an account at <a href="https://www.bulksms.com" target="_blank" rel="noopener noreferrer" className="text-emerald-400 underline hover:text-emerald-300">bulksms.com</a>.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSmsSave} className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-300">Token ID</label>
+                    <input
+                      type="text"
+                      value={smsTokenId}
+                      onChange={(e) => setSmsTokenId(e.target.value)}
+                      placeholder={smsStatus?.connected ? "Enter new Token ID to update" : "Paste your BulkSMS Token ID"}
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-300">Token Secret</label>
+                    <input
+                      type="password"
+                      value={smsTokenSecret}
+                      onChange={(e) => setSmsTokenSecret(e.target.value)}
+                      placeholder={smsStatus?.connected ? "Enter new Secret to update" : "Paste your BulkSMS Token Secret"}
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition font-mono"
+                    />
+                    <p className="text-xs text-slate-500">Leave both blank to keep your saved credentials and only change the settings below.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-300">Sender ID <span className="text-slate-500">(optional)</span></label>
+                    <input
+                      type="text"
+                      value={smsSenderId}
+                      onChange={(e) => setSmsSenderId(e.target.value)}
+                      placeholder="e.g. GraceChurch"
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                    />
+                    <p className="text-xs text-slate-500">A short name shown as the sender. Must be pre-registered with BulkSMS, otherwise leave blank.</p>
+                  </div>
+
+                  {/* One-time visitor auto-SMS */}
+                  <div className="pt-3 border-t border-slate-700/50 space-y-3">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={smsOneTimeEnabled}
+                        onChange={(e) => setSmsOneTimeEnabled(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-slate-500 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-slate-200">Auto-thank one-time visitors by SMS</span>
+                        <span className="block text-xs text-slate-400 mt-0.5">
+                          When a guest is captured as "Just visiting", automatically send them this thank-you SMS.
+                        </span>
+                      </span>
+                    </label>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-300">One-time visitor message</label>
+                      <textarea
+                        value={smsOneTimeMessage}
+                        onChange={(e) => setSmsOneTimeMessage(e.target.value)}
+                        rows={3}
+                        placeholder="Thank you for visiting us today. We hope to see you again soon."
+                        className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 resize-none transition"
+                      />
+                      <p className="text-xs text-slate-500 text-right">{smsOneTimeMessage.length} characters</p>
+                    </div>
+                  </div>
+
+                  {smsError && (
+                    <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">{smsError}</p>
+                  )}
+
+                  <div className="flex justify-end items-center gap-3">
+                    {smsSuccess && <span className="text-sm text-emerald-400">{smsSuccess}</span>}
+                    <button
+                      type="submit"
+                      disabled={savingSms}
+                      className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                    >
+                      {savingSms ? (
+                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving...</>
+                      ) : "Save SMS Settings"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           MAILING LISTS CHANNEL

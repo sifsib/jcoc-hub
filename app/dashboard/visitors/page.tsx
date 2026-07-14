@@ -5,6 +5,7 @@ import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import DateInput from "../../../components/ui/DateInput";
 import { useTeamMembers } from "../../../lib/useTeamMembers";
+import { getVisitorMinistryUsers, pickLeastLoadedAssignee, notifyAssignee } from "../../../lib/visitorMinistry";
 import {
   collection, query, where, getDocs, addDoc,
   updateDoc, doc, serverTimestamp, getDoc,
@@ -26,6 +27,8 @@ interface Visitor {
   assignedToUid?: string;   // DRI: team member responsible for following up
   assignedToName?: string;
   customFields?: Record<string, string>;
+  captureNote?: string;     // free-text note captured at sign-in
+  oneTimeSmsSent?: boolean;  // true once the automatic thank-you SMS has gone out
 }
 
 interface VisitorFieldConfig {
@@ -87,7 +90,15 @@ export default function VisitorsPage() {
   const [ageGroup, setAgeGroup] = useState("");
   const [reason, setReason] = useState("");
   const [assignedTo, setAssignedTo] = useState(""); // uid chosen at capture time
+  const [captureNote, setCaptureNote] = useState(""); // free-text note at capture time
+  const [oneTimeSmsEnabled, setOneTimeSmsEnabled] = useState(false); // one-time visitor auto-SMS toggle
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
+
+  // The Visitor Ministry is the only group allowed to be assigned. If nobody has
+  // been marked yet we fall back to the whole team so capture never breaks.
+  const ministryTeam = team.filter((t) => t.visitorMinistry);
+  const assignableTeam = ministryTeam.length > 0 ? ministryTeam : team;
+  const ministryConfigured = ministryTeam.length > 0;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
@@ -138,9 +149,20 @@ export default function VisitorsPage() {
       }
     });
     fetchVisitors(appUser.tenantId);
+    // Whether the one-time-visitor auto-SMS is switched on for this church.
+    fetch("/api/tenant/bulksms")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setOneTimeSmsEnabled(!!d.oneTimeSmsEnabled && !!d.connected); })
+      .catch(() => {});
   }, [appUser, userLoading]);
 
-  const triggerWorkflowsForVisitor = async (visitorId: string, visitorName: string, visitorPhone: string) => {
+  const triggerWorkflowsForVisitor = async (
+    visitorId: string,
+    visitorName: string,
+    visitorPhone: string,
+    assignee?: { uid: string; name: string } | null,
+    reason?: string,
+  ) => {
     if (!appUser) return;
     try {
       const wfSnap = await getDocs(query(
@@ -171,7 +193,19 @@ export default function VisitorsPage() {
           subjectName: visitorName, subjectPhone: visitorPhone,
           subjectType: "visitor", status: "active",
           completedSteps: 0, totalSteps: steps.length, startedAt: serverTimestamp(),
+          ...(assignee ? { assignedToUid: assignee.uid, assignedToName: assignee.name } : {}),
         });
+
+        // Let the responsible person know a workflow was auto-started for them.
+        if (assignee) {
+          notifyAssignee({
+            assigneeUid: assignee.uid,
+            subjectName: visitorName,
+            subjectPhone: visitorPhone,
+            kind: "workflow",
+            reason,
+          });
+        }
 
         for (const step of steps) {
           await addDoc(collection(db, "workflow_instance_steps"), {
@@ -199,9 +233,25 @@ export default function VisitorsPage() {
 
     const fc = visitorConfig.fields;
     const shouldTriggerWorkflow = fc.reasonForVisiting?.triggerWorkflow && reason && reason !== "Just visiting";
-    const initialStatus = shouldTriggerWorkflow ? "pending" : reason === "Just visiting" ? "none" : "pending";
+    const isOneTime = reason === "Just visiting";
+    const initialStatus = shouldTriggerWorkflow ? "pending" : isOneTime ? "none" : "pending";
+    const needsFollowUp = initialStatus === "pending";
+    const trimmedNote = captureNote.trim();
 
     try {
+      // Work out who is accountable: the chosen person, or auto-pick from the
+      // Visitor Ministry when this visitor needs a follow-up and none was chosen.
+      let assignee: { uid: string; name: string } | null = assignedTo
+        ? { uid: assignedTo, name: team.find((t) => t.uid === assignedTo)?.name || "" }
+        : null;
+      if (!assignee && needsFollowUp) {
+        try {
+          const ministry = await getVisitorMinistryUsers(appUser.tenantId);
+          const picked = await pickLeastLoadedAssignee(appUser.tenantId, ministry);
+          if (picked) assignee = { uid: picked.uid, name: picked.name };
+        } catch (e) { console.warn("Auto-assign skipped:", e); }
+      }
+
       const newVisitorData: Record<string, any> = {
         tenantId: appUser.tenantId, fullName: fullName.trim(),
         phone: formattedPhone, serviceDate, reason,
@@ -210,17 +260,38 @@ export default function VisitorsPage() {
       if (fc.email?.enabled && email.trim()) newVisitorData.email = email.trim().toLowerCase();
       if (fc.gender?.enabled && gender) newVisitorData.gender = gender;
       if (fc.ageGroup?.enabled && ageGroup) newVisitorData.ageGroup = ageGroup;
-      if (assignedTo) {
-        newVisitorData.assignedToUid = assignedTo;
-        newVisitorData.assignedToName = team.find((t) => t.uid === assignedTo)?.name || "";
+      if (trimmedNote) newVisitorData.captureNote = trimmedNote;
+      if (assignee) {
+        newVisitorData.assignedToUid = assignee.uid;
+        newVisitorData.assignedToName = assignee.name;
       }
       if (Object.keys(customValues).length > 0) newVisitorData.customFields = customValues;
 
       const docRef = await addDoc(collection(db, "visitors"), newVisitorData);
-      if (shouldTriggerWorkflow) await triggerWorkflowsForVisitor(docRef.id, fullName.trim(), formattedPhone);
+
+      // Item 1: a one-time "Just visiting" guest gets a single automatic thank-you SMS.
+      if (isOneTime && oneTimeSmsEnabled && formattedPhone) {
+        fetch("/api/visitors/send-sms", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ visitorId: docRef.id, phone: formattedPhone }),
+        }).catch(() => {});
+        newVisitorData.oneTimeSmsSent = true;
+      }
+
+      if (shouldTriggerWorkflow) {
+        // The workflow trigger emails the assignee itself (kind: workflow).
+        await triggerWorkflowsForVisitor(docRef.id, fullName.trim(), formattedPhone, assignee, reason);
+      } else if (assignee && needsFollowUp) {
+        // No workflow, but someone is accountable — let them know directly.
+        notifyAssignee({
+          assigneeUid: assignee.uid, subjectName: fullName.trim(),
+          subjectPhone: formattedPhone, kind: "visitor", reason, note: trimmedNote,
+        });
+      }
 
       setVisitors((prev) => [{ id: docRef.id, ...newVisitorData } as Visitor, ...prev]);
-      setFullName(""); setPhone(""); setEmail(""); setGender(""); setAgeGroup(""); setReason(""); setAssignedTo(""); setCustomValues({});
+      setFullName(""); setPhone(""); setEmail(""); setGender(""); setAgeGroup(""); setReason(""); setAssignedTo(""); setCaptureNote(""); setCustomValues({});
     } catch (err) {
       console.error("Error saving visitor:", err);
       alert("Failed to capture visitor details.");
@@ -243,6 +314,14 @@ export default function VisitorsPage() {
       setVisitors((prev) =>
         prev.map((x) => (x.id === visitor.id ? { ...x, assignedToUid: uid, assignedToName } : x))
       );
+      // Item 3: email the person who has just been made responsible.
+      if (uid) {
+        notifyAssignee({
+          assigneeUid: uid, subjectName: visitor.fullName,
+          subjectPhone: visitor.phone, kind: "visitor",
+          reason: visitor.reason, note: visitor.captureNote,
+        });
+      }
     } catch (err) {
       console.error("Error assigning visitor:", err);
       alert("Could not assign this visitor. Please try again.");
@@ -430,14 +509,28 @@ export default function VisitorsPage() {
                 )}
               </div>
             ))}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Note <span className="text-gray-400 font-normal normal-case">(optional)</span></label>
+              <textarea
+                value={captureNote}
+                onChange={(e) => setCaptureNote(e.target.value)}
+                placeholder="Anything worth remembering, e.g. came with a friend, asked about baptism..."
+                rows={3}
+                className="border p-2 rounded text-sm text-gray-700 focus:outline-blue-500 w-full resize-none"
+              />
+            </div>
             {canAssign && (
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Assign Follow-Up To</label>
                 <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={sel}>
-                  <option value="">Unassigned (assign later)</option>
-                  {team.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                  <option value="">{ministryConfigured ? "Auto-assign from Visitor Ministry" : "Auto-assign (or pick later)"}</option>
+                  {assignableTeam.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
                 </select>
-                <p className="text-xs text-gray-400">This is the person accountable for reaching out.</p>
+                <p className="text-xs text-gray-400">
+                  {ministryConfigured
+                    ? "Only Visitor Ministry members are shown. Leave blank to auto-assign the least-busy one."
+                    : "Tip: mark your Visitor Ministry team on the Team page to lock this list. For now, all team members are shown."}
+                </p>
               </div>
             )}
             <button type="submit" disabled={submitLoading} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors text-sm flex justify-center items-center gap-2 mt-2 disabled:opacity-50">
@@ -460,6 +553,7 @@ export default function VisitorsPage() {
                     <div>
                       <p className="font-bold text-gray-900">{v.fullName} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
                       <p className="text-sm text-gray-600 mt-1">{v.reason}</p>
+                      {v.captureNote && <p className="text-xs text-gray-500 mt-1 italic">Note: {v.captureNote}</p>}
                       <p className="text-xs text-gray-400 mt-1">Visited: {formatDisplayDate(v.serviceDate)}{v.ageGroup ? ` · ${v.ageGroup}` : ""}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className="text-xs text-gray-400">Responsible:</span>
@@ -470,7 +564,7 @@ export default function VisitorsPage() {
                             className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-blue-500"
                           >
                             <option value="">Unassigned</option>
-                            {team.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                            {assignableTeam.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
                           </select>
                         ) : (
                           <span className={`text-xs font-medium ${v.assignedToName ? "text-gray-700" : "text-red-500"}`}>
@@ -597,7 +691,7 @@ export default function VisitorsPage() {
                       </div>
                       <div className="flex flex-col gap-2">
                         <span className={`text-xs font-semibold px-3 py-1 rounded-full ${v.followUpStatus === "pending" ? "bg-red-50 text-red-700" : v.followUpStatus === "done" ? "bg-green-50 text-green-700" : "bg-gray-50 text-gray-700"}`}>
-                          {v.followUpStatus === "pending" ? "Follow-Up Pending" : v.followUpStatus === "done" ? "Followed Up" : "No Action"}
+                          {v.followUpStatus === "pending" ? "Follow-Up Pending" : v.followUpStatus === "done" ? "Followed Up" : v.oneTimeSmsSent ? "SMS Sent" : "No Action"}
                         </span>
                         {v.followUpStatus !== "done" && (
                           <button onClick={() => openFollowUpModal(v)} className="text-xs px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded font-medium transition-colors">
@@ -624,6 +718,14 @@ export default function VisitorsPage() {
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-lg">✕</button>
             </div>
+
+            {/* Capture note (captured at sign-in) */}
+            {selectedVisitor.captureNote && (
+              <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Capture Note</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedVisitor.captureNote}</p>
+              </div>
+            )}
 
             {/* Notes section */}
             <div>

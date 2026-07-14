@@ -23,6 +23,7 @@ interface TeamMember {
   status: string;
   branchId: string | null;
   assignedCellRegion: string | null;
+  visitorMinistry: boolean;
   createdAt: string;
 }
 
@@ -178,6 +179,7 @@ export default function TeamPage() {
         status: d.data().status || "active",
         branchId: d.data().branchId || null,
         assignedCellRegion: d.data().assignedCellRegion || null,
+        visitorMinistry: d.data().visitorMinistry === true,
         createdAt: d.data().createdAt || "",
       }));
 
@@ -283,6 +285,22 @@ export default function TeamPage() {
       setEditError("Could not save. Please try again.");
     } finally {
       setEditLoading(false);
+    }
+  }
+
+  // Toggle whether a team member is part of the Visitor Ministry. Only these
+  // people can be assigned to visitors and follow-up workflows.
+  const [ministryLoading, setMinistryLoading] = useState<string | null>(null);
+  async function toggleVisitorMinistry(targetUid: string, next: boolean) {
+    setMinistryLoading(targetUid);
+    try {
+      await updateDoc(doc(db, "users", targetUid), { visitorMinistry: next });
+      setMembers((prev) => prev.map((m) => (m.uid === targetUid ? { ...m, visitorMinistry: next } : m)));
+    } catch (err) {
+      console.error(err);
+      alert("Could not update the visitor ministry setting. Please try again.");
+    } finally {
+      setMinistryLoading(null);
     }
   }
 
@@ -550,6 +568,7 @@ export default function TeamPage() {
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Role</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Visitor Ministry</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Added</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -618,6 +637,20 @@ export default function TeamPage() {
                       {m.branchId
                         ? branches.find((b) => b.id === m.branchId)?.name || m.branchId
                         : <span className="text-gray-400">All branches</span>}
+                    </td>
+                    <td className="px-6 py-4">
+                      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={m.visitorMinistry}
+                          disabled={ministryLoading === m.uid}
+                          onChange={(e) => toggleVisitorMinistry(m.uid, e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+                        />
+                        <span className={`text-xs font-medium ${m.visitorMinistry ? "text-emerald-700" : "text-gray-400"}`}>
+                          {m.visitorMinistry ? "On team" : "Off"}
+                        </span>
+                      </label>
                     </td>
                     <td className="px-6 py-4">{statusBadge(m.status)}</td>
                     <td className="px-6 py-4 text-gray-500">{formatDate(m.createdAt)}</td>
