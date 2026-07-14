@@ -80,6 +80,41 @@ service cloud.firestore {
       return isSuperAdmin() || settingOwnTenant(newData);
     }
 
+    // ---- Free-tier member cap ----------------------------------------------
+    // Reads the tenant doc to enforce the free-tier limit. Costs one extra
+    // document read per member create, which is acceptable.
+    function tenantBilling(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)).data;
+    }
+    // Allows the create UNLESS the tenant is explicitly on the free tier with a
+    // known count at or above a known limit. It is deliberately permissive on
+    // missing data: if the tenant doc is absent, or tier / activeMemberCount /
+    // memberLimit have not been set yet (a church that predates the backfill),
+    // it does NOT block. That way the rule can never lock out a church whose
+    // count has not been established. Run the backfill so this never happens in
+    // practice, then this check is exact.
+    function withinMemberLimit(newData) {
+      return !exists(/databases/$(database)/documents/tenants/$(newData.tenantId))
+          || tenantBilling(newData.tenantId).tier != 'free'
+          || !('activeMemberCount' in tenantBilling(newData.tenantId))
+          || !('memberLimit' in tenantBilling(newData.tenantId))
+          || tenantBilling(newData.tenantId).activeMemberCount
+               < tenantBilling(newData.tenantId).memberLimit;
+    }
+
+    // ---- Paid-plan feature gate --------------------------------------------
+    // Reads the CALLER's own tenant tier to gate paid-only features (events,
+    // worship, volunteers, forms, workflows, daily summary). Permissive when the
+    // tier is unset (a tenant that predates the backfill) and for super admins,
+    // so nothing breaks before the backfill runs. Blocks only when the tenant is
+    // explicitly on the "free" tier.
+    function callerIsPaid() {
+      return isSuperAdmin()
+          || !exists(/databases/$(database)/documents/tenants/$(userTenantId()))
+          || !('tier' in tenantBilling(userTenantId()))
+          || tenantBilling(userTenantId()).tier != 'free';
+    }
+
     // ============================================
     // LOGIN AUDIT COLLECTION
     // ============================================
@@ -155,7 +190,8 @@ service cloud.firestore {
                     && request.resource.data.authUid == resource.data.authUid;
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
-                    && canManageMembers();
+                    && canManageMembers()
+                    && withinMemberLimit(request.resource.data);
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
@@ -436,11 +472,13 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                    && callerIsPaid();
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                    && callerIsPaid();
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
@@ -467,10 +505,12 @@ service cloud.firestore {
       allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                    && callerIsPaid();
       allow update: if isSignedIn() && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                    && callerIsPaid();
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
@@ -480,7 +520,8 @@ service cloud.firestore {
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
       // create/update: check new data; delete: check existing resource (request.resource.data is null on delete)
       allow create, update: if isSignedIn() && tenantAllowedWrite(request.resource.data)
-                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                             && callerIsPaid();
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
@@ -523,11 +564,13 @@ service cloud.firestore {
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                    && callerIsPaid();
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                    && callerIsPaid();
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
@@ -649,7 +692,8 @@ service cloud.firestore {
       allow read: if isSignedIn() && tenantId == userTenantId();
       allow create, update: if isSignedIn()
                              && tenantId == userTenantId()
-                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                             && callerIsPaid();
       allow delete: if isSignedIn()
                     && tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin'));
@@ -663,7 +707,8 @@ service cloud.firestore {
       allow read: if isSignedIn() && tenantId == userTenantId();
       allow create, update: if isSignedIn()
                              && tenantId == userTenantId()
-                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || isSuperAdmin());
+                             && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || isSuperAdmin())
+                             && callerIsPaid();
       allow delete: if isSignedIn()
                     && tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin') || isSuperAdmin());
@@ -674,9 +719,14 @@ service cloud.firestore {
     // ============================================
     match /tenants/{tenantId}/volunteerRoles/{id} {
       allow read: if isSignedIn() && tenantId == userTenantId();
-      allow create, delete: if isSignedIn()
-                            && tenantId == userTenantId()
-                            && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+      allow create: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                    && callerIsPaid();
+      // Delete stays open so a downgraded church can still remove old roles.
+      allow delete: if isSignedIn()
+                    && tenantId == userTenantId()
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
       allow update: if false;
     }
 
@@ -687,11 +737,29 @@ service cloud.firestore {
       allow read: if isSignedIn() && tenantId == userTenantId();
       allow create: if isSignedIn()
                     && tenantId == userTenantId()
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
+                    && callerIsPaid();
       allow delete: if isSignedIn()
                     && tenantId == userTenantId()
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
       allow update: if false;
+    }
+
+    // ============================================
+    // DAILY SUMMARY SETTINGS (paid feature)
+    // Doc id is the tenantId. The Cloud Function that sends the summary reads
+    // this via the Admin SDK (bypasses these rules). Owner/admin of the tenant
+    // may read; writing (turning it on / configuring) requires the paid plan.
+    // ============================================
+    match /summarySettings/{tenantId} {
+      allow read: if isSignedIn()
+                  && (isSuperAdmin()
+                      || (tenantId == userTenantId() && (hasRole('owner') || hasRole('admin'))));
+      allow create, update: if isSignedIn()
+                            && tenantId == userTenantId()
+                            && (hasRole('owner') || hasRole('admin'))
+                            && callerIsPaid();
+      allow delete: if isSignedIn() && isSuperAdmin();
     }
 
     // ============================================

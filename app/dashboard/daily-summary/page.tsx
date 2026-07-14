@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
+import { useTenantTier } from "../../../lib/useTenantTier";
+import { isPaidTier } from "../../../lib/tier";
+import PaidFeatureLock from "../../components/PaidFeatureLock";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
 // Timezones a South African church is realistically in. Default is SAST.
@@ -19,6 +22,7 @@ const ALLOWED_ROLES = ["owner", "admin", "super_admin"];
 
 export default function DailySummaryPage() {
   const { appUser, tenantId, loading } = useAppUser();
+  const { tier, loading: tierLoading } = useTenantTier();
 
   const [enabled, setEnabled] = useState(true);
   const [summaryTime, setSummaryTime] = useState("18:00");
@@ -95,8 +99,12 @@ export default function DailySummaryPage() {
     }
   }
 
-  if (loading || loadingDoc) {
+  if (loading || loadingDoc || tierLoading) {
     return <div className="p-8 text-slate-500">Loading...</div>;
+  }
+
+  if (!isPaidTier(tier)) {
+    return <PaidFeatureLock feature="Daily Summary" />;
   }
 
   if (!appUser || !ALLOWED_ROLES.includes(appUser.role)) {

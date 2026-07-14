@@ -5,6 +5,8 @@ import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import LogoutButton from "./LogoutButton";
 import MobileSidebar from "./MobileSidebar";
 import OverdueBadge from "../components/OverdueBadge";
+import MemberUsageMeter from "../components/MemberUsageMeter";
+import { isPaidTier, PAID_NAV_HREFS } from "../../lib/tier";
 
 export default async function DashboardLayout({
   children,
@@ -51,6 +53,14 @@ export default async function DashboardLayout({
   const primaryColor = tenantData?.primaryColor || "#059669";
   const tenantSlug = tenantData?.slug || "";
   const userMemberId = userDocData?.memberId || "";
+
+  // Free-tier member usage, surfaced in the sidebar for owners and admins.
+  const tenantTier = tenantData?.tier ?? null;
+  const activeMemberCount = tenantData?.activeMemberCount ?? null;
+  const memberLimit = tenantData?.memberLimit ?? null;
+  const canSeeUsageMeter = userRole === "owner" || userRole === "admin";
+  // Free tenants see paid modules as locked links to the billing/upgrade page.
+  const tenantIsPaid = isPaidTier(tenantTier);
 
   const allNavigation = [
     { name: "Church Overview", href: "/dashboard/analytics", icon: "📊", roles: ["owner", "admin", "viewer", "finance", "member_manager", "member_viewer"] },
@@ -107,20 +117,29 @@ export default async function DashboardLayout({
                 <span>Dashboard</span>
               </Link>
             </li>
-            {navigation.map((item) => (
-              <li key={item.name}>
-                <Link
-                  href={item.href}
-                  className="flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent"
-                >
-                  <span className="text-base opacity-60">{item.icon}</span>
-                  {item.name}
-                  {item.name === "Workflows" && (
-                    <OverdueBadge tenantId={tenantId} />
-                  )}
-                </Link>
-              </li>
-            ))}
+            {navigation.map((item) => {
+              const locked = !tenantIsPaid && PAID_NAV_HREFS.includes(item.href);
+              // Locked paid modules point at billing instead of the feature page.
+              return (
+                <li key={item.name}>
+                  <Link
+                    href={locked ? "/dashboard/billing" : item.href}
+                    className="flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent"
+                  >
+                    <span className="text-base opacity-60">{item.icon}</span>
+                    <span className={locked ? "text-gray-400" : ""}>{item.name}</span>
+                    {locked && (
+                      <span className="ml-auto text-[9px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                        🔒 Paid
+                      </span>
+                    )}
+                    {!locked && item.name === "Workflows" && (
+                      <OverdueBadge tenantId={tenantId} />
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
 
             {userRole === "super_admin" && (
               <li>
@@ -135,6 +154,14 @@ export default async function DashboardLayout({
             )}
           </ul>
         </nav>
+
+        {canSeeUsageMeter && (
+          <MemberUsageMeter
+            tier={tenantTier}
+            activeMemberCount={activeMemberCount}
+            memberLimit={memberLimit}
+          />
+        )}
 
         {tenantSlug && (
           <div className="px-4 pb-2 border-t border-gray-100 pt-3">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
+import { isPaidTier } from "@/lib/tier";
 import crypto from "crypto";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hub.kerekehub.co.za";
@@ -156,6 +157,14 @@ export async function POST(req: NextRequest) {
   // 4. Load tenant info for church name
   const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
   const churchName = tenantDoc.data()?.name || "your church";
+
+  // Server-side paid gate: inviting extra admins/team members is a Church-plan feature.
+  if (!isPaidTier(tenantDoc.data()?.tier)) {
+    return NextResponse.json(
+      { error: "Adding team members is on the Church plan. Upgrade for R159/mo to invite admins." },
+      { status: 402 }
+    );
+  }
 
   // 5. Check if an inactive user with this email already exists
   const existingInactive = await adminDb

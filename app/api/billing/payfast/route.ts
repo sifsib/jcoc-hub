@@ -55,13 +55,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal accounts do not require payment." }, { status: 400 });
   }
 
-  // 3. Determine the amount to charge
-  let recurringAmount = 159; // default full rate
-  if (tenant.accountType === "standard" && tenant.billingPhase === "trial") {
-    recurringAmount = 99; // moves to evaluation rate first
-  }
+  // 3. Amount to charge. The member-based model has a single flat rate: R159/mo
+  //    for unlimited members. Beta/standard upgrades all pay the same.
+  const recurringAmount = 159;
 
-  // 4. Billing date = day of month when free period ends (or today + 1 as fallback)
+  // 4. Billing date = day of month the free window ends, or today for a
+  //    free-tier church upgrading now (no trial/evaluation dates set).
   const endDate = new Date(tenant.trialEndsAt || tenant.evaluationEndsAt || Date.now());
   const billingDay = Math.min(endDate.getDate(), 28); // PayFast max is 28
 

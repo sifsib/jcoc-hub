@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
+import { useTenantTier } from "../../../lib/useTenantTier";
+import { isPaidTier } from "../../../lib/tier";
+import PaidFeatureLock from "../../components/PaidFeatureLock";
 import {
   collection,
   query,
@@ -29,6 +32,7 @@ interface ChurchForm {
 
 export default function FormsPage() {
   const { user, tenantId, loading: userLoading } = useAppUser();
+  const { tier, loading: tierLoading } = useTenantTier();
   const router = useRouter();
 
   const [forms, setForms] = useState<ChurchForm[]>([]);
@@ -107,12 +111,16 @@ export default function FormsPage() {
     setTimeout(() => setCopiedId(null), 2000);
   }
 
-  if (userLoading || loading) {
+  if (userLoading || loading || tierLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  }
+
+  if (!isPaidTier(tier)) {
+    return <PaidFeatureLock feature="Custom forms" />;
   }
 
   return (

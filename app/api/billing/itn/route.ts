@@ -45,10 +45,15 @@ export async function POST(req: NextRequest) {
       const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const invoiceNumber = `INV-${period.replace("-", "")}-${tenantId.slice(0, 6).toUpperCase()}`;
 
-      // Update tenant billing status
+      // Update tenant billing status. A completed payment also lifts the church
+      // onto the paid tier: unlimited members (memberLimit null) at R159/mo. This
+      // is what turns a free upgrade into an actual paid account.
       await adminDb.collection("tenants").doc(tenantId).update({
         paymentStatus: "active",
         billingPhase: "active",
+        tier: "paid",
+        memberLimit: null,
+        currentRate: 159,
         lastPaymentAt: now.toISOString(),
         lastPaymentAmount: amount,
         updatedAt: now,

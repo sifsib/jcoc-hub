@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { isPaidTier } from "@/lib/tier";
 
 const BATCH_SIZE = 20; // parallel Brevo requests per round
 
@@ -74,6 +75,15 @@ export async function POST(req: NextRequest) {
   if (!tenantSnap.exists) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
 
   const tenant = tenantSnap.data()!;
+
+  // Server-side paid gate: bulk email is a Church-plan feature.
+  if (!isPaidTier(tenant.tier)) {
+    return NextResponse.json(
+      { error: "Bulk email is on the Church plan. Upgrade for R159/mo to use it." },
+      { status: 402 }
+    );
+  }
+
   const { brevoApiKey, brevoSenderEmail, brevoSenderName, name: churchName } = tenant;
 
   if (!brevoApiKey) {

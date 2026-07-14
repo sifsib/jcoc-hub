@@ -455,6 +455,62 @@ function MemberBlock({
   );
 }
 
+// ─── Free-tier upgrade modal ────────────────────────────────────────────────
+// Shown instead of a raw error when a free church hits its member cap.
+function UpgradeLimitModal({
+  open,
+  limit,
+  onClose,
+}: {
+  open: boolean;
+  limit: number | null;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xl">
+            🌱
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Your church has grown</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              You have reached the free plan limit of {limit ?? 50} active members.
+              Upgrade to the Church plan for R159 a month for unlimited members and
+              every module.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
+          <a
+            href="/dashboard/billing"
+            className="inline-flex justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition"
+          >
+            Upgrade for R159/mo
+          </a>
+          <button
+            onClick={onClose}
+            className="inline-flex justify-center rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+          >
+            Not now
+          </button>
+        </div>
+        <p className="mt-3 text-xs text-gray-400">
+          Tip: archiving members who have left frees up space on the free plan.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ManageMembershipPage() {
@@ -492,6 +548,12 @@ export default function ManageMembershipPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // ── Free-tier member cap ──
+  const [tier, setTier] = useState<string | null>(null);
+  const [activeMemberCount, setActiveMemberCount] = useState<number | null>(null);
+  const [memberLimit, setMemberLimit] = useState<number | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Configure lists state
   const [editMinistries, setEditMinistries] = useState<string[]>([]);
@@ -564,6 +626,10 @@ export default function ManageMembershipPage() {
             ministryGroups: td.ministryGroups?.length ? td.ministryGroups : DEFAULT_MINISTRY_GROUPS,
             churchRoles: td.churchRoles?.length ? td.churchRoles : DEFAULT_CHURCH_ROLES,
           });
+          // Free-tier limit fields, used to guard the add-member flows below.
+          setTier(td.tier ?? null);
+          setActiveMemberCount(typeof td.activeMemberCount === "number" ? td.activeMemberCount : null);
+          setMemberLimit(typeof td.memberLimit === "number" ? td.memberLimit : null);
         }
         // Load form config from Church Settings
         try {
@@ -650,6 +716,8 @@ export default function ManageMembershipPage() {
 
   const approvePending = async (req: any) => {
     if (!appUser) return;
+    // Approving a self-join adds one active member. Guard the free-tier cap.
+    if (wouldExceedLimit(1)) { setShowUpgradeModal(true); return; }
     try {
       const { id, status, submittedAt, source, tenantId: _t, ...memberData } = req;
       await addDoc(collection(db, "members"), {
@@ -660,8 +728,13 @@ export default function ManageMembershipPage() {
         createdAt: serverTimestamp(),
       });
       await updateDoc(doc(db, "memberRequests", req.id), { status: "approved" });
+      bumpLocalCount(1);
       setPendingRequests((p) => p.filter((r) => r.id !== req.id));
-    } catch (e) { console.error(e); alert("Failed to approve. Please try again."); }
+    } catch (e: any) {
+      console.error(e);
+      if (isLimitError(e)) setShowUpgradeModal(true);
+      else alert("Failed to approve. Please try again.");
+    }
   };
 
   const rejectPending = async (reqId: string) => {
@@ -835,10 +908,42 @@ export default function ManageMembershipPage() {
 
   // ─── Submit form ─────────────────────────────────────────────────────────────
 
+  // ─── Free-tier limit helpers ──────────────────────────────────────────────
+  const isFreeTier = tier === "free";
+  // True when a free church is already at or over its cap.
+  const atMemberLimit =
+    isFreeTier &&
+    typeof activeMemberCount === "number" &&
+    typeof memberLimit === "number" &&
+    activeMemberCount >= memberLimit;
+  // True when adding `toAdd` active members would push a free church past the cap.
+  const wouldExceedLimit = (toAdd: number) =>
+    isFreeTier &&
+    typeof activeMemberCount === "number" &&
+    typeof memberLimit === "number" &&
+    activeMemberCount + toAdd > memberLimit;
+  // The security rule denies the write with permission-denied when the cap is
+  // hit. On a free tenant that means "you are full", so we show the upgrade
+  // modal rather than a generic failure.
+  const isLimitError = (err: any) => isFreeTier && err?.code === "permission-denied";
+  // Keep the local count roughly in step after a successful add, so a second
+  // add in the same session is guarded correctly without a full reload.
+  const bumpLocalCount = (n: number) =>
+    setActiveMemberCount((c) => (typeof c === "number" ? c + n : c));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!appUser) return;
     if (!consent.privacy) { setFeedback({ ok: false, text: "Privacy policy consent is required." }); return; }
+
+    // How many active member records this submission will create.
+    const memberChildrenToAdd = children.filter((c) => c.isMember).length;
+    const toAdd =
+      1 +
+      (primary.maritalStatus === "Married" && isSpouseMember === "yes" ? 1 : 0) +
+      memberChildrenToAdd;
+    if (wouldExceedLimit(toAdd)) { setShowUpgradeModal(true); return; }
+
     setSubmitting(true); setFeedback(null);
 
     try {
@@ -929,11 +1034,16 @@ export default function ManageMembershipPage() {
 
       await refreshList();
       const count = 1 + (isSpouseMember === "yes" ? 1 : 0) + children.filter(c => c.isMember).length;
+      bumpLocalCount(count);
       setFeedback({ ok: true, text: `${count} member record${count !== 1 ? "s" : ""} saved successfully.` });
       reset(); setView("list");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Save error:", err);
-      setFeedback({ ok: false, text: "Save failed. Please try again." });
+      if (isLimitError(err)) {
+        setShowUpgradeModal(true);
+      } else {
+        setFeedback({ ok: false, text: "Save failed. Please try again." });
+      }
     } finally { setSubmitting(false); }
   };
 
@@ -1183,6 +1293,10 @@ export default function ManageMembershipPage() {
 
   const handleImport = async (skipIndices: Set<number>) => {
     if (!appUser || !importRows.length) return;
+    // A free church that is already full cannot import more members. Rows that
+    // would tip an almost-full church over the cap are stopped per-record by the
+    // security rule, and caught below.
+    if (atMemberLimit) { setShowUpgradeModal(true); return; }
     setDuplicateWarning(null);
     setImporting(true); let count = 0;
 
@@ -1353,10 +1467,20 @@ export default function ManageMembershipPage() {
         }
       }
       await refreshList();
+      bumpLocalCount(count);
       alert(`${count} member record${count !== 1 ? "s" : ""} imported successfully.`);
       setImportRows([]); if (fileRef.current) fileRef.current.value = "";
       setView("list");
-    } catch (err) { console.error("Import error:", err); alert("Import failed. Check console."); }
+    } catch (err: any) {
+      console.error("Import error:", err);
+      if (isLimitError(err)) {
+        // Some rows may have saved before the cap was hit; refresh so the list is accurate.
+        await refreshList();
+        setShowUpgradeModal(true);
+      } else {
+        alert("Import failed. Check console.");
+      }
+    }
     finally { setImporting(false); }
   };
 
@@ -1396,6 +1520,7 @@ export default function ManageMembershipPage() {
 
     return (
       <div className="max-w-3xl mx-auto px-4 py-6">
+        <UpgradeLimitModal open={showUpgradeModal} limit={memberLimit} onClose={() => setShowUpgradeModal(false)} />
         <button onClick={() => { setView("list"); reset(); setEditingMemberId(null); }}
           className="text-sm text-blue-600 hover:text-blue-800 font-medium mb-4 flex items-center gap-1">
           ← Back to register
@@ -1956,6 +2081,7 @@ export default function ManageMembershipPage() {
   if (view === "import") {
     return (
       <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
+        <UpgradeLimitModal open={showUpgradeModal} limit={memberLimit} onClose={() => setShowUpgradeModal(false)} />
         <button onClick={() => setView("list")} className="text-sm text-blue-600 hover:text-blue-800 font-medium self-start">← Back to register</button>
         <div>
           <h1 className="text-2xl font-bold text-gray-800 mb-1">Import Members</h1>
@@ -2120,6 +2246,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
   if (view === "pending") {
     return (
       <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
+        <UpgradeLimitModal open={showUpgradeModal} limit={memberLimit} onClose={() => setShowUpgradeModal(false)} />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Pending Membership Requests</h1>
@@ -2183,6 +2310,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
+      <UpgradeLimitModal open={showUpgradeModal} limit={memberLimit} onClose={() => setShowUpgradeModal(false)} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Membership Management</h1>
@@ -2276,7 +2404,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               )}
             </div>
           )}
-          <button onClick={() => { reset(); setView("form"); }}
+          <button onClick={() => { if (atMemberLimit) { setShowUpgradeModal(true); return; } reset(); setView("form"); }}
             className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
             + Add Member
           </button>

@@ -18,6 +18,10 @@ interface TenantBilling {
   evaluationEndsAt: string | null;
   fullRateStartsAt: string | null;
   paymentStatus?: "unpaid" | "active" | string;
+  // Member-based model fields.
+  tier?: "free" | "paid" | string;
+  memberLimit?: number | null;
+  activeMemberCount?: number | null;
 }
 
 function formatDate(iso: string | null): string {
@@ -35,7 +39,8 @@ function daysUntil(iso: string | null): number {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-// Determine what rate the tenant will pay next and when
+// The next billing event under the member-based model. There is a single flat
+// rate of R159/mo. Comped accounts have their own free windows.
 function getNextBillingEvent(t: TenantBilling): {
   label: string;
   date: string | null;
@@ -45,16 +50,9 @@ function getNextBillingEvent(t: TenantBilling): {
     return { label: "Free forever", date: null, amount: 0 };
   }
   if (t.accountType === "beta") {
-    return { label: "R159/mo starts", date: t.trialEndsAt, amount: 159 };
+    return { label: "R159/mo starts", date: t.trialEndsAt || t.fullRateStartsAt, amount: 159 };
   }
-  // standard
-  if (t.billingPhase === "trial" && t.trialEndsAt) {
-    return { label: "Evaluation period starts (R99/mo)", date: t.trialEndsAt, amount: 99 };
-  }
-  if (t.billingPhase === "evaluation" && t.evaluationEndsAt) {
-    return { label: "Full rate starts (R159/mo)", date: t.evaluationEndsAt, amount: 159 };
-  }
-  return { label: "Full rate", date: null, amount: 159 };
+  return { label: "R159/mo", date: null, amount: 159 };
 }
 
 interface PaymentRecord {
@@ -175,7 +173,12 @@ export default function BillingPage() {
   const days = daysUntil(nextEvent.date);
   const isPaid = billing.paymentStatus === "active";
   const isInternal = billing.accountType === "internal";
-  const needsPayment = !isInternal && !isPaid && nextEvent.amount > 0;
+  const isFreeTier = billing.tier === "free";
+  const memberLimit = typeof billing.memberLimit === "number" ? billing.memberLimit : 50;
+  const activeCount = typeof billing.activeMemberCount === "number" ? billing.activeMemberCount : null;
+  // Free-tier churches only pay when they choose to upgrade; paid/beta accounts
+  // set up the recurring payment in the Payment Method section.
+  const needsPayment = !isInternal && !isFreeTier && !isPaid && nextEvent.amount > 0;
 
   const phaseColors: Record<string, string> = {
     internal: "text-emerald-400 bg-emerald-900/30 border-emerald-700",
@@ -209,31 +212,71 @@ export default function BillingPage() {
         ) : billing.accountType === "beta" ? (
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-400">Months 1-4</span>
+              <span className="text-slate-400">Months 1-6</span>
               <span className="text-white font-semibold">FREE</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Month 5+</span>
-              <span className="text-white font-semibold">R159/mo</span>
+              <span className="text-slate-400">After that</span>
+              <span className="text-white font-semibold">R159/mo, unlimited members</span>
             </div>
+          </div>
+        ) : isFreeTier ? (
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Free plan</span>
+              <span className="text-white font-semibold">R0/mo</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Members</span>
+              <span className="text-white font-semibold">
+                {activeCount !== null ? `${activeCount} / ${memberLimit}` : `Up to ${memberLimit}`}
+              </span>
+            </div>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Free under {memberLimit} members, forever. Upgrade to R159/mo any time for
+              unlimited members and every module.
+            </p>
           </div>
         ) : (
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-400">Month 1</span>
-              <span className="text-white font-semibold">FREE</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Months 2-4</span>
-              <span className="text-white font-semibold">R99/mo</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Month 5+</span>
+              <span className="text-slate-400">Church plan</span>
               <span className="text-white font-semibold">R159/mo</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Members</span>
+              <span className="text-white font-semibold">Unlimited</span>
             </div>
           </div>
         )}
       </div>
+
+      {/* Upgrade prompt for free-tier churches */}
+      {isFreeTier && (
+        <div className="bg-emerald-900/20 border border-emerald-700/50 rounded-xl p-6 mb-6">
+          <h2 className="text-sm font-semibold text-emerald-300 uppercase tracking-wide mb-2">
+            Upgrade to unlimited
+          </h2>
+          <p className="text-slate-300 text-sm mb-4">
+            Move to the Church plan for R159/mo. Unlimited members, automation, advanced
+            analytics, bulk email, custom branding, and multiple admins. Your current data
+            stays exactly as it is.
+          </p>
+          {error && (
+            <p className="text-red-400 text-sm bg-red-900/20 px-4 py-2 rounded-lg mb-4">{error}</p>
+          )}
+          <button
+            onClick={handleSetupPayment}
+            disabled={payfastLoading}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors"
+          >
+            {payfastLoading ? "Redirecting to PayFast..." : "Upgrade for R159/mo"}
+          </button>
+          <p className="text-slate-500 text-xs mt-3">
+            You will be taken to PayFast to securely enter your card details. Kereke Hub never stores payment information.
+          </p>
+        </div>
+      )}
 
       {/* Next billing event */}
       {!isInternal && nextEvent.date && (
@@ -256,7 +299,7 @@ export default function BillingPage() {
       )}
 
       {/* Invoice generator */}
-      {!isInternal && (
+      {!isInternal && !isFreeTier && (
         <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl p-6 mb-6">
           <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-1">
             Invoices
@@ -345,7 +388,7 @@ export default function BillingPage() {
       )}
 
       {/* Payment status */}
-      {!isInternal && (
+      {!isInternal && !isFreeTier && (
         <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl p-6">
           <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">
             Payment Method

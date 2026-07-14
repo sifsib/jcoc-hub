@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { isPaidTier } from "@/lib/tier";
 
 const BATCH_SIZE = 100; // messages per BulkSMS request
 
@@ -70,6 +71,15 @@ export async function POST(req: NextRequest) {
   const tenantSnap = await adminDb.collection("tenants").doc(caller.tenantId).get();
   if (!tenantSnap.exists) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   const tenant = tenantSnap.data()!;
+
+  // Server-side paid gate: bulk SMS is a Church-plan feature.
+  if (!isPaidTier(tenant.tier)) {
+    return NextResponse.json(
+      { error: "Bulk SMS is on the Church plan. Upgrade for R159/mo to use it." },
+      { status: 402 }
+    );
+  }
+
   const { bulksmsTokenId, bulksmsTokenSecret, bulksmsSenderId, name: churchName } = tenant;
   if (!bulksmsTokenId || !bulksmsTokenSecret) {
     return NextResponse.json(

@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
+import { useTenantTier } from "../../../lib/useTenantTier";
+import { isPaidTier } from "../../../lib/tier";
+import PaidFeatureLock from "../../components/PaidFeatureLock";
 import {
   collection,
   query,
@@ -91,6 +94,7 @@ function statusBadge(status: string) {
 // Main component
 // ─────────────────────────────────────────────
 export default function TeamPage() {
+  const { tier, loading: tierLoading } = useTenantTier();
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState("");
@@ -365,13 +369,17 @@ export default function TeamPage() {
   }
 
   // ─── States ───────────────────────────────
-  if (loading) {
+  if (loading || tierLoading) {
     return (
       <div className="flex items-center justify-center h-64 gap-3">
         <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
         <p className="text-gray-500 font-medium">Loading team...</p>
       </div>
     );
+  }
+
+  if (!isPaidTier(tier)) {
+    return <PaidFeatureLock feature="Multiple admins and custom roles" />;
   }
 
   if (!isOwner) {

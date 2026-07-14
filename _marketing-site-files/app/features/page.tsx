@@ -122,7 +122,7 @@ const MODULES = [
       <div className="mt-4 bg-slate-950 rounded-xl p-3 border border-slate-800">
         <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Active groups</p>
         {[
-          { name: 'Cell A — Soweto', count: '14 members' },
+          { name: 'Cell A, Soweto', count: '14 members' },
           { name: 'Youth ministry', count: '22 members' },
           { name: "Women's fellowship", count: '18 members' },
         ].map((g) => (
@@ -137,7 +137,7 @@ const MODULES = [
   {
     title: 'Automated workflows',
     icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-    desc: 'Build multi-step follow-up sequences that run automatically based on triggers. A new visitor is logged and the system assigns a pastoral call for day 1, a home visit for day 7, and a welcome letter for day 14 — without anyone remembering to do it.',
+    desc: 'Build multi-step follow-up sequences that run automatically based on triggers. A new visitor is logged and the system assigns a pastoral call for day 1, a home visit for day 7, and a welcome letter for day 14, without anyone remembering to do it.',
     preview: (
       <div className="mt-4 bg-slate-950 rounded-xl p-3 border border-slate-800">
         <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Workflow triggers</p>
@@ -253,7 +253,7 @@ const MODULES = [
     desc: 'Roster volunteers to roles for each service or event. Assign who is on sound, welcome, ushering, or any custom role you define. See a full view of who is serving when, and pull up any member\'s upcoming assignments at a glance.',
     preview: (
       <div className="mt-4 bg-slate-950 rounded-xl p-3 border border-slate-800">
-        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Sunday 1 June — roster</p>
+        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Sunday 1 June roster</p>
         {[
           { role: 'Sound', name: 'Sipho Dlamini', tc: 'text-sky-400 bg-sky-500/10' },
           { role: 'Welcome team', name: 'Nandi Nkosi', tc: 'text-emerald-400 bg-emerald-500/10' },
@@ -273,7 +273,7 @@ const MODULES = [
     desc: 'Build and manage your church song library with keys, tempo notes, and chord chart links. Then create a setlist for each service by pulling directly from the library. Your worship team always knows what\'s planned ahead of Sunday.',
     preview: (
       <div className="mt-4 bg-slate-950 rounded-xl p-3 border border-slate-800">
-        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Setlist — 1 June</p>
+        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-2">Setlist for 1 June</p>
         {[
           { song: 'Way Maker', key: 'D', order: '1' },
           { song: 'Goodness of God', key: 'G', order: '2' },

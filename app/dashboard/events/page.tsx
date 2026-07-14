@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import DateInput from "../../../components/ui/DateInput";
 import { useAppUser } from "../../../lib/useAppUser";
+import { useTenantTier } from "../../../lib/useTenantTier";
+import { isPaidTier } from "../../../lib/tier";
+import PaidFeatureLock from "../../components/PaidFeatureLock";
 import {
   collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy,
 } from "firebase/firestore";
@@ -57,6 +60,7 @@ const EMPTY_SINGLE = { title: "", type: "service" as EventType, description: "",
 
 export default function EventsPage() {
   const { tenantId, loading: userLoading } = useAppUser();
+  const { tier, loading: tierLoading } = useTenantTier();
   const router = useRouter();
 
   const [events, setEvents] = useState<ChurchEvent[]>([]);
@@ -185,12 +189,16 @@ export default function EventsPage() {
 
   const canCreate = sharedTitle.trim() && (isMultiDay ? days.every(d => d.date) : !!single.date);
 
-  if (userLoading || loading) {
+  if (userLoading || loading || tierLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  }
+
+  if (!isPaidTier(tier)) {
+    return <PaidFeatureLock feature="Events" />;
   }
 
   return (

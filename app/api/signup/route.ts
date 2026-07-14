@@ -4,10 +4,10 @@
 // Creates: Firebase Auth user, tenant doc, user doc (role: owner).
 // Returns a session cookie so the user lands on the dashboard immediately.
 //
-// Access code tiers:
-//   BETA_ACCESS_CODE env var   → beta (4 months free, then R139/mo)
-//   no code / wrong code       → standard (30-day trial, then R99, then R139)
-//   email === INTERNAL_EMAIL   → internal (free forever)
+// Account types (member-based model):
+//   BETA_ACCESS_CODE env var   → beta (free for 6 months, then R159/mo, unlimited)
+//   no code / wrong code       → standard (free under 50 members, R159/mo above)
+//   email === INTERNAL_EMAIL   → internal (free forever, unlimited)
 //
 // Brevo integration:
 //   BREVO_API_KEY env var      → Brevo API key (from Brevo dashboard > SMTP & API > API Keys)

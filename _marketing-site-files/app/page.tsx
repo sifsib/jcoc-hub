@@ -9,27 +9,40 @@ export default function Home() {
       <section className="py-20 px-6 text-center">
         <div className="max-w-3xl mx-auto">
           <span className="inline-block mb-4 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            Built for growing Churches
+            Built for South African churches
           </span>
           <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white mb-5 leading-[1.1]">
-            Church Management Software<br />
-            <span className="text-emerald-400">Built for South Africa</span>
+            Ministry management,<br />
+            <span className="text-emerald-400">done properly.</span>
           </h1>
-          <p className="text-lg md:text-xl text-slate-400 font-medium max-w-2xl mx-auto mb-10 leading-relaxed">
-            Kereke Hub replaces the spreadsheets, WhatsApp threads, and paper registers that slow your leadership team down. One platform for your full congregation.
+          <p className="text-lg md:text-xl text-slate-400 font-medium max-w-2xl mx-auto mb-8 leading-relaxed">
+            Kereke Hub replaces the spreadsheets, WhatsApp threads, paper registers, and giving links your leaders juggle every week. Members, attendance, giving, visitors, and comms, all in one calm dashboard.
           </p>
+
+          {/* Trust chips */}
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-9">
+            {['Free under 50 members', 'No card required', 'POPIA compliant', 'Set up in a week'].map((chip) => (
+              <span key={chip} className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                {chip}
+              </span>
+            ))}
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
-            <Link
-              href="/demo#request"
+            <a
+              href="https://hub.kerekehub.co.za/signup"
               className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-4 rounded-xl text-base font-bold transition-all duration-300 hover:bg-emerald-500 hover:scale-105 active:scale-95 shadow-lg shadow-emerald-900/30 text-center"
             >
-              Book a Free Demo
-            </Link>
+              Sign Up Free
+            </a>
             <Link
-              href="/features"
+              href="/demo#request"
               className="w-full sm:w-auto bg-slate-800 text-slate-200 border border-slate-700 px-8 py-4 rounded-xl text-base font-bold transition-all duration-300 hover:bg-slate-700 hover:scale-105 active:scale-95 text-center"
             >
-              See All Features
+              Book a Free Demo
             </Link>
           </div>
         </div>
@@ -92,7 +105,7 @@ export default function Home() {
 
               {/* Chart */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Attendance trend — last 8 weeks</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Attendance trend, last 8 weeks</p>
                 <svg viewBox="0 0 400 60" className="w-full h-12" preserveAspectRatio="none">
                   <defs>
                     <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
@@ -170,13 +183,13 @@ export default function Home() {
             {[
               {
                 step: '1',
-                title: 'Book a demo walkthrough',
-                desc: 'We screen-share the full system with your leadership team. No sales pressure, just a proper look under the hood at every module.',
+                title: 'Create your free account',
+                desc: 'Start on the free plan in minutes, no card required. Churches under 50 members stay free, and larger churches get a full walkthrough with our team.',
               },
               {
                 step: '2',
                 title: 'Migrate your existing records',
-                desc: 'We help you import members from spreadsheets or paper registers. Your first month is free and dedicated entirely to getting your data clean.',
+                desc: 'We help you import members from spreadsheets or paper registers, and get your data clean before your first Sunday in the new system.',
               },
               {
                 step: '3',
@@ -209,7 +222,7 @@ export default function Home() {
               What is included
             </span>
             <h2 className="text-3xl md:text-4xl font-black text-white mb-3">Every module your church needs</h2>
-            <p className="text-slate-400 font-medium max-w-lg mx-auto">One subscription unlocks the full platform. No feature gating, no per-seat pricing.</p>
+            <p className="text-slate-400 font-medium max-w-lg mx-auto">Use them all, or just the few you need this season. It all works together.</p>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -227,7 +240,7 @@ export default function Home() {
               {
                 icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
                 title: 'Financial tracking',
-                desc: 'Log tithes, building funds, and special collections. Attach receipts and export to CSV for auditing.',
+                desc: 'Log tithes, building funds, and offerings, attach receipts, take online giving via PayFast and EFT, and export to CSV.',
               },
               {
                 icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
@@ -235,14 +248,14 @@ export default function Home() {
                 desc: 'Track first-time visitors from arrival through to connection. Assign follow-up tasks to specific leaders.',
               },
               {
-                icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
-                title: 'Gmail SMTP comms',
-                desc: 'Send letters and statements from your own church email address. Plug in your Gmail SMTP credentials and go.',
+                icon: 'M13 10V3L4 14h7v7l9-11h-7z',
+                title: 'Automation and forms',
+                desc: 'Build custom forms with shareable links, and let triggered workflows follow up on visitors, new members, and birthdays for you.',
               },
               {
-                icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01',
-                title: 'Custom branding',
-                desc: 'Make the dashboard feel like yours. Set your church name and brand color across the entire workspace.',
+                icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+                title: 'Communications',
+                desc: 'Send letters, statements, and announcements from your own church email address through Gmail SMTP.',
               },
             ].map((feat) => (
               <div
@@ -268,42 +281,30 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── WHY CHOOSE KEREKE HUB ── */}
+      {/* ── BUILT FOR SOUTH AFRICA ── */}
       <section className="py-20 px-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
             <span className="inline-block mb-4 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               Why Kereke Hub
             </span>
-            <h2 className="text-3xl md:text-4xl font-black text-white mb-3">Built differently. Built for you.</h2>
-            <p className="text-slate-400 font-medium max-w-2xl mx-auto">We're not a global platform that pretends to fit churches. We're built from the ground up for South African congregations.</p>
+            <h2 className="text-3xl md:text-4xl font-black text-white mb-3">Built for South Africa, not adapted for it.</h2>
+            <p className="text-slate-400 font-medium max-w-2xl mx-auto">Most church software is shaped around US payment rails and US billing. We started the other way round.</p>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-6">
+          <div className="grid sm:grid-cols-3 gap-6">
             {[
               {
-                title: 'South African focus',
-                desc: 'Built for how churches in SA actually work. Currency in ZAR, POPIA-compliant by default, and personal support from people who understand your context.',
+                title: 'One platform, not five tools',
+                desc: 'Members, attendance, giving, events, visitors, and comms in one system. It replaces the spreadsheets, WhatsApp threads, and separate giving links most churches stitch together.',
               },
               {
-                title: 'No per-seat pricing',
-                desc: 'One flat monthly fee, no matter how many members you have. Add 50 people or 500, the price stays the same.',
+                title: 'Local by default',
+                desc: 'Priced in rand, giving through PayFast and EFT, POPIA compliant, and support from people who actually understand a South African church.',
               },
               {
-                title: 'Included personal setup',
-                desc: 'Your first month is free and dedicated to getting your data clean and your team trained. No DIY onboarding.',
-              },
-              {
-                title: 'Made for non-tech people',
-                desc: 'Your church admin team doesn\'t need an IT degree. The dashboard is intuitive, and our support team speaks plainly.',
-              },
-              {
-                title: 'Affordable entry',
-                desc: 'Start at R159 per month after your free evaluation period. That\'s less than a weekly coffee run.',
-              },
-              {
-                title: 'Cancel anytime',
-                desc: 'No contracts, no early-exit penalties. Your data is always yours. If Kereke Hub isn\'t working, you\'re free to leave.',
+                title: 'One flat price, unlimited members',
+                desc: 'Free under 50 members. After that a flat R159 a month, whether you have 80 members or 800. No per-seat billing, no cut of your giving.',
               },
             ].map((item) => (
               <div
@@ -319,41 +320,41 @@ export default function Home() {
       </section>
 
       {/* ── PRICING TEASER ── */}
-      <section className="py-20 px-6">
+      <section className="py-20 px-6 bg-slate-900/30">
         <div className="max-w-2xl mx-auto text-center">
           <span className="inline-block mb-4 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            Transparent pricing
+            Honest pricing
           </span>
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">No surprises. No contracts.</h2>
+          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">Free to start. R159 to grow.</h2>
           <p className="text-slate-400 font-medium mb-10 leading-relaxed">
-            Start free for your first month. No card required during setup. Then just R159 per month for the full platform, once you have seen it work for your church.
+            Free forever for churches under 50 active members. One flat R159 a month unlocks everything, unlimited members and every module. No card required to start.
           </p>
-          <div className="grid sm:grid-cols-3 gap-4 mb-10">
+          <div className="grid sm:grid-cols-2 gap-4 mb-10 max-w-lg mx-auto">
             {[
-              { period: 'Month 1', price: 'FREE', note: 'Full setup support' },
-              { period: 'Months 2 to 4', price: 'R99/mo', note: 'Evaluation window' },
-              { period: 'Ongoing', price: 'R159/mo', note: 'Full access, cancel anytime', highlight: true },
+              { name: 'Free', price: 'R0', small: '/forever', note: 'Up to 50 active members', highlight: false },
+              { name: 'Church', price: 'R159', small: '/mo', note: 'Unlimited members, every module', highlight: true },
             ].map((tier) => (
               <div
-                key={tier.period}
-                className={`rounded-2xl p-5 border ${
+                key={tier.name}
+                className={`rounded-2xl p-6 border ${
                   tier.highlight
                     ? 'bg-emerald-500/5 border-emerald-500/30'
                     : 'bg-slate-900 border-slate-800'
                 }`}
               >
                 <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${tier.highlight ? 'text-emerald-400' : 'text-slate-500'}`}>
-                  {tier.period}
+                  {tier.name}
                 </p>
-                <p className={`text-2xl font-black mb-1 ${tier.highlight ? 'text-emerald-400' : 'text-white'}`}>
-                  {tier.price}
-                </p>
+                <div className="flex items-baseline justify-center gap-1 mb-2">
+                  <span className={`text-3xl font-black ${tier.highlight ? 'text-emerald-400' : 'text-white'}`}>{tier.price}</span>
+                  <span className="text-sm text-slate-500 font-medium">{tier.small}</span>
+                </div>
                 <p className="text-[11px] text-slate-500 font-medium">{tier.note}</p>
               </div>
             ))}
           </div>
           <Link href="/pricing" className="inline-block text-sm font-bold text-emerald-400 hover:text-emerald-300 transition">
-            Read full pricing details →
+            See full pricing and comparison →
           </Link>
         </div>
       </section>
@@ -361,23 +362,23 @@ export default function Home() {
       {/* ── FINAL CTA ── */}
       <section className="py-20 px-6 border-t border-slate-800">
         <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">Ready to simplify your admin?</h2>
+          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">Your church is ready. Your software should be too.</h2>
           <p className="text-slate-400 font-medium mb-8 leading-relaxed">
-            Book a free demo and we will walk your leadership team through the full system. First month is on us.
+            Start free today, or book a demo and we will walk your leadership team through the full system and help you import your members.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link
-              href="/demo#request"
-              className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-4 rounded-xl text-base font-bold transition-all duration-300 hover:bg-emerald-500 hover:scale-105 active:scale-95 shadow-lg shadow-emerald-900/30 text-center"
-            >
-              Book a Free Demo
-            </Link>
             <a
               href="https://hub.kerekehub.co.za/signup"
-              className="w-full sm:w-auto bg-slate-800 text-slate-200 border border-slate-700 px-8 py-4 rounded-xl text-base font-bold transition-all duration-300 hover:bg-slate-700 hover:scale-105 active:scale-95 text-center"
+              className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-4 rounded-xl text-base font-bold transition-all duration-300 hover:bg-emerald-500 hover:scale-105 active:scale-95 shadow-lg shadow-emerald-900/30 text-center"
             >
               Sign Up Free
             </a>
+            <Link
+              href="/demo#request"
+              className="w-full sm:w-auto bg-slate-800 text-slate-200 border border-slate-700 px-8 py-4 rounded-xl text-base font-bold transition-all duration-300 hover:bg-slate-700 hover:scale-105 active:scale-95 text-center"
+            >
+              Book a Free Demo
+            </Link>
           </div>
         </div>
       </section>

@@ -285,34 +285,33 @@ export default function AdminSettingsPage() {
     }
   };
 
-  // Manually upgrade a self-service signup to beta access (4 months free then R139)
+  // Manually upgrade a self-service signup to beta access (6 months free, then R159,
+  // full access with unlimited members as a comp).
   const convertToBeta = async (signup: SignupRecord) => {
     setActionLoading(signup.id);
     try {
       const now = new Date();
       const freeWindowEnds = new Date(now);
-      freeWindowEnds.setMonth(freeWindowEnds.getMonth() + 4);
+      freeWindowEnds.setMonth(freeWindowEnds.getMonth() + 6);
 
-      // Update the signups record
-      await updateDoc(doc(db, "signups", signup.id), {
+      // Beta accounts are comped onto the paid tier (unlimited members).
+      const betaFields = {
         accountType: "beta",
         billingPhase: "trial",
+        tier: "paid",
+        memberLimit: null,
         currentRate: 0,
         trialEndsAt: freeWindowEnds.toISOString(),
         evaluationEndsAt: null,
         fullRateStartsAt: freeWindowEnds.toISOString(),
-      });
+      };
+
+      // Update the signups record
+      await updateDoc(doc(db, "signups", signup.id), betaFields);
 
       // Update the actual tenant document too
       if (signup.tenantId) {
-        await updateDoc(doc(db, "tenants", signup.tenantId), {
-          accountType: "beta",
-          billingPhase: "trial",
-          currentRate: 0,
-          trialEndsAt: freeWindowEnds.toISOString(),
-          evaluationEndsAt: null,
-          fullRateStartsAt: freeWindowEnds.toISOString(),
-        });
+        await updateDoc(doc(db, "tenants", signup.tenantId), betaFields);
       }
 
       setSignups((prev) =>

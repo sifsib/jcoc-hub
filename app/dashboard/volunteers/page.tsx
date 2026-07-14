@@ -3,6 +3,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
+import { useTenantTier } from "../../../lib/useTenantTier";
+import { isPaidTier } from "../../../lib/tier";
+import PaidFeatureLock from "../../components/PaidFeatureLock";
 import DateInput from "../../../components/ui/DateInput";
 import {
   collection,
@@ -90,6 +93,7 @@ const DEFAULT_ROLES = [
 
 export default function VolunteersPage() {
   const { appUser, tenantId, loading: userLoading } = useAppUser();
+  const { tier, loading: tierLoading } = useTenantTier();
   const [tab, setTab] = useState<ViewTab>("roster");
 
   // Data state
@@ -291,12 +295,16 @@ export default function VolunteersPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (userLoading || loading) {
+  if (userLoading || loading || tierLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-gray-400 text-sm animate-pulse">Loading volunteer schedule...</p>
       </div>
     );
+  }
+
+  if (!isPaidTier(tier)) {
+    return <PaidFeatureLock feature="Volunteers" />;
   }
 
   return (
