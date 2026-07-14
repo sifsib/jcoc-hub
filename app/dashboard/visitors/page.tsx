@@ -15,6 +15,8 @@ import NotesPanel from "../../components/NotesPanel";
 interface Visitor {
   id: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   phone: string;
   email?: string;
   serviceDate: string;
@@ -82,7 +84,8 @@ export default function VisitorsPage() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [visitorConfig, setVisitorConfig] = useState<VisitorFormConfig>(DEFAULT_VISITOR_CONFIG);
 
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [serviceDate, setServiceDate] = useState("");
@@ -237,6 +240,7 @@ export default function VisitorsPage() {
     const initialStatus = shouldTriggerWorkflow ? "pending" : isOneTime ? "none" : "pending";
     const needsFollowUp = initialStatus === "pending";
     const trimmedNote = captureNote.trim();
+    const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
 
     try {
       // Work out who is accountable: the chosen person, or auto-pick from the
@@ -253,7 +257,8 @@ export default function VisitorsPage() {
       }
 
       const newVisitorData: Record<string, any> = {
-        tenantId: appUser.tenantId, fullName: fullName.trim(),
+        tenantId: appUser.tenantId,
+        fullName, firstName: firstName.trim(), lastName: lastName.trim(),
         phone: formattedPhone, serviceDate, reason,
         followUpStatus: initialStatus, capturedBy: appUser.email, createdAt: serverTimestamp(),
       };
@@ -274,7 +279,7 @@ export default function VisitorsPage() {
         fetch("/api/visitors/send-sms", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ visitorId: docRef.id, phone: formattedPhone, name: fullName.trim() }),
+          body: JSON.stringify({ visitorId: docRef.id, phone: formattedPhone, name: fullName, firstName: firstName.trim(), lastName: lastName.trim() }),
         }).catch(() => {});
         newVisitorData.oneTimeSmsSent = true;
       }
@@ -291,7 +296,7 @@ export default function VisitorsPage() {
       }
 
       setVisitors((prev) => [{ id: docRef.id, ...newVisitorData } as Visitor, ...prev]);
-      setFullName(""); setPhone(""); setEmail(""); setGender(""); setAgeGroup(""); setReason(""); setAssignedTo(""); setCaptureNote(""); setCustomValues({});
+      setFirstName(""); setLastName(""); setPhone(""); setEmail(""); setGender(""); setAgeGroup(""); setReason(""); setAssignedTo(""); setCaptureNote(""); setCustomValues({});
     } catch (err) {
       console.error("Error saving visitor:", err);
       alert("Failed to capture visitor details.");
@@ -442,9 +447,15 @@ export default function VisitorsPage() {
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Service Date</label>
               <DateInput value={serviceDate} onChange={(val) => setServiceDate(val)} className={inp} required />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Full Name <span className="text-red-500">*</span></label>
-              <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Jane Doe" className={inp} required />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">First Name <span className="text-red-500">*</span></label>
+                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="e.g. Jane" className={inp} required />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Name <span className="text-red-500">*</span></label>
+                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="e.g. Doe" className={inp} required />
+              </div>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact Number <span className="text-red-500">*</span></label>

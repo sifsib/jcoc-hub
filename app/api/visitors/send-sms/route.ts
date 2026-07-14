@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { phone, message, visitorId, name } = await req.json();
+  const { phone, message, visitorId, name, firstName: firstNameIn, lastName: lastNameIn } = await req.json();
   if (!phone?.trim()) return NextResponse.json({ error: "A phone number is required." }, { status: 400 });
 
   const tenantSnap = await adminDb.collection("tenants").doc(caller.tenantId).get();
@@ -61,8 +61,9 @@ export async function POST(req: NextRequest) {
       "Thank you for visiting us today. We hope to see you again soon.").toString();
 
   // Fill [First Name] / [Last Name] / [Church Name] from the visitor's details.
-  const firstName = String(name || "").trim().split(" ")[0] || "";
-  const lastName = String(name || "").trim().split(" ").slice(1).join(" ") || "";
+  // Prefer the explicit first/last name; fall back to splitting a full name.
+  const firstName = (firstNameIn || String(name || "").trim().split(" ")[0] || "").trim();
+  const lastName = (lastNameIn || String(name || "").trim().split(" ").slice(1).join(" ") || "").trim();
   const body = rawBody
     .replace(/\[\s*first\s*name\s*\]/gi, firstName)
     .replace(/\[\s*last\s*name\s*\]/gi, lastName)
