@@ -95,6 +95,22 @@ export default function CommunicationsPage() {
   const [savingSms, setSavingSms] = useState(false);
   const [smsError, setSmsError] = useState("");
   const [smsSuccess, setSmsSuccess] = useState("");
+  // Birthday auto-SMS settings
+  const [smsBirthdayEnabled, setSmsBirthdayEnabled] = useState(false);
+  const [smsBirthdayMessage, setSmsBirthdayMessage] = useState("");
+  // SMS composer
+  const [smsTab, setSmsTab] = useState<"compose" | "setup">("compose");
+  const [smsAudience, setSmsAudience] = useState<"all" | "group" | "individuals">("all");
+  const [smsMessage, setSmsMessage] = useState("");
+  const [smsGroups, setSmsGroups] = useState<{ id: string; name: string }[]>([]);
+  const [smsGroupId, setSmsGroupId] = useState("");
+  const [smsAllMembers, setSmsAllMembers] = useState<{ id: string; name: string; phone: string }[]>([]);
+  const [smsMemberSearch, setSmsMemberSearch] = useState("");
+  const [smsSelectedIds, setSmsSelectedIds] = useState<string[]>([]);
+  const [smsAllCount, setSmsAllCount] = useState<number | null>(null);
+  const [smsSending, setSmsSending] = useState(false);
+  const [smsSendError, setSmsSendError] = useState("");
+  const [smsSendSuccess, setSmsSendSuccess] = useState("");
 
   // ── WhatsApp state ──
   const [waTab, setWaTab] = useState<"compose" | "history">("compose");
@@ -222,11 +238,83 @@ export default function CommunicationsPage() {
           setSmsSenderId(d.senderId || "");
           setSmsOneTimeEnabled(!!d.oneTimeSmsEnabled);
           setSmsOneTimeMessage(d.oneTimeSmsMessage || "");
+          setSmsBirthdayEnabled(!!d.birthdaySmsEnabled);
+          setSmsBirthdayMessage(d.birthdaySmsMessage || "");
         }
       })
       .catch(console.error)
       .finally(() => setSmsLoading(false));
   }, [channel, smsStatus, tenantId]);
+
+  // Load groups + members once for the SMS composer.
+  useEffect(() => {
+    if (channel !== "sms" || !tenantId || smsAllCount !== null) return;
+    (async () => {
+      try {
+        const [gSnap, mSnap] = await Promise.all([
+          getDocs(query(collection(db, "groups"), where("tenantId", "==", tenantId))),
+          getDocs(query(collection(db, "members"), where("tenantId", "==", tenantId), where("status", "==", "active"))),
+        ]);
+        setSmsGroups(gSnap.docs.map((d) => ({ id: d.id, name: d.data().name || "Unnamed group" })));
+        const members = mSnap.docs
+          .map((d) => {
+            const x = d.data();
+            return {
+              id: d.id,
+              name: x.fullName || [x.firstName, x.lastName].filter(Boolean).join(" ") || "Unnamed",
+              phone: x.phone || x.cellphone || "",
+            };
+          })
+          .filter((m) => m.phone);
+        setSmsAllMembers(members);
+        setSmsAllCount(members.length);
+      } catch (e) {
+        console.error("SMS composer load failed:", e);
+        setSmsAllCount(0);
+      }
+    })();
+  }, [channel, tenantId, smsAllCount]);
+
+  async function handleSmsSend(e: React.FormEvent) {
+    e.preventDefault();
+    setSmsSendError("");
+    setSmsSendSuccess("");
+    if (!smsMessage.trim()) { setSmsSendError("Please type a message."); return; }
+    if (smsAudience === "group" && !smsGroupId) { setSmsSendError("Please choose a group."); return; }
+    if (smsAudience === "individuals" && smsSelectedIds.length === 0) { setSmsSendError("Please pick at least one person."); return; }
+    setSmsSending(true);
+    try {
+      const res = await fetch("/api/communications/sms", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message: smsMessage.trim(),
+          audience: smsAudience,
+          groupId: smsAudience === "group" ? smsGroupId : undefined,
+          memberIds: smsAudience === "individuals" ? smsSelectedIds : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSmsSendError(data.error || "Something went wrong."); return; }
+      setSmsSendSuccess(`Sent to ${data.sent} recipient${data.sent !== 1 ? "s" : ""}${data.failed > 0 ? ` (${data.failed} failed)` : ""}.`);
+      setSmsMessage("");
+      setSmsSelectedIds([]);
+    } catch {
+      setSmsSendError("Could not reach the server. Please try again.");
+    } finally {
+      setSmsSending(false);
+    }
+  }
+
+  // Recipient count preview for the composer (group count is resolved server-side).
+  const smsRecipientLabel =
+    smsAudience === "all"
+      ? `${smsAllCount ?? 0} member${(smsAllCount ?? 0) !== 1 ? "s" : ""} with a phone number`
+      : smsAudience === "individuals"
+      ? `${smsSelectedIds.length} selected`
+      : smsGroupId
+      ? `Group: ${smsGroups.find((g) => g.id === smsGroupId)?.name || ""}`
+      : "No group chosen yet";
 
   async function handleSmsSave(e: React.FormEvent) {
     e.preventDefault();
@@ -243,6 +331,8 @@ export default function CommunicationsPage() {
           senderId: smsSenderId,
           oneTimeSmsEnabled: smsOneTimeEnabled,
           oneTimeSmsMessage: smsOneTimeMessage,
+          birthdaySmsEnabled: smsBirthdayEnabled,
+          birthdaySmsMessage: smsBirthdayMessage,
         }),
       });
       const data = await res.json();
@@ -944,6 +1034,164 @@ export default function CommunicationsPage() {
                 <p className="text-sm font-medium">{smsStatus?.connected ? "BulkSMS connected" : "BulkSMS not connected"}</p>
               </div>
 
+              {/* Sub-tabs */}
+              <div className="flex gap-1 border-b border-slate-700/60">
+                {(["compose", "setup"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setSmsTab(tab)}
+                    className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
+                      smsTab === tab ? "text-emerald-400 border-b-2 border-emerald-400" : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {tab === "compose" ? "New SMS" : "Setup"}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Compose Tab ── */}
+              {smsTab === "compose" && (
+                !smsStatus?.connected ? (
+                  <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-8 text-center space-y-3">
+                    <p className="text-slate-300 text-sm font-medium">SMS not connected</p>
+                    <p className="text-slate-500 text-xs">Add your BulkSMS credentials under Setup to start sending.</p>
+                    <button onClick={() => setSmsTab("setup")} className="mt-2 inline-flex items-center gap-1.5 text-emerald-400 text-sm font-medium hover:text-emerald-300 transition-colors">Go to Setup</button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSmsSend} className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
+                    {/* Audience */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-slate-300">Send to</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {([["all", "Everyone"], ["group", "A group"], ["individuals", "Individuals"]] as const).map(([val, label]) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setSmsAudience(val)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                              smsAudience === val
+                                ? "border-emerald-500 bg-emerald-900/30 text-emerald-300"
+                                : "border-slate-600 text-slate-300 hover:border-slate-500"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Group picker */}
+                    {smsAudience === "group" && (
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-300">Group</label>
+                        <select
+                          value={smsGroupId}
+                          onChange={(e) => setSmsGroupId(e.target.value)}
+                          className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                        >
+                          <option value="">Choose a group...</option>
+                          {smsGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
+                        {smsGroups.length === 0 && <p className="text-xs text-slate-500">No groups found. Create one under Groups first.</p>}
+                      </div>
+                    )}
+
+                    {/* Individuals picker */}
+                    {smsAudience === "individuals" && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-slate-300">People</label>
+                        {smsSelectedIds.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {smsSelectedIds.map((id) => {
+                              const m = smsAllMembers.find((x) => x.id === id);
+                              return (
+                                <span key={id} className="inline-flex items-center gap-1 bg-emerald-900/40 border border-emerald-700/40 text-emerald-300 text-xs px-2 py-1 rounded-full">
+                                  {m?.name || id}
+                                  <button type="button" onClick={() => setSmsSelectedIds((prev) => prev.filter((x) => x !== id))} className="hover:text-white">✕</button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <input
+                          type="text"
+                          value={smsMemberSearch}
+                          onChange={(e) => setSmsMemberSearch(e.target.value)}
+                          placeholder="Search members by name..."
+                          className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                        />
+                        {smsMemberSearch.trim() && (
+                          <div className="max-h-40 overflow-y-auto border border-slate-700/60 rounded-lg divide-y divide-slate-700/40">
+                            {smsAllMembers
+                              .filter((m) => m.name.toLowerCase().includes(smsMemberSearch.toLowerCase()) && !smsSelectedIds.includes(m.id))
+                              .slice(0, 12)
+                              .map((m) => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => { setSmsSelectedIds((prev) => [...prev, m.id]); setSmsMemberSearch(""); }}
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700/40 flex items-center justify-between"
+                                >
+                                  <span>{m.name}</span>
+                                  <span className="text-xs text-slate-500">{m.phone}</span>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Message */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-sm font-medium text-slate-300">Message</label>
+                        <button
+                          type="button"
+                          onClick={() => setSmsMessage((prev) => prev + "[First Name]")}
+                          className="text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+                        >
+                          + Insert [First Name]
+                        </button>
+                      </div>
+                      <textarea
+                        value={smsMessage}
+                        onChange={(e) => setSmsMessage(e.target.value)}
+                        rows={5}
+                        placeholder="Hi [First Name], join us this Sunday at 9am!"
+                        className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 resize-none transition"
+                      />
+                      <p className="text-xs text-slate-500 flex items-center justify-between">
+                        <span>Tip: <code className="text-emerald-400">[First Name]</code> is replaced with each person's name.</span>
+                        <span>{smsMessage.length} characters</span>
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-900/40 border border-slate-700/50 rounded-lg px-4 py-2.5 text-xs text-slate-400">
+                      Recipients: <span className="text-slate-200 font-medium">{smsRecipientLabel}</span>
+                    </div>
+
+                    {smsSendError && <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-2">{smsSendError}</p>}
+                    {smsSendSuccess && <p className="text-sm text-emerald-400 bg-emerald-900/20 border border-emerald-800/40 rounded-lg px-4 py-2">{smsSendSuccess}</p>}
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={smsSending || !smsMessage.trim()}
+                        className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                      >
+                        {smsSending ? (
+                          <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending...</>
+                        ) : (
+                          <><svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>Send SMS</>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )
+              )}
+
+              {/* ── Setup Tab ── */}
+              {smsTab === "setup" && (
               <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 space-y-4">
                 <div>
                   <h3 className="text-sm font-semibold text-white">Connect BulkSMS</h3>
@@ -1017,6 +1265,35 @@ export default function CommunicationsPage() {
                     </div>
                   </div>
 
+                  {/* Birthday auto-SMS */}
+                  <div className="pt-3 border-t border-slate-700/50 space-y-3">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={smsBirthdayEnabled}
+                        onChange={(e) => setSmsBirthdayEnabled(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-slate-500 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-slate-200">Wish members happy birthday by SMS</span>
+                        <span className="block text-xs text-slate-400 mt-0.5">
+                          Each morning, members whose birthday is today automatically get this SMS. Uses [First Name].
+                        </span>
+                      </span>
+                    </label>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-300">Birthday message</label>
+                      <textarea
+                        value={smsBirthdayMessage}
+                        onChange={(e) => setSmsBirthdayMessage(e.target.value)}
+                        rows={3}
+                        placeholder="Happy birthday [First Name]! We thank God for your life."
+                        className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 resize-none transition"
+                      />
+                      <p className="text-xs text-slate-500 text-right">{smsBirthdayMessage.length} characters</p>
+                    </div>
+                  </div>
+
                   {smsError && (
                     <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">{smsError}</p>
                   )}
@@ -1035,6 +1312,7 @@ export default function CommunicationsPage() {
                   </div>
                 </form>
               </div>
+              )}
             </>
           )}
         </div>

@@ -993,6 +993,107 @@ export const brevoBirthdayEmails = onSchedule(
 );
 
 // ─────────────────────────────────────────────────────────────
+// SCHEDULED: BULKSMS BIRTHDAY SMS
+//
+// Runs daily at 07:00 SAST. For every tenant that has:
+//   - bulksmsTokenId + bulksmsTokenSecret configured
+//   - bulksmsBirthdayEnabled === true
+//
+// Finds all active members whose DOB month+day matches today and who have a
+// phone number, and texts them a personalized birthday message. Supports the
+// [First Name] / [Last Name] / [Church Name] merge tags.
+// ─────────────────────────────────────────────────────────────
+function personalizeSms(
+  message: string,
+  vars: { firstName: string; lastName: string; churchName: string }
+): string {
+  return message
+    .replace(/\[\s*first\s*name\s*\]/gi, vars.firstName)
+    .replace(/\[\s*last\s*name\s*\]/gi, vars.lastName)
+    .replace(/\[\s*church\s*name\s*\]/gi, vars.churchName);
+}
+
+function normaliseSmsNumber(raw: string): string {
+  let n = String(raw || "").replace(/\D/g, "");
+  if (n.startsWith("0")) n = "27" + n.substring(1);
+  return n;
+}
+
+export const bulksmsBirthdaySms = onSchedule(
+  {
+    schedule: "0 5 * * *",   // 05:00 UTC = 07:00 SAST
+    timeZone: "Africa/Johannesburg",
+  },
+  async () => {
+    const today = new Date();
+    const todayMD =
+      String(today.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(today.getDate()).padStart(2, "0");
+
+    console.log(`[bulksmsBirthdaySms] Running for ${todayMD}`);
+
+    const tenantsSnap = await db.collection("tenants").get();
+    let totalSent = 0;
+
+    for (const tenantDoc of tenantsSnap.docs) {
+      const t = tenantDoc.data();
+      const tokenId: string | undefined = t.bulksmsTokenId;
+      const tokenSecret: string | undefined = t.bulksmsTokenSecret;
+      if (!tokenId || !tokenSecret || t.bulksmsBirthdayEnabled !== true) continue;
+
+      const message: string =
+        t.bulksmsBirthdayMessage ||
+        "Happy birthday [First Name]! We thank God for your life and pray His blessings over you today.";
+      const senderId: string | undefined = t.bulksmsSenderId;
+      const churchName: string = t.name || "";
+      const authHeader = "Basic " + Buffer.from(`${tokenId}:${tokenSecret}`).toString("base64");
+
+      const membersSnap = await db
+        .collection("members")
+        .where("tenantId", "==", tenantDoc.id)
+        .where("status", "==", "active")
+        .get();
+
+      for (const memberDoc of membersSnap.docs) {
+        const m = memberDoc.data();
+        if (!m.dob) continue;
+        if (String(m.dob).slice(5, 10) !== todayMD) continue;
+
+        const to = normaliseSmsNumber(m.phone || m.cellphone || "");
+        if (to.length < 10) continue;
+
+        const firstName = m.firstName || String(m.fullName || "").split(" ")[0] || "";
+        const lastName = m.lastName || String(m.fullName || "").split(" ").slice(1).join(" ") || "";
+        const body = personalizeSms(message, { firstName, lastName, churchName });
+
+        const payload: Record<string, unknown> = { to, body };
+        if (senderId && senderId.trim()) payload.from = senderId.trim();
+
+        try {
+          const res = await fetch("https://api.bulksms.com/v1/messages", {
+            method: "POST",
+            headers: { Authorization: authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) {
+            totalSent++;
+            console.log(`[bulksmsBirthdaySms] Sent to ${to} (tenant: ${tenantDoc.id})`);
+          } else {
+            const errBody = await res.text();
+            console.error(`[bulksmsBirthdaySms] Failed for ${to}: ${errBody}`);
+          }
+        } catch (err) {
+          console.error(`[bulksmsBirthdaySms] Error sending to ${to}:`, err);
+        }
+      }
+    }
+
+    console.log(`[bulksmsBirthdaySms] Done. ${totalSent} birthday SMS sent.`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
 // SCHEDULED: DAILY WHATSAPP SUMMARY (see ./dailySummary.ts)
 // ─────────────────────────────────────────────────────────────
 export { dailySummary } from "./dailySummary";

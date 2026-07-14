@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { phone, message, visitorId } = await req.json();
+  const { phone, message, visitorId, name } = await req.json();
   if (!phone?.trim()) return NextResponse.json({ error: "A phone number is required." }, { status: 400 });
 
   const tenantSnap = await adminDb.collection("tenants").doc(caller.tenantId).get();
@@ -55,10 +55,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body =
+  const rawBody =
     (message?.trim() ||
       tenant.oneTimeVisitorSmsMessage ||
       "Thank you for visiting us today. We hope to see you again soon.").toString();
+
+  // Fill [First Name] / [Last Name] / [Church Name] from the visitor's details.
+  const firstName = String(name || "").trim().split(" ")[0] || "";
+  const lastName = String(name || "").trim().split(" ").slice(1).join(" ") || "";
+  const body = rawBody
+    .replace(/\[\s*first\s*name\s*\]/gi, firstName)
+    .replace(/\[\s*last\s*name\s*\]/gi, lastName)
+    .replace(/\[\s*church\s*name\s*\]/gi, tenant.name || "");
 
   const to = normaliseNumber(phone);
   if (to.length < 10) return NextResponse.json({ error: "That phone number looks invalid." }, { status: 400 });

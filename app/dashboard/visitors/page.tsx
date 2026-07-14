@@ -274,7 +274,7 @@ export default function VisitorsPage() {
         fetch("/api/visitors/send-sms", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ visitorId: docRef.id, phone: formattedPhone }),
+          body: JSON.stringify({ visitorId: docRef.id, phone: formattedPhone, name: fullName.trim() }),
         }).catch(() => {});
         newVisitorData.oneTimeSmsSent = true;
       }

@@ -34,6 +34,9 @@ async function getCaller(req: NextRequest): Promise<{ uid: string; tenantId: str
 const DEFAULT_ONE_TIME_MESSAGE =
   "Thank you for visiting us today. It was a joy to have you with us, and we hope to see you again soon. God bless you.";
 
+const DEFAULT_BIRTHDAY_MESSAGE =
+  "Happy birthday [First Name]! We thank God for your life and pray His blessings over you today and always.";
+
 // ── GET: connection status + settings ──────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const caller = await getCaller(req);
@@ -48,6 +51,8 @@ export async function GET(req: NextRequest) {
     senderId: data.bulksmsSenderId ?? "",
     oneTimeSmsEnabled: data.oneTimeVisitorSmsEnabled ?? false,
     oneTimeSmsMessage: data.oneTimeVisitorSmsMessage ?? DEFAULT_ONE_TIME_MESSAGE,
+    birthdaySmsEnabled: data.bulksmsBirthdayEnabled ?? false,
+    birthdaySmsMessage: data.bulksmsBirthdayMessage ?? DEFAULT_BIRTHDAY_MESSAGE,
   });
 }
 
@@ -60,12 +65,14 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { tokenId, tokenSecret, senderId, oneTimeSmsEnabled, oneTimeSmsMessage } = body;
+  const { tokenId, tokenSecret, senderId, oneTimeSmsEnabled, oneTimeSmsMessage, birthdaySmsEnabled, birthdaySmsMessage } = body;
 
   const update: Record<string, unknown> = {
     bulksmsSenderId: (senderId ?? "").trim(),
     oneTimeVisitorSmsEnabled: !!oneTimeSmsEnabled,
     oneTimeVisitorSmsMessage: (oneTimeSmsMessage ?? "").trim() || DEFAULT_ONE_TIME_MESSAGE,
+    bulksmsBirthdayEnabled: !!birthdaySmsEnabled,
+    bulksmsBirthdayMessage: (birthdaySmsMessage ?? "").trim() || DEFAULT_BIRTHDAY_MESSAGE,
     updatedAt: new Date().toISOString(),
   };
 
