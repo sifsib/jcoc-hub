@@ -1094,6 +1094,95 @@ export const bulksmsBirthdaySms = onSchedule(
 );
 
 // ─────────────────────────────────────────────────────────────
+// SCHEDULED: ONE-TIME VISITOR THANK-YOU SMS (24h after capture)
+//
+// Runs hourly. Sends the one-time thank-you SMS to "Just visiting" guests who
+// were captured with oneTimeSmsPending === true, once at least 24 hours have
+// passed since capture. Marks them sent so each guest is only texted once.
+// The tenant must still have BulkSMS connected and one-time SMS enabled.
+// ─────────────────────────────────────────────────────────────
+export const visitorFollowupSms = onSchedule(
+  {
+    schedule: "0 * * * *",   // top of every hour
+    timeZone: "Africa/Johannesburg",
+  },
+  async () => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours ago
+
+    const pendingSnap = await db
+      .collection("visitors")
+      .where("oneTimeSmsPending", "==", true)
+      .get();
+
+    if (pendingSnap.empty) {
+      console.log("[visitorFollowupSms] Nothing pending.");
+      return;
+    }
+
+    const tenantCache: Record<string, any> = {};
+    let totalSent = 0;
+
+    for (const vDoc of pendingSnap.docs) {
+      const v = vDoc.data();
+
+      // Only send once 24h have elapsed since capture.
+      const createdMs = v.createdAt && typeof v.createdAt.toMillis === "function" ? v.createdAt.toMillis() : 0;
+      if (!createdMs || createdMs > cutoff) continue;
+
+      const tid = v.tenantId;
+      if (!tid) { await vDoc.ref.update({ oneTimeSmsPending: false }); continue; }
+
+      if (!(tid in tenantCache)) {
+        const tSnap = await db.collection("tenants").doc(tid).get();
+        tenantCache[tid] = tSnap.exists ? tSnap.data() || null : null;
+      }
+      const t = tenantCache[tid];
+      // If the church has turned the feature off or disconnected BulkSMS, skip
+      // (leave pending so it can still go out if they re-enable it).
+      if (!t || t.oneTimeVisitorSmsEnabled !== true || !t.bulksmsTokenId || !t.bulksmsTokenSecret) continue;
+
+      const to = normaliseSmsNumber(v.phone || "");
+      if (to.length < 10) { await vDoc.ref.update({ oneTimeSmsPending: false }); continue; }
+
+      const firstName = v.firstName || String(v.fullName || "").split(" ")[0] || "";
+      const lastName = v.lastName || String(v.fullName || "").split(" ").slice(1).join(" ") || "";
+      const body = personalizeSms(
+        t.oneTimeVisitorSmsMessage || "Thank you for visiting us today. We hope to see you again soon.",
+        { firstName, lastName, churchName: t.name || "" }
+      );
+
+      const payload: Record<string, unknown> = { to, body };
+      if (t.bulksmsSenderId && String(t.bulksmsSenderId).trim()) payload.from = String(t.bulksmsSenderId).trim();
+      const authHeader = "Basic " + Buffer.from(`${t.bulksmsTokenId}:${t.bulksmsTokenSecret}`).toString("base64");
+
+      try {
+        const res = await fetch("https://api.bulksms.com/v1/messages", {
+          method: "POST",
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          totalSent++;
+          await vDoc.ref.update({
+            oneTimeSmsPending: false,
+            oneTimeSmsSent: true,
+            oneTimeSmsSentAt: new Date().toISOString(),
+          });
+          console.log(`[visitorFollowupSms] Sent to ${to} (tenant: ${tid})`);
+        } else {
+          const errBody = await res.text();
+          console.error(`[visitorFollowupSms] Failed for ${to}: ${errBody}`);
+        }
+      } catch (err) {
+        console.error(`[visitorFollowupSms] Error sending to ${to}:`, err);
+      }
+    }
+
+    console.log(`[visitorFollowupSms] Done. ${totalSent} follow-up SMS sent.`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
 // SCHEDULED: DAILY WHATSAPP SUMMARY (see ./dailySummary.ts)
 // ─────────────────────────────────────────────────────────────
 export { dailySummary } from "./dailySummary";

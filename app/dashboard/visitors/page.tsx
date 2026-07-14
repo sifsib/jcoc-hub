@@ -30,6 +30,7 @@ interface Visitor {
   assignedToName?: string;
   customFields?: Record<string, string>;
   captureNote?: string;     // free-text note captured at sign-in
+  oneTimeSmsPending?: boolean; // queued to receive the thank-you SMS ~24h after capture
   oneTimeSmsSent?: boolean;  // true once the automatic thank-you SMS has gone out
 }
 
@@ -266,6 +267,9 @@ export default function VisitorsPage() {
       if (fc.gender?.enabled && gender) newVisitorData.gender = gender;
       if (fc.ageGroup?.enabled && ageGroup) newVisitorData.ageGroup = ageGroup;
       if (trimmedNote) newVisitorData.captureNote = trimmedNote;
+      // Item 1: queue the one-time thank-you SMS. It is sent ~24h later by the
+      // scheduled visitorFollowupSms Cloud Function, not immediately.
+      if (isOneTime && oneTimeSmsEnabled && formattedPhone) newVisitorData.oneTimeSmsPending = true;
       if (assignee) {
         newVisitorData.assignedToUid = assignee.uid;
         newVisitorData.assignedToName = assignee.name;
@@ -273,16 +277,6 @@ export default function VisitorsPage() {
       if (Object.keys(customValues).length > 0) newVisitorData.customFields = customValues;
 
       const docRef = await addDoc(collection(db, "visitors"), newVisitorData);
-
-      // Item 1: a one-time "Just visiting" guest gets a single automatic thank-you SMS.
-      if (isOneTime && oneTimeSmsEnabled && formattedPhone) {
-        fetch("/api/visitors/send-sms", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ visitorId: docRef.id, phone: formattedPhone, name: fullName, firstName: firstName.trim(), lastName: lastName.trim() }),
-        }).catch(() => {});
-        newVisitorData.oneTimeSmsSent = true;
-      }
 
       if (shouldTriggerWorkflow) {
         // The workflow trigger emails the assignee itself (kind: workflow).
@@ -702,7 +696,7 @@ export default function VisitorsPage() {
                       </div>
                       <div className="flex flex-col gap-2">
                         <span className={`text-xs font-semibold px-3 py-1 rounded-full ${v.followUpStatus === "pending" ? "bg-red-50 text-red-700" : v.followUpStatus === "done" ? "bg-green-50 text-green-700" : "bg-gray-50 text-gray-700"}`}>
-                          {v.followUpStatus === "pending" ? "Follow-Up Pending" : v.followUpStatus === "done" ? "Followed Up" : v.oneTimeSmsSent ? "SMS Sent" : "No Action"}
+                          {v.followUpStatus === "pending" ? "Follow-Up Pending" : v.followUpStatus === "done" ? "Followed Up" : v.oneTimeSmsSent ? "SMS Sent" : v.oneTimeSmsPending ? "SMS Scheduled" : "No Action"}
                         </span>
                         {v.followUpStatus !== "done" && (
                           <button onClick={() => openFollowUpModal(v)} className="text-xs px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded font-medium transition-colors">
