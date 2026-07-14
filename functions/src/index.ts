@@ -1,5 +1,4 @@
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
-import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
@@ -1229,69 +1228,5 @@ export const onMemberCountWrite = onDocumentWritten(
         err
       );
     }
-  }
-);
-
-// ─────────────────────────────────────────────────────────────
-// ONE-TIME BACKFILL: activeMemberCount, tier, memberLimit
-//
-// The counter above only tracks changes from the moment it deployed, so
-// churches that already existed have no accurate count and no tier yet.
-// This job walks every tenant, counts its active members, and sets the
-// three fields the free-tier limit relies on.
-//
-// Decision (locked with Sifiso): GRANDFATHER existing churches. An existing
-// church that is already over 50 members stays on free and keeps all its
-// members. The hard block only stops NEW adds beyond the limit; it never
-// deletes or hides anyone, and it never silently moves a church to paid.
-//
-// This is a temporary, secret-protected endpoint. Call it once after deploy,
-// confirm the counts, then delete this function and redeploy.
-//
-// Set the secret first:
-//   firebase functions:secrets:set BACKFILL_KEY
-// Then call once (replace <KEY> and the region/project in the URL):
-//   https://<region>-<project>.cloudfunctions.net/backfillMemberCounts?key=<KEY>
-// ─────────────────────────────────────────────────────────────
-const BACKFILL_KEY = defineSecret("BACKFILL_KEY");
-
-export const backfillMemberCounts = onRequest(
-  { secrets: [BACKFILL_KEY] },
-  async (req, res) => {
-    if (req.query.key !== BACKFILL_KEY.value()) {
-      res.status(403).send("Forbidden");
-      return;
-    }
-
-    const tenantsSnap = await db.collection("tenants").get();
-    let updated = 0;
-
-    for (const tenantDoc of tenantsSnap.docs) {
-      const data = tenantDoc.data();
-
-      const membersSnap = await db
-        .collection("members")
-        .where("tenantId", "==", tenantDoc.id)
-        .where("status", "==", "active")
-        .get();
-      const count = membersSnap.size;
-
-      // Comped churches (internal, beta) are paid/unlimited. Everyone else is
-      // grandfathered onto free with a 50 limit, regardless of current count.
-      // A tier already set at signup (Stage 1 self-service) is respected.
-      const isComped = data.accountType === "internal" || data.accountType === "beta";
-      const tier: "free" | "paid" = data.tier ?? (isComped ? "paid" : "free");
-      const memberLimit = tier === "paid" ? null : (data.memberLimit ?? 50);
-
-      await tenantDoc.ref.update({
-        activeMemberCount: count,
-        tier,
-        memberLimit,
-        updatedAt: new Date().toISOString(),
-      });
-      updated++;
-    }
-
-    res.status(200).send(`Backfilled ${updated} tenants.`);
   }
 );
