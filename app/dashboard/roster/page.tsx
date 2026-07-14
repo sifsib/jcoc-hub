@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import ExportMemberButton from "../../components/ExportMemberButton";
 import NotesPanel from "../../components/NotesPanel";
+import InfoTooltip from "../../components/InfoTooltip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -527,6 +528,7 @@ export default function ManageMembershipPage() {
   const [showJoinLink, setShowJoinLink] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   // ── Filter state ──
+  const [memberSearch, setMemberSearch] = useState("");
   const [filterMinistryGroup, setFilterMinistryGroup] = useState("");
   const [filterMaritalStatus, setFilterMaritalStatus] = useState("");
   const [filterCellRegion, setFilterCellRegion] = useState("");
@@ -1488,6 +1490,13 @@ export default function ManageMembershipPage() {
 
   // ── Derived: filtered members ─────────────────────────────────────────────
   const filteredMembers = members.filter((m) => {
+    if (memberSearch.trim()) {
+      const q = memberSearch.trim().toLowerCase();
+      const haystack = [
+        m.fullName, m.firstName, m.lastName, m.email, m.phone,
+      ].filter(Boolean).join(" ").toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
     if (filterMinistryGroup && m.ministryGroup !== filterMinistryGroup) return false;
     if (filterMaritalStatus && m.maritalStatus !== filterMaritalStatus) return false;
     if (filterCellRegion && m.cellRegion !== filterCellRegion) return false;
@@ -2419,6 +2428,31 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
       )}
 
 
+      {/* ── Search bar ── */}
+      <div className="relative">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+        </svg>
+        <input
+          type="text"
+          value={memberSearch}
+          onChange={(e) => setMemberSearch(e.target.value)}
+          placeholder="Search members by name, email, or phone..."
+          className="w-full border border-gray-200 rounded-xl pl-9 pr-9 py-2.5 text-sm text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {memberSearch && (
+          <button
+            onClick={() => setMemberSearch("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-bold"
+            aria-label="Clear search"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
       {/* ── Filter panel ── */}
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-3 flex items-center justify-between gap-4">
@@ -2454,7 +2488,10 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
           <div className="px-5 pb-4 border-t border-gray-100 pt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
             {/* Ministry Group */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Ministry Group</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                Ministry Group
+                <InfoTooltip text="The broader ministry a member belongs to, e.g. Youth, Worship, Ushering." why="Use this to filter rosters when planning ministry-specific communication or events." />
+              </label>
               <select
                 value={filterMinistryGroup}
                 onChange={(e) => setFilterMinistryGroup(e.target.value)}
@@ -2480,7 +2517,10 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
             {/* Cell Region / Branch */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cell Region / Branch</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                Cell Region / Branch
+                <InfoTooltip text="The geographic cell group or branch campus a member is attached to." why="Helps cell leaders and branch pastors pull their own list without seeing the whole church." />
+              </label>
               <select
                 value={filterCellRegion}
                 onChange={(e) => setFilterCellRegion(e.target.value)}
@@ -2519,7 +2559,10 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
             {/* Type of Membership */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Type of Membership</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                Type of Membership
+                <InfoTooltip text="How this person relates to the church, e.g. Full Member, Associate, Visitor Turned Member." why="Some reports and tier limits count only certain membership types, so this affects your numbers." />
+              </label>
               <select
                 value={filterMembershipType}
                 onChange={(e) => setFilterMembershipType(e.target.value)}
@@ -2535,11 +2578,11 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
 
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b bg-gray-50">
-          <p className="text-sm font-bold text-gray-700">Active Register — {filteredMembers.length}{activeFilters > 0 ? ` of ${members.length}` : ""} member{filteredMembers.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm font-bold text-gray-700">Active Register — {filteredMembers.length}{(activeFilters > 0 || memberSearch) ? ` of ${members.length}` : ""} member{filteredMembers.length !== 1 ? "s" : ""}</p>
         </div>
         {filteredMembers.length === 0 ? (
           <div className="p-10 text-center text-gray-400 text-sm">
-            {members.length === 0 ? (<>No members yet. Use <strong>+ Add Member</strong> to register your first member, or <strong>Import Members</strong> to import from your website.</>) : (<>No members match the current filters. <button onClick={() => { setFilterMinistryGroup(""); setFilterMaritalStatus(""); setFilterCellRegion(""); setFilterBornAgain(""); setFilterWaterBaptized(""); setFilterMembershipType(""); }} className="text-blue-600 underline font-medium">Clear filters</button></>)}
+            {members.length === 0 ? (<>No members yet. Use <strong>+ Add Member</strong> to register your first member, or <strong>Import Members</strong> to import from your website.</>) : (<>No members match {memberSearch ? "your search" : "the current filters"}. <button onClick={() => { setMemberSearch(""); setFilterMinistryGroup(""); setFilterMaritalStatus(""); setFilterCellRegion(""); setFilterBornAgain(""); setFilterWaterBaptized(""); setFilterMembershipType(""); }} className="text-blue-600 underline font-medium">Clear {memberSearch ? "search" : "filters"}</button></>)}
           </div>
         ) : (
           <div className="overflow-x-auto">
