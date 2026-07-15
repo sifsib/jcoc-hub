@@ -17,21 +17,36 @@ export interface MinistryUser {
   email: string;
 }
 
-// Load active users flagged as visitor ministry for a tenant.
+// Load active users who make up the follow-up team for a tenant: anyone switched
+// on in the "Follow-Up Team" toggle (visitorMinistry === true) PLUS anyone whose
+// main role is the dedicated follow_up role. Two queries merged by uid, since
+// Firestore can't OR across two different fields in a single query.
 export async function getVisitorMinistryUsers(tenantId: string): Promise<MinistryUser[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, "users"),
-      where("tenantId", "==", tenantId),
-      where("visitorMinistry", "==", true)
-    )
-  );
-  return snap.docs
-    .filter((d) => (d.data().status || "active") !== "inactive")
-    .map((d) => {
-      const x = d.data();
-      return { uid: d.id, name: x.displayName || x.email || "Unnamed", email: x.email || "" };
-    });
+  const [flaggedSnap, roleSnap] = await Promise.all([
+    getDocs(
+      query(
+        collection(db, "users"),
+        where("tenantId", "==", tenantId),
+        where("visitorMinistry", "==", true)
+      )
+    ),
+    getDocs(
+      query(
+        collection(db, "users"),
+        where("tenantId", "==", tenantId),
+        where("role", "==", "follow_up")
+      )
+    ),
+  ]);
+
+  const byUid: Record<string, MinistryUser> = {};
+  [...flaggedSnap.docs, ...roleSnap.docs].forEach((d) => {
+    if ((d.data().status || "active") === "inactive") return;
+    if (byUid[d.id]) return;
+    const x = d.data();
+    byUid[d.id] = { uid: d.id, name: x.displayName || x.email || "Unnamed", email: x.email || "" };
+  });
+  return Object.values(byUid);
 }
 
 // Pick the ministry member currently carrying the fewest active workflow

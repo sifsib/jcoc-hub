@@ -35,7 +35,7 @@ interface TenantBranch {
   name: string;
 }
 
-type AssignableRole = "admin" | "viewer" | "finance" | "member_manager" | "member_viewer" | "cell_leader";
+type AssignableRole = "admin" | "viewer" | "finance" | "member_manager" | "member_viewer" | "cell_leader" | "follow_up";
 
 const ROLE_META: Record<AssignableRole, { label: string; description: string; color: string }> = {
   admin: {
@@ -67,6 +67,11 @@ const ROLE_META: Record<AssignableRole, { label: string; description: string; co
     label: "Cell Leader",
     description: "Can mark and view attendance for their assigned cell group only.",
     color: "bg-teal-50 text-teal-700 border border-teal-200",
+  },
+  follow_up: {
+    label: "Follow-Up Coordinator",
+    description: "Works first-time guests and their assigned follow-ups only. No financials, no roster editing, no team management.",
+    color: "bg-rose-50 text-rose-700 border border-rose-200",
   },
 };
 
@@ -292,8 +297,9 @@ export default function TeamPage() {
     }
   }
 
-  // Toggle whether a team member is part of the Visitor Ministry. Only these
-  // people can be assigned to visitors and follow-up workflows.
+  // Toggle whether a team member is part of the Follow-Up Team. Anyone switched
+  // on here can be allocated first-time guests and follow-ups and use the
+  // follow-up functions, whatever their main role. (Stored as visitorMinistry.)
   const [ministryLoading, setMinistryLoading] = useState<string | null>(null);
   async function toggleVisitorMinistry(targetUid: string, next: boolean) {
     setMinistryLoading(targetUid);
@@ -416,7 +422,7 @@ export default function TeamPage() {
       </div>
 
       {/* Role guide cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {(Object.entries(ROLE_META) as [AssignableRole, typeof ROLE_META[AssignableRole]][]).map(([key, meta]) => (
           <div key={key} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
             <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold mb-2 ${meta.color}`}>{meta.label}</span>
@@ -576,7 +582,7 @@ export default function TeamPage() {
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Role</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch</th>
-                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Visitor Ministry</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Follow-Up Team</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Added</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -656,7 +662,7 @@ export default function TeamPage() {
                           className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
                         />
                         <span className={`text-xs font-medium ${m.visitorMinistry ? "text-emerald-700" : "text-gray-400"}`}>
-                          {m.visitorMinistry ? "On team" : "Off"}
+                          {m.visitorMinistry ? "On" : "Off"}
                         </span>
                       </label>
                     </td>
@@ -784,7 +790,7 @@ export default function TeamPage() {
           )}
           {promoteSearch.length > 1 && promoteResults.length === 0 && (
             <p className="mt-2 text-xs text-gray-400 italic">
-              No congregation members found with a portal account matching that name. They need to be invited first if they do not have an account yet.
+              No congregation members found with a portal account matching that name. This search only lists people who already have a member portal account and are not yet on the team. If you are looking for someone you removed before, scroll down to Deactivated Users and press Reactivate. Your own owner account is not shown here.
             </p>
           )}
         </div>

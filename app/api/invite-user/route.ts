@@ -25,7 +25,9 @@ async function sendInviteEmail(
     viewer: "View Only",
     finance: "Finance Manager",
     member_manager: "Membership Manager",
+    member_viewer: "Membership Viewer",
     cell_leader: "Cell Leader",
+    follow_up: "Follow-Up Coordinator",
   };
 
   const html = `
@@ -144,7 +146,7 @@ export async function POST(req: NextRequest) {
   const { email, displayName, role, branchId, assignedCellRegion } = await req.json();
 
   // 3. Validate role
-  const assignableRoles = ["admin", "viewer", "finance", "member_manager", "cell_leader"];
+  const assignableRoles = ["admin", "viewer", "finance", "member_manager", "member_viewer", "cell_leader", "follow_up"];
   if (!assignableRoles.includes(role)) {
     return NextResponse.json({ error: "Invalid role." }, { status: 400 });
   }

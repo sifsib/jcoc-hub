@@ -109,9 +109,10 @@ export default function VisitorsPage() {
   const [workflowOptions, setWorkflowOptions] = useState<{ id: string; name: string }[]>([]);
   const [rowWorkflow, setRowWorkflow] = useState<Record<string, string>>({}); // visitorId -> workflowId
 
-  // The Visitor Ministry is the only group allowed to be assigned. If nobody has
-  // been marked yet we fall back to the whole team so capture never breaks.
-  const ministryTeam = team.filter((t) => t.visitorMinistry);
+  // The Follow-Up Team is the only group allowed to be assigned: anyone flagged
+  // with the toggle, plus anyone whose role is the dedicated follow_up role. If
+  // nobody qualifies yet we fall back to the whole team so capture never breaks.
+  const ministryTeam = team.filter((t) => t.visitorMinistry || t.role === "follow_up");
   const assignableTeam = ministryTeam.length > 0 ? ministryTeam : team;
   const ministryConfigured = ministryTeam.length > 0;
 

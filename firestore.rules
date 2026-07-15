@@ -67,6 +67,15 @@ service cloud.firestore {
     function canManageCommunications() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin');
     }
+    // Follow-up team: the dedicated follow_up role, the manager roles that already
+    // handle guests, plus ANY team member switched on in the "Follow-Up Team"
+    // toggle (stored as visitorMinistry). These people may work first-time guests
+    // and their follow-ups regardless of their main role.
+    function canDoFollowUp() {
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager')
+          || hasRole('follow_up')
+          || userData().get('visitorMinistry', false) == true;
+    }
     function sameTenant(resource) {
       return resource.data.tenantId == userTenantId();
     }
@@ -315,14 +324,14 @@ service cloud.firestore {
     match /visitors/{id} {
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
-                  && canReadMembers();
+                  && (canReadMembers() || canDoFollowUp());
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
-                    && canManageMembers();
+                    && (canManageMembers() || canDoFollowUp());
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
-                    && canManageMembers();
+                    && (canManageMembers() || canDoFollowUp());
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageMembers();
@@ -503,7 +512,7 @@ service cloud.firestore {
     // ============================================
     match /workflows/{id} {
       allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || canDoFollowUp())));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))
                     && callerIsPaid();
@@ -532,9 +541,10 @@ service cloud.firestore {
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager')
                   || resource.data.assignedToUid == request.auth.uid)));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || canDoFollowUp());
       allow update: if isSignedIn() && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager')
+                    || (canDoFollowUp() && resource.data.assignedToUid == request.auth.uid));
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));
@@ -545,7 +555,7 @@ service cloud.firestore {
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager')
                   || resource.data.assignedToUid == request.auth.uid)));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || canDoFollowUp());
       allow update: if isSignedIn() && tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager')
                     || resource.data.assignedToUid == request.auth.uid);
