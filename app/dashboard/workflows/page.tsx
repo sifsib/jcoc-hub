@@ -7,6 +7,7 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -244,8 +245,9 @@ export default function WorkflowsPage() {
             <h2 className="text-lg font-bold text-gray-900 mb-5">New Workflow</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                   Workflow Name <span className="text-red-500">*</span>
+                  <InfoTooltip text="A short name for this follow-up sequence, for example First-Time Visitor Care." why="This is only for your team to recognise it in lists. Name it after what it does so you can tell your workflows apart later." />
                 </label>
                 <input
                   type="text"
@@ -257,7 +259,10 @@ export default function WorkflowsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Trigger</label>
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-2">
+                  Trigger
+                  <InfoTooltip text="The event that automatically starts this workflow, for example a new visitor being captured." why="The trigger is the whole point of automation. It decides when people get dropped onto this follow-up path without anyone having to do it by hand." />
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   {TRIGGERS.map((t) => (
                     <button

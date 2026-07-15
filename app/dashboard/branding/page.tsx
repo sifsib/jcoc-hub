@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { auth, db, storage } from "../../../lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import InfoTooltip from "../../components/InfoTooltip";
 
 // Preset brand colors to choose from
 const PRESET_COLORS = [
@@ -289,7 +290,10 @@ export default function BrandingPage() {
             style={{ backgroundColor: branding.primaryColor }}
           />
           <div className="flex flex-col">
-            <label className="text-xs font-semibold text-gray-500 mb-1">Custom hex color</label>
+            <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1">
+              Custom hex color
+              <InfoTooltip text="The six-character code, like #1A5C38, for your exact brand colour." why="If your church already has an official colour, paste its hex code here so buttons and headers match your identity precisely. If you are not sure, use Pick from palette instead." />
+            </label>
             <input
               type="text"
               value={branding.primaryColor}
@@ -381,8 +385,9 @@ export default function BrandingPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+          <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1.5">
             PayFast Payment Link <span className="font-normal text-gray-400">(optional)</span>
+            <InfoTooltip text="Your ready-made PayFast donate link that lets members give online by card." why="Paste the link from your PayFast donate button here and the hub will show a Give button to members. Leave it blank if you only collect giving in person or by EFT." />
           </label>
           <input
             type="url"

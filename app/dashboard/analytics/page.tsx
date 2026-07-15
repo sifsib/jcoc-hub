@@ -8,6 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
+import InfoTooltip from "../../components/InfoTooltip";
 
 interface CareTierMember {
   id: string;
@@ -448,7 +449,10 @@ export default function AnalyticsPage() {
       {/* Care tier analytics */}
       <div className="flex flex-col gap-6 mb-8">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Care Tier Alerts</h2>
+          <h2 className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
+            Care Tier Alerts
+            <InfoTooltip text="An automatic ranking of members by how long they have been missing from recorded services." why="The tiers escalate, Tier 1 is an early nudge and Tier 3 means someone has been gone a while. It turns your attendance data into a practical to-do list for who your care team should reach out to first." />
+          </h2>
           <p className="text-gray-500 text-sm mt-1">Members flagged by days absent from recorded services.</p>
         </div>
 

@@ -5,6 +5,7 @@ import { auth, db } from "../../../lib/firebase";
 import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -459,7 +460,10 @@ export default function TeamPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-1">Role</label>
+                    <label className="flex items-center gap-1 text-xs font-bold text-gray-600 mb-1">
+                      Role
+                      <InfoTooltip text="What this person is allowed to see and do in the hub, for example admin, finance, or follow-up." why="The role controls their permissions, so it is your main privacy and security setting. Give people the lowest role that still lets them do their job." />
+                    </label>
                     <select
                       value={inviteRole}
                       onChange={(e) => setInviteRole(e.target.value as AssignableRole)}
@@ -472,7 +476,10 @@ export default function TeamPage() {
                   </div>
                   {inviteRole === "cell_leader" && (
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1">Assigned Cell Region <span className="text-red-500">*</span></label>
+                      <label className="flex items-center gap-1 text-xs font-bold text-gray-600 mb-1">
+                        Assigned Cell Region <span className="text-red-500">*</span>
+                        <InfoTooltip text="The cell or region this leader is responsible for." why="It scopes what they can see so a cell leader only works with their own people, not the whole church. This is what keeps each leader's view private to their group." />
+                      </label>
                       {cellRegions.length > 0 ? (
                         <select
                           required

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -446,7 +447,10 @@ export default function GroupsPage() {
 
                 {/* Group Type */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Group Type</label>
+                  <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                    Group Type
+                    <InfoTooltip text="What kind of group this is, for example a cell group, ministry, or class." why="The type controls how the group is grouped in reports and who tends to lead it, so pick the one that matches how your church actually runs it." />
+                  </label>
                   <select
                     value={dynamicGroupType}
                     onChange={(e) => setDynamicGroupType(e.target.value as GroupType)}

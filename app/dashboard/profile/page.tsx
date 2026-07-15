@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+import InfoTooltip from "../../components/InfoTooltip";
 
 interface ProfileData {
   name: string;
@@ -705,7 +706,10 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tracking Start Date</label>
+            <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1.5">
+              Tracking Start Date
+              <InfoTooltip text="The date from which the hub starts counting your church's data and analytics." why="Set this to when you actually began using Kereke Hub. Records before this date are ignored so your growth charts and reports are not skewed by an empty setup period." />
+            </label>
             <div className="flex gap-3 items-center">
               <input
                 type="date"
@@ -803,7 +807,10 @@ export default function ProfilePage() {
 
           {/* Slug editor */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Church URL Slug</label>
+            <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1.5">
+              Church URL Slug
+              <InfoTooltip text="The short name that appears in your church's web links, e.g. the grace-city part of a giving or forms link." why="Keep it short and readable with no spaces. Changing it after you have shared links can break the old ones, so try to settle on it early." />
+            </label>
             <div className="flex gap-3 items-start">
               <div className="flex-1">
                 <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent transition">
@@ -917,7 +924,10 @@ export default function ProfilePage() {
 
           <div className="flex flex-col gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Merchant ID</label>
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1.5">
+                Merchant ID
+                <InfoTooltip text="Your account number from PayFast, found in your PayFast dashboard settings." why="The hub uses this to route online giving into your PayFast account. Copy it exactly, a wrong digit means payments will not reach you." />
+              </label>
               <input
                 type="text"
                 value={payfast.payfastMerchantId}
@@ -927,7 +937,10 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Merchant Key</label>
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1.5">
+                Merchant Key
+                <InfoTooltip text="A secret code from PayFast that pairs with your Merchant ID to authorise payments." why="Treat it like a password and do not share it. It sits next to your Merchant ID in the PayFast dashboard." />
+              </label>
               <div className="relative">
                 <input
                   type={showPayfastKey ? "text" : "password"}
@@ -946,8 +959,9 @@ export default function ProfilePage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1.5">
                 Passphrase <span className="text-gray-400 font-normal">(optional but recommended)</span>
+                <InfoTooltip text="An extra security phrase you set inside PayFast to sign each transaction." why="It adds a layer of protection so nobody can fake a payment to your account. If you set one in PayFast, it must match here exactly or giving will fail." />
               </label>
               <input
                 type="password"

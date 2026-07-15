@@ -7,6 +7,7 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -237,8 +238,9 @@ export default function FormsPage() {
             <h2 className="text-lg font-bold text-gray-900 mb-5">New Form</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                   Form Title <span className="text-red-500">*</span>
+                  <InfoTooltip text="The name members see at the top of this form, for example New Members Welcome or Event Sign-Up." why="This is a public-facing form you can share by link, so give it a clear title people will recognise before they fill it in." />
                 </label>
                 <input
                   type="text"

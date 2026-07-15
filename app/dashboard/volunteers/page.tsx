@@ -7,6 +7,7 @@ import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
 import DateInput from "../../../components/ui/DateInput";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -563,7 +564,10 @@ export default function VolunteersPage() {
 
               {/* Service label */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Service / Event</label>
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1.5">
+                  Service / Event
+                  <InfoTooltip text="The specific service or event you are building this volunteer roster for." why="Pick it first, because everything you assign below, roles and people, is tied to this one occasion." />
+                </label>
                 <select
                   value={assignForm.serviceLabel}
                   onChange={(e) => setAssignForm({ ...assignForm, serviceLabel: e.target.value })}
@@ -577,7 +581,10 @@ export default function VolunteersPage() {
 
               {/* Role */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Ministry Role</label>
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1.5">
+                  Ministry Role
+                  <InfoTooltip text="The job this volunteer will do on the day, for example ushering, sound, or worship." why="Roles come from your own list. If a role you need is missing, add it under Role Name first, then assign a member to it here." />
+                </label>
                 {roles.length === 0 ? (
                   <p className="text-sm text-amber-600">
                     No roles defined yet.{" "}

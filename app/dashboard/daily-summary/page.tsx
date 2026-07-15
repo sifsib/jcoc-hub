@@ -6,6 +6,7 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
+import InfoTooltip from "../../components/InfoTooltip";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
 // Timezones a South African church is realistically in. Default is SAST.
@@ -149,7 +150,10 @@ export default function DailySummaryPage() {
 
         {/* Time */}
         <div>
-          <label className="block text-sm font-medium text-slate-700">Time of day</label>
+          <label className="flex items-center gap-1 text-sm font-medium text-slate-700">
+            Time of day
+            <InfoTooltip text="When each day's summary is sent to you." why="Pick a time you will actually read it, for example early morning before the day gets busy. It sends every day at this time." />
+          </label>
           <input
             type="time"
             value={summaryTime}
@@ -179,7 +183,10 @@ export default function DailySummaryPage() {
 
         {/* Recipient */}
         <div>
-          <label className="block text-sm font-medium text-slate-700">WhatsApp number to send to</label>
+          <label className="flex items-center gap-1 text-sm font-medium text-slate-700">
+            WhatsApp number to send to
+            <InfoTooltip text="The WhatsApp number that receives the daily summary." why="Use full international format, for example 2782 instead of 082, so the message actually delivers. This can be your own number or a leader you want kept in the loop." />
+          </label>
           <input
             type="tel"
             value={recipientPhone}

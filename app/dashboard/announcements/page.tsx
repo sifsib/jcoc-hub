@@ -7,6 +7,7 @@ import {
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import InfoTooltip from "../../components/InfoTooltip";
 
 interface Announcement {
   id: string;
@@ -184,7 +185,10 @@ export default function AnnouncementsPage() {
           </h2>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Title</label>
+            <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1.5">
+              Title
+              <InfoTooltip text="The headline members see first, for example Youth Camp This Weekend." why="Announcements show up in the members' area, so a clear title decides whether people bother reading the rest." />
+            </label>
             <input
               type="text"
               value={form.title}

@@ -8,6 +8,7 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy,
 } from "firebase/firestore";
@@ -301,7 +302,10 @@ export default function EventsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                    Type
+                    <InfoTooltip text="The category of event, for example service, conference, or outreach." why="It helps members filter what is coming up and lets you see at a glance what kind of events fill your calendar." />
+                  </label>
                   <select value={sharedType} onChange={e => setSharedType(e.target.value as EventType)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -316,7 +320,10 @@ export default function EventsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Capacity <span className="text-gray-400 font-normal">(0 = unlimited)</span></label>
+                  <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                    Capacity <span className="text-gray-400 font-normal">(0 = unlimited)</span>
+                    <InfoTooltip text="The maximum number of people who can RSVP or register for this event." why="Set a limit for venues with fixed seating so sign-ups close automatically once it is full. Leave it at 0 when space is not a concern." />
+                  </label>
                   <input type="number" min="0" value={sharedCapacity} onChange={e => setSharedCapacity(Number(e.target.value))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                 </div>

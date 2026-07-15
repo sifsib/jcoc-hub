@@ -6,6 +6,7 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -829,7 +830,10 @@ export default function CommunicationsPage() {
                 {/* Form */}
                 <form onSubmit={handleBrevoSave} className="space-y-3 pt-2 border-t border-slate-700/50">
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-300">Brevo API Key</label>
+                    <label className="flex items-center gap-1 text-xs font-medium text-slate-300">
+                      Brevo API Key
+                      <InfoTooltip text="A secret key from your Brevo account that lets the hub send emails on your behalf." why="Brevo is the email service behind the scenes. Copy the key from your Brevo dashboard under SMTP and API. Without it, emails will not send. Treat it like a password." />
+                    </label>
                     <input
                       type="password"
                       value={apiKeyInput}
@@ -839,7 +843,10 @@ export default function CommunicationsPage() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-300">Sender Email</label>
+                    <label className="flex items-center gap-1 text-xs font-medium text-slate-300">
+                      Sender Email
+                      <InfoTooltip text="The email address your members will see messages coming from." why="Use a real church address you own and have verified in Brevo. A random or unverified address makes emails bounce or land in spam." />
+                    </label>
                     <input
                       type="email"
                       value={senderEmailInput}
@@ -1212,7 +1219,10 @@ export default function CommunicationsPage() {
 
                 <form onSubmit={handleSmsSave} className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-300">Token ID</label>
+                    <label className="flex items-center gap-1 text-xs font-medium text-slate-300">
+                      Token ID
+                      <InfoTooltip text="Part of your BulkSMS login that lets the hub send text messages." why="You generate a Token ID and Token Secret inside your BulkSMS account. They work as a pair, so copy both carefully. This is safer than putting your actual password in here." />
+                    </label>
                     <input
                       type="text"
                       value={smsTokenId}
@@ -1233,7 +1243,10 @@ export default function CommunicationsPage() {
                     <p className="text-xs text-slate-500">Leave both blank to keep your saved credentials and only change the settings below.</p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-300">Sender ID <span className="text-slate-500">(optional)</span></label>
+                    <label className="flex items-center gap-1 text-xs font-medium text-slate-300">
+                      Sender ID <span className="text-slate-500">(optional)</span>
+                      <InfoTooltip text="The name that shows as the sender on a member's phone instead of a number." why="For example members could see the SMS is from GRACECITY rather than a random number. It usually needs to be pre-registered with BulkSMS, and some networks ignore it, so leave it blank if you are unsure." />
+                    </label>
                     <input
                       type="text"
                       value={smsSenderId}
@@ -1261,7 +1274,10 @@ export default function CommunicationsPage() {
                       </span>
                     </label>
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-300">One-time visitor message</label>
+                      <label className="flex items-center gap-1 text-xs font-medium text-slate-300">
+                        One-time visitor message
+                        <InfoTooltip text="A single automatic welcome text sent to a first-time visitor after you capture them." why="It goes out once, not on repeat, so keep it warm and short. Think of it as the digital version of a friendly hello after their first Sunday." />
+                      </label>
                       <textarea
                         value={smsOneTimeMessage}
                         onChange={(e) => setSmsOneTimeMessage(e.target.value)}

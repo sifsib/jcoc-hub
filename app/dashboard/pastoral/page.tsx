@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../../lib/firebase';
 import { useAppUser } from '../../../lib/useAppUser';
+import InfoTooltip from '../../components/InfoTooltip';
 import {
   collection, addDoc, updateDoc, getDocs,
   query, where, orderBy, doc, serverTimestamp,
@@ -354,7 +355,10 @@ export default function PastoralCarePage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Type</label>
+                <label className="flex items-center gap-1 text-xs font-semibold text-gray-600 mb-1">
+                  Type
+                  <InfoTooltip text="The kind of care interaction this was, for example a visit, phone call, or counseling session." why="Sorting care by type lets you see patterns later, like how many home visits your team did in a month, without opening every single record." />
+                </label>
                 <select
                   value={careType}
                   onChange={e => setCareType(e.target.value as CareType)}
@@ -369,7 +373,10 @@ export default function PastoralCarePage() {
 
             {/* Notes */}
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Notes *</label>
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-600 mb-1">
+                Notes *
+                <InfoTooltip text="What happened and any follow-up needed from this care interaction." why="Pastoral notes are sensitive and only owners and admins can see them. Write enough for continuity of care, but remember the person may one day ask what was recorded." />
+              </label>
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}

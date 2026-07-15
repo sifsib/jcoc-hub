@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -219,7 +220,10 @@ export default function SupportPage() {
             {/* Category + Priority row */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Category</label>
+                <label className="flex items-center gap-1 text-sm font-medium text-slate-300 mb-1">
+                  Category
+                  <InfoTooltip text="The kind of issue you are reporting, for example billing, a bug, or a feature request." why="Picking the right category helps route your ticket to the right person faster, so you get a quicker answer." />
+                </label>
                 <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value as TicketCategory })}
@@ -232,7 +236,10 @@ export default function SupportPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Priority</label>
+                <label className="flex items-center gap-1 text-sm font-medium text-slate-300 mb-1">
+                  Priority
+                  <InfoTooltip text="How urgent this is for you, from low up to something that blocks you completely." why="Be honest with it. Marking everything as urgent makes it harder for support to tell what genuinely needs attention first." />
+                </label>
                 <select
                   value={form.priority}
                   onChange={(e) => setForm({ ...form, priority: e.target.value as TicketPriority })}

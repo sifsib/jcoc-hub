@@ -5,6 +5,7 @@ import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from "firebase/firestore";
 import { WhatsAppLinker } from "../../../components/WhatsAppLinker";
+import InfoTooltip from "../../components/InfoTooltip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -438,7 +439,10 @@ export default function ChurchSettingsPage() {
             </label>
 
             <div className="mt-4">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Default workflow</label>
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                Default workflow
+                <InfoTooltip text="The follow-up sequence a new visitor is placed on automatically when no other workflow is chosen." why="This is your safety net. It means every visitor gets a follow-up path even if whoever captured them forgot to pick one." />
+              </label>
               <select
                 value={defaultWorkflowId}
                 onChange={(e) => setDefaultWorkflowId(e.target.value)}

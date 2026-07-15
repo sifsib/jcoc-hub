@@ -7,6 +7,7 @@ import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
 import DateInput from "../../../components/ui/DateInput";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -787,7 +788,10 @@ export default function WorshipPage() {
               <div className="px-6 py-4 border-t border-gray-100 space-y-3 shrink-0">
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Key for this service</label>
+                    <label className="flex items-center gap-1 text-xs font-medium text-gray-600 mb-1">
+                      Key for this service
+                      <InfoTooltip text="The key you will actually sing this song in for this particular service." why="It overrides the song's default key just for this set, handy when a different worship leader or singer needs it higher or lower." />
+                    </label>
                     <select
                       value={pickerOverrideKey}
                       onChange={(e) => setPickerOverrideKey(e.target.value)}
@@ -862,7 +866,10 @@ export default function WorshipPage() {
 
                 {/* Key */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Default Key</label>
+                  <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1.5">
+                    Default Key
+                    <InfoTooltip text="The musical key you normally sing this song in." why="It becomes the starting point whenever the song is added to a set. You can still override it for a specific service if a different singer needs another key." />
+                  </label>
                   <select
                     value={songForm.key}
                     onChange={(e) => setSongForm({ ...songForm, key: e.target.value })}
