@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "../../lib/firebase";
 import { useAppUser } from "../../lib/useAppUser";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 interface OverdueStep {
   id: string;
@@ -120,9 +120,35 @@ export default function DashboardPage() {
           where("tenantId", "==", tid),
           where("followUpStatus", "==", "pending"),
         ));
-        const pending: PendingFollowUp[] = visitorsSnap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as PendingFollowUp))
-          .sort((a, b) => new Date(a.serviceDate).getTime() - new Date(b.serviceDate).getTime());
+
+        // Self-heal: hide (and mark done) any pending guest whose follow-up
+        // workflow is already completed. Catches workflows finished before the
+        // completion-sync fix existed.
+        const completedInstSnap = await getDocs(query(
+          collection(db, "workflow_instances"),
+          where("tenantId", "==", tid),
+          where("status", "==", "completed"),
+        ));
+        const completedVisitorIds = new Set(
+          completedInstSnap.docs
+            .map((d) => d.data())
+            .filter((i) => i.subjectType === "visitor" && i.subjectId)
+            .map((i) => i.subjectId as string)
+        );
+
+        const pending: PendingFollowUp[] = [];
+        for (const d of visitorsSnap.docs) {
+          if (completedVisitorIds.has(d.id)) {
+            updateDoc(doc(db, "visitors", d.id), {
+              followUpStatus: "done",
+              followedUpBy: "Workflow",
+              followedUpAt: serverTimestamp(),
+            }).catch((e) => console.warn("Follow-up reconcile skipped:", e));
+            continue; // don't show a guest whose workflow is already done
+          }
+          pending.push({ id: d.id, ...d.data() } as PendingFollowUp);
+        }
+        pending.sort((a, b) => new Date(a.serviceDate).getTime() - new Date(b.serviceDate).getTime());
         setPendingFollowUps(pending);
 
         // Quick stats

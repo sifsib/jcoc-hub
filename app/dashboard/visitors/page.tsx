@@ -135,7 +135,39 @@ export default function VisitorsPage() {
     try {
       const q = query(collection(db, "visitors"), where("tenantId", "==", tenantId));
       const snap = await getDocs(q);
-      const list: Visitor[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Visitor));
+      let list: Visitor[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Visitor));
+
+      // Self-heal: a guest whose follow-up workflow is already completed should
+      // not still be sitting in "Follow-Up Required". This catches workflows that
+      // were finished before completion-sync existed. We look up every completed
+      // workflow for this church and mark the matching guests as followed up.
+      try {
+        const completedSnap = await getDocs(query(
+          collection(db, "workflow_instances"),
+          where("tenantId", "==", tenantId),
+          where("status", "==", "completed"),
+        ));
+        const completedVisitorIds = new Set(
+          completedSnap.docs
+            .map((d) => d.data())
+            .filter((i) => i.subjectType === "visitor" && i.subjectId)
+            .map((i) => i.subjectId as string)
+        );
+        list = list.map((v) => {
+          if (v.followUpStatus === "pending" && completedVisitorIds.has(v.id)) {
+            updateDoc(doc(db, "visitors", v.id), {
+              followUpStatus: "done",
+              followedUpBy: v.followedUpBy || "Workflow",
+              followedUpAt: serverTimestamp(),
+            }).catch((e) => console.warn("Follow-up reconcile skipped:", e));
+            return { ...v, followUpStatus: "done" as const, followedUpBy: v.followedUpBy || "Workflow" };
+          }
+          return v;
+        });
+      } catch (e) {
+        console.warn("Could not reconcile completed workflows:", e);
+      }
+
       list.sort((a, b) => new Date(b.serviceDate).getTime() - new Date(a.serviceDate).getTime());
       setVisitors(list);
     } catch (err) {
