@@ -527,8 +527,10 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
     }
     match /workflow_instances/{id} {
+      // Managers see everything; the assignee can read their own follow-ups.
       allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager')
+                  || resource.data.assignedToUid == request.auth.uid)));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
       allow update: if isSignedIn() && tenantAllowed(resource)
@@ -538,12 +540,15 @@ service cloud.firestore {
                     && (hasRole('owner') || hasRole('admin'))));
     }
     match /workflow_instance_steps/{id} {
+      // Managers see everything; the assignee can read + tick off their own steps.
       allow read: if isSignedIn() && (isSuperAdmin() || (tenantAllowed(resource)
-                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))));
+                  && (hasRole('owner') || hasRole('admin') || hasRole('member_manager')
+                  || resource.data.assignedToUid == request.auth.uid)));
       allow create: if isSignedIn() && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
       allow update: if isSignedIn() && tenantAllowed(resource)
-                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+                    && (hasRole('owner') || hasRole('admin') || hasRole('member_manager')
+                    || resource.data.assignedToUid == request.auth.uid);
       allow delete: if isSignedIn()
                     && (isSuperAdmin() || (tenantAllowed(resource)
                     && (hasRole('owner') || hasRole('admin'))));

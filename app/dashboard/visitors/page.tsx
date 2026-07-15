@@ -28,6 +28,9 @@ interface Visitor {
   followedUpBy?: string;
   assignedToUid?: string;   // DRI: team member responsible for following up
   assignedToName?: string;
+  assignedWorkflowId?: string;   // workflow attached at assign time
+  assignedWorkflowName?: string;
+  workflowInstanceId?: string;   // the live instance created for this visitor
   customFields?: Record<string, string>;
   captureNote?: string;     // free-text note captured at sign-in
   oneTimeSmsPending?: boolean; // queued to receive the thank-you SMS ~24h after capture
@@ -98,6 +101,12 @@ export default function VisitorsPage() {
   const [oneTimeSmsEnabled, setOneTimeSmsEnabled] = useState(false); // one-time visitor auto-SMS toggle
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
+  // Follow-up workflow settings + the list to choose from + per-row chosen workflow.
+  const [workflowRequired, setWorkflowRequired] = useState(false);
+  const [defaultWorkflowId, setDefaultWorkflowId] = useState("");
+  const [workflowOptions, setWorkflowOptions] = useState<{ id: string; name: string }[]>([]);
+  const [rowWorkflow, setRowWorkflow] = useState<Record<string, string>>({}); // visitorId -> workflowId
+
   // The Visitor Ministry is the only group allowed to be assigned. If nobody has
   // been marked yet we fall back to the whole team so capture never breaks.
   const ministryTeam = team.filter((t) => t.visitorMinistry);
@@ -143,15 +152,31 @@ export default function VisitorsPage() {
     if (userLoading || !appUser) { if (!userLoading) setLoading(false); return; }
     getDoc(doc(db, "tenants", appUser.tenantId, "settings", "formConfig")).then((snap) => {
       if (snap.exists()) {
-        const data = snap.data() as { visitor?: VisitorFormConfig };
+        const data = snap.data() as {
+          visitor?: VisitorFormConfig;
+          visitorWorkflow?: { required?: boolean; defaultWorkflowId?: string };
+        };
         if (data.visitor) {
           setVisitorConfig({
             fields: { ...DEFAULT_VISITOR_CONFIG.fields, ...data.visitor.fields },
             customFields: data.visitor.customFields || [],
           });
         }
+        if (data.visitorWorkflow) {
+          setWorkflowRequired(!!data.visitorWorkflow.required);
+          setDefaultWorkflowId(data.visitorWorkflow.defaultWorkflowId || "");
+        }
       }
     });
+    // Active "New Visitor" workflows the church can attach at assign time.
+    getDocs(query(
+      collection(db, "workflows"),
+      where("tenantId", "==", appUser.tenantId),
+      where("trigger", "==", "visitor_added"),
+      where("active", "==", true),
+    )).then((snap) => {
+      setWorkflowOptions(snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) || "Untitled workflow" })));
+    }).catch(() => {});
     fetchVisitors(appUser.tenantId);
     // Whether the one-time-visitor auto-SMS is switched on for this church.
     fetch("/api/tenant/bulksms")
@@ -299,10 +324,79 @@ export default function VisitorsPage() {
     }
   };
 
-  // Allocate (or change) the team member responsible for this visitor.
-  const assignVisitor = async (visitor: Visitor, uid: string) => {
+  // Attach ONE chosen workflow to a visitor and tag the assignee to it, so the
+  // responsible person can see it on their dashboard. Returns the new instance
+  // id, or null if it can't start (no steps / error). Best-effort emailing.
+  const startWorkflowInstance = async (
+    workflowId: string,
+    visitor: Visitor,
+    assignee: { uid: string; name: string },
+  ): Promise<{ instanceId: string; workflowName: string } | null> => {
+    if (!appUser || !workflowId) return null;
+    try {
+      const wfDoc = await getDoc(doc(db, "workflows", workflowId));
+      if (!wfDoc.exists()) return null;
+      const wf = wfDoc.data() as any;
+      const stepsSnap = await getDocs(query(
+        collection(db, "workflow_steps"),
+        where("tenantId", "==", appUser.tenantId),
+        where("workflowId", "==", workflowId),
+      ));
+      const steps = stepsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any)).sort((a: any, b: any) => a.order - b.order);
+      if (steps.length === 0) return null;
+
+      const addDays = (days: number) => {
+        const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().split("T")[0];
+      };
+
+      const instanceRef = await addDoc(collection(db, "workflow_instances"), {
+        workflowId, workflowName: wf.name || "",
+        tenantId: appUser.tenantId, subjectId: visitor.id,
+        subjectName: visitor.fullName, subjectPhone: visitor.phone,
+        subjectType: "visitor", status: "active",
+        completedSteps: 0, totalSteps: steps.length, startedAt: serverTimestamp(),
+        assignedToUid: assignee.uid, assignedToName: assignee.name,
+      });
+
+      for (const step of steps) {
+        await addDoc(collection(db, "workflow_instance_steps"), {
+          instanceId: instanceRef.id, workflowId,
+          tenantId: appUser.tenantId, stepId: step.id, stepOrder: step.order,
+          actionType: step.actionType, title: step.title, message: step.message,
+          dependsOnStepIds: step.dependsOnStepIds || [],
+          dueDate: addDays(step.delayDays || 0), status: "pending",
+          assignedToUid: assignee.uid, assignedToName: assignee.name,
+        });
+      }
+      await updateDoc(doc(db, "workflows", workflowId), { instanceCount: (wf.instanceCount || 0) + 1 });
+
+      notifyAssignee({
+        assigneeUid: assignee.uid, subjectName: visitor.fullName,
+        subjectPhone: visitor.phone, kind: "workflow", reason: visitor.reason,
+      });
+      return { instanceId: instanceRef.id, workflowName: wf.name || "" };
+    } catch (err) {
+      console.error("Workflow start error:", err);
+      return null;
+    }
+  };
+
+  // Allocate (or change) the team member responsible for this visitor, and
+  // attach the chosen follow-up workflow. If the church made a workflow
+  // compulsory, assigning is blocked until one is picked.
+  const assignVisitor = async (visitor: Visitor, uid: string, workflowIdArg?: string) => {
     if (!appUser) return;
     const assignedToName = team.find((t) => t.uid === uid)?.name || "";
+
+    // Which workflow to attach: explicit choice > row choice > church default.
+    const chosenWorkflowId = workflowIdArg ?? rowWorkflow[visitor.id] ?? defaultWorkflowId;
+
+    // Enforce the compulsory-workflow rule (only when actually assigning someone).
+    if (uid && workflowRequired && !chosenWorkflowId) {
+      alert("Your church requires a follow-up workflow. Please choose one from the Workflow dropdown before assigning.");
+      return;
+    }
+
     try {
       await updateDoc(doc(db, "visitors", visitor.id), {
         assignedToUid: uid,
@@ -313,8 +407,25 @@ export default function VisitorsPage() {
       setVisitors((prev) =>
         prev.map((x) => (x.id === visitor.id ? { ...x, assignedToUid: uid, assignedToName } : x))
       );
-      // Item 3: email the person who has just been made responsible.
-      if (uid) {
+
+      // Start the workflow once, when someone is assigned and one is chosen and
+      // this visitor doesn't already have a live workflow attached.
+      if (uid && chosenWorkflowId && !visitor.workflowInstanceId) {
+        const started = await startWorkflowInstance(chosenWorkflowId, { ...visitor, assignedToName }, { uid, name: assignedToName });
+        if (started) {
+          await updateDoc(doc(db, "visitors", visitor.id), {
+            assignedWorkflowId: chosenWorkflowId,
+            assignedWorkflowName: started.workflowName,
+            workflowInstanceId: started.instanceId,
+          });
+          setVisitors((prev) =>
+            prev.map((x) => (x.id === visitor.id
+              ? { ...x, assignedWorkflowId: chosenWorkflowId, assignedWorkflowName: started.workflowName, workflowInstanceId: started.instanceId }
+              : x))
+          );
+        }
+      } else if (uid) {
+        // No workflow attached, but someone is now accountable, so email them.
         notifyAssignee({
           assigneeUid: uid, subjectName: visitor.fullName,
           subjectPhone: visitor.phone, kind: "visitor",
@@ -560,7 +671,7 @@ export default function VisitorsPage() {
                       <p className="text-sm text-gray-600 mt-1">{v.reason}</p>
                       {v.captureNote && <p className="text-xs text-gray-500 mt-1 italic">Note: {v.captureNote}</p>}
                       <p className="text-xs text-gray-400 mt-1">Visited: {formatDisplayDate(v.serviceDate)}{v.ageGroup ? ` · ${v.ageGroup}` : ""}</p>
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
                         <span className="text-xs text-gray-400">Responsible:</span>
                         {canAssign ? (
                           <select
@@ -575,6 +686,33 @@ export default function VisitorsPage() {
                           <span className={`text-xs font-medium ${v.assignedToName ? "text-gray-700" : "text-red-500"}`}>
                             {v.assignedToName || "Unassigned"}
                           </span>
+                        )}
+
+                        {/* Workflow picker: pre-filled with the church default, overridable */}
+                        {canAssign && workflowOptions.length > 0 && (
+                          v.workflowInstanceId ? (
+                            <span className="text-xs font-medium text-emerald-600">
+                              Workflow: {v.assignedWorkflowName || "attached"}
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-xs text-gray-400">Workflow:</span>
+                              <select
+                                value={rowWorkflow[v.id] ?? v.assignedWorkflowId ?? defaultWorkflowId}
+                                onChange={(e) => {
+                                  const wfId = e.target.value;
+                                  setRowWorkflow((prev) => ({ ...prev, [v.id]: wfId }));
+                                  // If a person is already assigned, attaching starts the workflow now.
+                                  if (v.assignedToUid) assignVisitor(v, v.assignedToUid, wfId);
+                                }}
+                                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-blue-500"
+                              >
+                                {!workflowRequired && <option value="">No workflow</option>}
+                                {workflowRequired && <option value="">Choose a workflow…</option>}
+                                {workflowOptions.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                              </select>
+                            </>
+                          )
                         )}
                       </div>
                     </div>

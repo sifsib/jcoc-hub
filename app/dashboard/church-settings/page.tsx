@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from "firebase/firestore";
 import { WhatsAppLinker } from "../../../components/WhatsAppLinker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -38,9 +38,17 @@ interface VisitorFormConfig {
   customFields: CustomField[];
 }
 
+// Compulsory follow-up workflow settings for visitors.
+interface VisitorWorkflowConfig {
+  required: boolean;          // must a workflow be attached when a visitor is assigned?
+  defaultWorkflowId: string;  // pre-selected workflow at assign time
+  defaultWorkflowName: string;
+}
+
 interface FormConfig {
   member: MemberFormConfig;
   visitor: VisitorFormConfig;
+  visitorWorkflow?: VisitorWorkflowConfig;
   updatedAt?: string;
 }
 
@@ -173,6 +181,11 @@ export default function ChurchSettingsPage() {
   const [editingOptions, setEditingOptions] = useState<{ form: Tab; fieldKey: string; isCustom: boolean } | null>(null);
   const [optionInput, setOptionInput] = useState("");
 
+  // Visitor follow-up workflow settings + the list of workflows to choose from.
+  const [workflowRequired, setWorkflowRequired] = useState(false);
+  const [defaultWorkflowId, setDefaultWorkflowId] = useState("");
+  const [workflowOptions, setWorkflowOptions] = useState<{ id: string; name: string }[]>([]);
+
   useEffect(() => {
     if (userLoading) return;
     if (!tenantId) { setLoading(false); return; }
@@ -183,9 +196,23 @@ export default function ChurchSettingsPage() {
         setMemberCustomFields(data.member?.customFields || []);
         setVisitorFields(mergeWithDefaults(data.visitor, DEFAULT_VISITOR_FIELDS));
         setVisitorCustomFields(data.visitor?.customFields || []);
+        if (data.visitorWorkflow) {
+          setWorkflowRequired(!!data.visitorWorkflow.required);
+          setDefaultWorkflowId(data.visitorWorkflow.defaultWorkflowId || "");
+        }
       }
       setLoading(false);
     }).catch(() => setLoading(false));
+
+    // Pull the church's "New Visitor" workflows so they can pick a default.
+    getDocs(query(
+      collection(db, "workflows"),
+      where("tenantId", "==", tenantId),
+      where("trigger", "==", "visitor_added"),
+      where("active", "==", true),
+    )).then((snap) => {
+      setWorkflowOptions(snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) || "Untitled workflow" })));
+    }).catch(() => {});
   }, [tenantId, userLoading]);
 
   async function handleSave() {
@@ -195,6 +222,11 @@ export default function ChurchSettingsPage() {
       const payload: FormConfig = {
         member: { fields: memberFields, customFields: memberCustomFields },
         visitor: { fields: visitorFields, customFields: visitorCustomFields },
+        visitorWorkflow: {
+          required: workflowRequired,
+          defaultWorkflowId,
+          defaultWorkflowName: workflowOptions.find((w) => w.id === defaultWorkflowId)?.name || "",
+        },
         updatedAt: new Date().toISOString(),
       };
       await setDoc(doc(db, "tenants", tenantId, "settings", "formConfig"), payload, { merge: true });
@@ -385,6 +417,44 @@ export default function ChurchSettingsPage() {
         >
           + Add Custom Field
         </button>
+
+        {/* Visitor follow-up workflow (visitor tab only) */}
+        {tab === "visitor" && (
+          <div className="mt-8 border border-gray-200 rounded-xl p-5 bg-gray-50">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Follow-Up Workflow</p>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={workflowRequired}
+                onChange={(e) => setWorkflowRequired(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <span className="text-sm text-gray-700">
+                <span className="font-medium">Require a workflow when a visitor is assigned.</span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  When this is on, whoever assigns a visitor to a team member must also attach a follow-up workflow before they can save.
+                </span>
+              </span>
+            </label>
+
+            <div className="mt-4">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Default workflow</label>
+              <select
+                value={defaultWorkflowId}
+                onChange={(e) => setDefaultWorkflowId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">No default (staff choose each time)</option>
+                {workflowOptions.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                {workflowOptions.length === 0
+                  ? "You have no New Visitor workflows yet. Create one on the Workflows page first."
+                  : "This workflow is pre-selected when assigning a visitor. Staff can still pick a different one."}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Options editor modal */}
