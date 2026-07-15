@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import DateInput from "../../../components/ui/DateInput";
@@ -78,6 +79,7 @@ const DEFAULT_VISITOR_CONFIG: VisitorFormConfig = {
 };
 
 export default function VisitorsPage() {
+  const router = useRouter();
   const { appUser, loading: userLoading } = useAppUser();
   const { team } = useTeamMembers(appUser?.tenantId);
   // Only owner/admin/managers may hand out accountability.
@@ -716,9 +718,18 @@ export default function VisitorsPage() {
                         )}
                       </div>
                     </div>
-                    <button onClick={() => openFollowUpModal(v)} className="whitespace-nowrap px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded text-sm font-medium transition-colors self-start">
-                      Log Contact
-                    </button>
+                    {v.workflowInstanceId ? (
+                      <button
+                        onClick={() => router.push(`/dashboard/workflows/${v.assignedWorkflowId}?tab=active&instance=${v.workflowInstanceId}`)}
+                        className="whitespace-nowrap px-4 py-2 bg-emerald-600 border border-emerald-600 text-white hover:bg-emerald-700 rounded text-sm font-medium transition-colors self-start"
+                      >
+                        Open Workflow
+                      </button>
+                    ) : (
+                      <button onClick={() => openFollowUpModal(v)} className="whitespace-nowrap px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded text-sm font-medium transition-colors self-start">
+                        Log Contact
+                      </button>
+                    )}
                   </div>
                 ))
               )}

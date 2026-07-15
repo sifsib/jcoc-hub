@@ -152,6 +152,16 @@ export default function WorkflowBuilderPage() {
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
   const [expandedInstance, setExpandedInstance] = useState<string | null>(null);
   const [instanceSteps, setInstanceSteps] = useState<Record<string, InstanceStep[]>>({});
+
+  // When opened from the Visitors page ("Open Workflow"), jump straight to the
+  // Active tab and expand that visitor's instance.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab");
+    const inst = params.get("instance");
+    if (t === "active" || t === "steps" || t === "settings") setTab(t);
+    if (inst) setExpandedInstance(inst);
+  }, []);
   const [showStartModal, setShowStartModal] = useState(false);
   const [personSearch, setPersonSearch] = useState("");
   const [rosterPeople, setRosterPeople] = useState<RosterPerson[]>([]);
