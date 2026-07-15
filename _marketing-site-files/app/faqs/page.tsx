@@ -9,20 +9,45 @@ const FAQ_CATEGORIES = [
     category: 'Getting started',
     faqs: [
       {
-        q: 'How do we get access to the free first month?',
-        a: 'After you book a demo, we walk your team through the full system in a screen-share session. Once that is done we issue you an activation code that unlocks your workspace for the first 30 days at no cost, with no card details required.',
+        q: 'How do we sign up?',
+        a: 'You sign up yourself at hub.kerekehub.co.za/signup. It takes about two minutes. You enter your church name, your details, and a password, and your workspace is created straight away. No demo or activation code is needed to get going, though you are welcome to book a demo first if you would rather see it walked through.',
       },
       {
-        q: 'What happens when the free month ends?',
-        a: 'Your dashboard will prompt you to add payment details. Until you do, your workspace goes into a read-only state so nothing is lost. You will not be charged automatically without entering billing information first.',
+        q: 'Is it really free to start?',
+        a: 'Yes. Churches with under 50 active members run on the free plan for as long as they like, at no cost and with no card details required. You only move onto the paid plan when you cross 50 members or want the modules reserved for the paid tier. Nothing charges automatically without you entering billing details first.',
+      },
+      {
+        q: 'Do we need a demo before we can use it?',
+        a: 'No. Signup is self-service, so you can create your account and start straight away. That said, a lot of church teams still find the demo useful as a quick orientation, so we keep it on offer. It is optional, not a gate.',
       },
       {
         q: 'How long does setup actually take?',
-        a: 'Most churches are fully operational within a week. The first session covers account setup and initial configuration. From there, importing your existing member records from a spreadsheet usually takes a few hours depending on how clean your data is. We help with that.',
+        a: 'The account itself is ready in minutes. Getting your data in is the part that varies. Importing an existing member list from a spreadsheet usually takes a few hours depending on how tidy the data is, and we help you through that. Most churches are comfortably up and running within their first week.',
       },
       {
         q: 'Do we need a technical person on our team to run this?',
-        a: 'No. Kereke Hub was designed specifically for church administrators, not IT staff. If you can use a web browser, you can run the platform. We provide full setup support and our support ticketing is available directly from your dashboard.',
+        a: 'No. Kereke Hub was built for church administrators, not IT staff. If you can use a web browser, you can run the platform. Support is available directly from your dashboard if you get stuck.',
+      },
+    ],
+  },
+  {
+    category: 'Pricing and billing',
+    faqs: [
+      {
+        q: 'How much does Kereke Hub cost?',
+        a: 'There are two plans. Free, which is R0 forever for churches under 50 active members, and the Church plan at R159 a month, which gives you unlimited members and every module. It is one flat rate. We do not charge per seat and we do not take a cut of your giving.',
+      },
+      {
+        q: 'What counts as an active member for the 50 limit?',
+        a: 'An active member is someone currently on your roster, not a visitor or an archived record. So if you are a smaller congregation you can run the whole thing for free indefinitely. Once your active roster passes 50, the dashboard will prompt you to move onto the R159 plan.',
+      },
+      {
+        q: 'Do we get charged automatically?',
+        a: 'No. You will not be billed without entering payment details yourself first. If you reach a point where a paid feature or the member limit applies, the dashboard prompts you rather than charging silently in the background.',
+      },
+      {
+        q: 'Can we cancel anytime?',
+        a: 'Yes. There are no lock-in contracts. You can cancel whenever you want, and we recommend exporting your member and financial records to CSV before you do so nothing is lost.',
       },
     ],
   },
@@ -45,6 +70,10 @@ const FAQ_CATEGORIES = [
         q: 'How do groups and cell groups work?',
         a: 'You create groups and assign members to them. Each group has its own attendance log and a designated leader. You can have as many groups as you need, whether that is geographic cells, ministry departments, or age-based fellowships.',
       },
+      {
+        q: 'Does it help us follow up on members who go quiet?',
+        a: 'Yes, that is really the point of the pastoral care tools. As attendance is logged over time, the system surfaces members who have started slipping so a leader can reach out before someone drifts away unnoticed. You can capture pastoral notes on a member profile too, which keeps the follow-up history in one place instead of scattered across phones.',
+      },
     ],
   },
   {
@@ -61,6 +90,10 @@ const FAQ_CATEGORIES = [
       {
         q: 'Can we export our financial records?',
         a: 'Yes. All financial logs can be exported to a standard CSV file at any point from your dashboard settings. This is designed to drop directly into your bank reconciliation or hand to an auditor.',
+      },
+      {
+        q: 'Can we import a bank statement instead of capturing every entry by hand?',
+        a: 'Yes. You can import a statement as a CSV, Excel, or PDF file and the system pulls the transactions in for you to review before they are saved. During review you tag each transaction against your own finance categories, so it lines up with how your church already tracks its money rather than a fixed generic list.',
       },
       {
         q: 'Is financial data visible to all admin users?',
@@ -99,6 +132,31 @@ const FAQ_CATEGORIES = [
       {
         q: 'How does the email communication feature work?',
         a: 'You plug in your own Gmail SMTP credentials and the platform routes outgoing emails through your official church email address. This means member letters, announcements, and statements arrive from your church domain, not a generic system address.',
+      },
+      {
+        q: 'Can we send WhatsApp and SMS messages to members?',
+        a: 'Yes. Kereke Hub connects to WhatsApp so you can reach members on the channel they actually check, and you can send SMS as well, which is handy for things like a one-time welcome to a first-time visitor. Bulk WhatsApp and SMS sending sits on the paid plan, since that is where the higher-volume communication tools live.',
+      },
+      {
+        q: 'Do these communication tools cost extra on top of the plan?',
+        a: 'The features themselves are included in the R159 paid plan, so there is no separate charge from us to switch them on. SMS does rely on message credits through the SMS provider, so very high volumes carry the usual per-message cost, but for normal church use that stays small.',
+      },
+    ],
+  },
+  {
+    category: 'Free vs paid plan',
+    faqs: [
+      {
+        q: 'What do we get on the free plan?',
+        a: 'Quite a lot, actually. The free plan covers your member roster with pastoral notes, attendance, visitors, giving and financial tracking, groups, pastoral care, announcements, your church profile, custom branding, and CSV export. For a smaller congregation that is often everything they need.',
+      },
+      {
+        q: 'What is reserved for the paid plan?',
+        a: 'The R159 plan unlocks the heavier operational tooling: automation workflows, custom forms, bulk email and SMS, multiple team members with their own roles, events, worship planning, volunteer scheduling, and the daily summary. It also lifts the 50 member cap so you have unlimited members.',
+      },
+      {
+        q: 'Is our branding really free?',
+        a: 'Yes. Custom branding sits on the free plan. Your church name and logo show up in your workspace whether or not you are paying, because your identity should not be something you have to unlock.',
       },
     ],
   },
