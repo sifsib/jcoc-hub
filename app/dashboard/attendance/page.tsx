@@ -6,6 +6,7 @@ import { db } from "../../../lib/firebase";
 import DateInput from "../../../components/ui/DateInput";
 import { useAppUser } from "../../../lib/useAppUser";
 import ExportMemberButton from "../../components/ExportMemberButton";
+import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
   query,
@@ -437,8 +438,9 @@ export default function AttendancePage() {
       {/* Service Selector */}
       <div className="bg-white border rounded-lg p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col gap-1 w-full sm:w-1/3">
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Service Date
+            <InfoTooltip text="The day whose attendance you are capturing or reviewing." why="Attendance is stored per service, so pick the right date first. If there is no session set up for that day you will not be able to mark anyone." />
           </label>
           <DateInput
             value={selectedDate}
@@ -713,8 +715,9 @@ export default function AttendancePage() {
 
             {isReported === true && (
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Reason
+                  <InfoTooltip text="Why this member was away, when the absence was reported beforehand." why="Tracking reasons helps you tell a genuine heads-up apart from someone quietly drifting away, so your care team knows who actually needs a check-in." />
                 </label>
                 <input
                   type="text"

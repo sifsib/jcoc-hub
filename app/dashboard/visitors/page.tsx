@@ -12,6 +12,7 @@ import {
   updateDoc, doc, serverTimestamp, getDoc,
 } from "firebase/firestore";
 import NotesPanel from "../../components/NotesPanel";
+import InfoTooltip from "../../components/InfoTooltip";
 
 interface Visitor {
   id: string;
@@ -584,7 +585,10 @@ export default function VisitorsPage() {
 
           <form onSubmit={handleCaptureVisitor} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Service Date</label>
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Service Date
+                <InfoTooltip text="The date of the service this person actually visited." why="It groups visitors by the Sunday or event they came to, which is what your attendance and follow-up reports count on. It is not today's date unless they visited today." />
+              </label>
               <DateInput value={serviceDate} onChange={(val) => setServiceDate(val)} className={inp} required />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -672,7 +676,10 @@ export default function VisitorsPage() {
             </div>
             {canAssign && (
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Assign Follow-Up To</label>
+                <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Assign Follow-Up To
+                  <InfoTooltip text="The team member responsible for reaching out to this visitor." why="Only people on your Follow-Up Team show up here. Assigning someone gives them a clear owner so nobody slips through the cracks, and they get notified it is theirs. Leave it blank to let the system auto-assign." />
+                </label>
                 <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={sel}>
                   <option value="">{ministryConfigured ? "Auto-assign from Visitor Ministry" : "Auto-assign (or pick later)"}</option>
                   {assignableTeam.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}

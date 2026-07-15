@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, storage } from '../../../lib/firebase';
 import DateInput from '../../../components/ui/DateInput';
+import InfoTooltip from '../../components/InfoTooltip';
 import { useAppUser } from '../../../lib/useAppUser';
 import {
   collection,
@@ -964,7 +965,10 @@ export default function FinancePage() {
               <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" required />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-600 mb-1">
+                Category
+                <InfoTooltip text="The income or expense bucket this transaction falls under, e.g. Tithes, Rent, Utilities." why="Categories drive your reports and CSV exports, so a wrong pick makes your totals hard to trust. These are your church's own custom categories, editable under Manage Categories." />
+              </label>
               <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
                 <option value="">Select a category</option>
                 {(txType === 'income' ? incomeCategories : expenseCategories).map((cat) => (
@@ -982,8 +986,9 @@ export default function FinancePage() {
             {/* Member linkage — income only, optional */}
             {txType === 'income' && (
               <div className="relative">
-                <label className="block text-xs font-semibold text-gray-600 mb-1">
-                  Member <span className="text-gray-400 font-normal">(optional — link this income to a member)</span>
+                <label className="flex items-center gap-1 text-xs font-semibold text-gray-600 mb-1">
+                  Member <span className="text-gray-400 font-normal">(optional, link this income to a member)</span>
+                  <InfoTooltip text="Attaches this gift to a specific member's giving record." why="Only link it when you want that giving to show on the member's own history, for example for year-end giving statements. Leave it blank for anonymous or general offerings." />
                 </label>
                 {selectedMemberId ? (
                   <div className="flex items-center justify-between border border-emerald-300 bg-emerald-50 rounded-lg px-3 py-2">
@@ -1174,7 +1179,10 @@ export default function FinancePage() {
               <p className="text-sm text-gray-500 mt-1">Downloads an Excel workbook matching the KFWC audit format: 26 sheets covering income and expenses for each month, plus an Income Statement.</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Financial Year</label>
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-600 mb-1">
+                Financial Year
+                <InfoTooltip text="The year of records included in the CSV file you are about to download." why="Pick the year your treasurer or auditor actually needs, otherwise the export could pull the wrong figures." />
+              </label>
               <select value={exportYear} onChange={(e) => setExportYear(Number(e.target.value))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                 {[thisYear - 1, thisYear].map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -1352,7 +1360,10 @@ export default function FinancePage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Reason for change <span className="text-red-500">*</span></label>
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-600 mb-1">
+                Reason for change <span className="text-red-500">*</span>
+                <InfoTooltip text="A short note explaining why you are editing an existing transaction." why="Finance records should never change silently. This note is kept as an audit trail so anyone reviewing the books later can see what was corrected and why." />
+              </label>
               <textarea value={amendReason} onChange={(e) => setAmendReason(e.target.value)} rows={2} placeholder="e.g. Captured R500 instead of R5000 by mistake" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
 
