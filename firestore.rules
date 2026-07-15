@@ -565,6 +565,40 @@ service cloud.firestore {
     }
 
     // ============================================
+    // NOTES (timestamped audit notes under a parent doc)
+    // Written by NotesPanel under members/*, visitors/*, and workflow_instances/*.
+    // Each note stores its own tenantId so these rules keep them isolated per
+    // church without reading the parent. Notes are an immutable trail: create
+    // only, never edited or deleted. Any staff member who can see members or work
+    // follow-ups can read them, so admins can always go back and see notes even
+    // after a workflow is closed. (Firestore requires an explicit rule per parent;
+    // a recursive wildcard can't be followed by /notes/{id}.)
+    // ============================================
+    function canReadNotes() {
+      return isSuperAdmin()
+          || (resource.data.tenantId == userTenantId() && (canReadMembers() || canDoFollowUp()));
+    }
+    function canCreateNote() {
+      return isSuperAdmin()
+          || (request.resource.data.tenantId == userTenantId() && (canManageMembers() || canDoFollowUp()));
+    }
+    match /members/{parentId}/notes/{noteId} {
+      allow read: if isSignedIn() && canReadNotes();
+      allow create: if isSignedIn() && canCreateNote();
+      allow update, delete: if false;
+    }
+    match /visitors/{parentId}/notes/{noteId} {
+      allow read: if isSignedIn() && canReadNotes();
+      allow create: if isSignedIn() && canCreateNote();
+      allow update, delete: if false;
+    }
+    match /workflow_instances/{parentId}/notes/{noteId} {
+      allow read: if isSignedIn() && canReadNotes();
+      allow create: if isSignedIn() && canCreateNote();
+      allow update, delete: if false;
+    }
+
+    // ============================================
     // EVENTS
     // ============================================
     match /events/{id} {

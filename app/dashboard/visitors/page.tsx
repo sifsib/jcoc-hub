@@ -889,6 +889,7 @@ export default function VisitorsPage() {
                 parentPath={`visitors/${selectedVisitor.id}`}
                 authorName={appUser?.displayName || appUser?.email || "Admin"}
                 authorEmail={appUser?.email || ""}
+                tenantId={appUser?.tenantId || ""}
               />
             </div>
 

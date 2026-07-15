@@ -485,6 +485,7 @@ export default function MemberDetailPage() {
                               parentPath={`workflow_instances/${inst.id}`}
                               authorName="Admin"
                               authorEmail=""
+                              tenantId={tenantId || ""}
                             />
                           </div>
                         </>

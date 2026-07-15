@@ -1872,6 +1872,7 @@ export default function ManageMembershipPage() {
               parentPath={`members/${editingMemberId}`}
               authorName={appUser?.displayName || appUser?.name || appUser?.email || "Admin"}
               authorEmail={appUser?.email || ""}
+              tenantId={appUser?.tenantId || ""}
             />
           </div>
         )}

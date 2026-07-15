@@ -20,6 +20,11 @@ interface NotesPanelProps {
   parentPath: string;
   authorName: string;
   authorEmail: string;
+  // Tenant this note belongs to. Stored on every note so the security rules can
+  // keep notes isolated per church and let any staff member read them later.
+  tenantId: string;
+  // When true, hides the "add note" box and shows notes read-only.
+  readOnly?: boolean;
 }
 
 function formatTs(ts: Timestamp | null): string {
@@ -30,7 +35,7 @@ function formatTs(ts: Timestamp | null): string {
   }) + " at " + d.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
 }
 
-export default function NotesPanel({ parentPath, authorName, authorEmail }: NotesPanelProps) {
+export default function NotesPanel({ parentPath, authorName, authorEmail, tenantId, readOnly = false }: NotesPanelProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -58,11 +63,13 @@ export default function NotesPanel({ parentPath, authorName, authorEmail }: Note
         text: trimmed,
         authorName: authorName || "Unknown",
         authorEmail: authorEmail || "",
+        tenantId: tenantId || "",
         createdAt: serverTimestamp(),
       });
       setText("");
     } catch (err) {
       console.error("Failed to add note:", err);
+      alert("Could not save the note. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -71,6 +78,7 @@ export default function NotesPanel({ parentPath, authorName, authorEmail }: Note
   return (
     <div className="flex flex-col gap-3">
       {/* Add note */}
+      {!readOnly && (
       <div className="flex gap-2">
         <textarea
           value={text}
@@ -90,6 +98,7 @@ export default function NotesPanel({ parentPath, authorName, authorEmail }: Note
           {saving ? "..." : "Add"}
         </button>
       </div>
+      )}
 
       {/* Notes list */}
       {loading ? (

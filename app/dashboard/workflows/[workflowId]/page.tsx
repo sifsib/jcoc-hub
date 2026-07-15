@@ -411,6 +411,24 @@ export default function WorkflowBuilderPage() {
     }
   }
 
+  // Keep the visitor's follow-up status in step with their workflow. When the
+  // workflow for a visitor finishes, mark that guest as followed up so they drop
+  // off the "Follow-Up Required" list and the dashboard pending widget. If the
+  // workflow is reopened, put them back on the pending list.
+  async function syncVisitorFollowUp(instanceId: string, completed: boolean) {
+    const inst = instances.find((i) => i.id === instanceId);
+    if (!inst || inst.subjectType !== "visitor" || !inst.subjectId) return;
+    try {
+      await updateDoc(doc(db, "visitors", inst.subjectId), {
+        followUpStatus: completed ? "done" : "pending",
+        followedUpBy: appUser?.email || "Workflow",
+        followedUpAt: completed ? serverTimestamp() : null,
+      });
+    } catch (err) {
+      console.error("Could not sync visitor follow-up status:", err);
+    }
+  }
+
   async function markStepDone(instanceId: string, instanceStepId: string, currentStatus: StepStatus) {
     const newStatus: StepStatus = currentStatus === "done" ? "pending" : "done";
     await updateDoc(doc(db, "workflow_instance_steps", instanceStepId), {
@@ -434,10 +452,19 @@ export default function WorkflowBuilderPage() {
       completedSteps: completedCount,
       status: allDone ? "completed" : "active",
     });
+    await syncVisitorFollowUp(instanceId, allDone);
   }
 
   async function completeInstance(instanceId: string) {
     await updateDoc(doc(db, "workflow_instances", instanceId), { status: "completed" });
+    await syncVisitorFollowUp(instanceId, true);
+  }
+
+  // Reopen a completed workflow: put it back to active and return the guest to
+  // the pending follow-up list.
+  async function reopenInstance(instanceId: string) {
+    await updateDoc(doc(db, "workflow_instances", instanceId), { status: "active" });
+    await syncVisitorFollowUp(instanceId, false);
   }
 
   // Assign (or change) the DRI for a running workflow. onSnapshot refreshes the list.
@@ -485,6 +512,150 @@ export default function WorkflowBuilderPage() {
     `${p.firstName} ${p.lastName}`.toLowerCase().includes(personSearch.toLowerCase())
   );
   const alreadyStarted = new Set(instances.map((i) => i.subjectId));
+
+  // One card renderer used for BOTH active and completed instances, so a closed
+  // workflow can be reopened to read its steps and notes. Completed cards show a
+  // "Completed" badge and a "Reopen" action instead of "Mark Complete".
+  const renderInstanceCard = (inst: WorkflowInstance) => {
+    const isExpanded = expandedInstance === inst.id;
+    const iSteps = instanceSteps[inst.id] || [];
+    const pct = inst.totalSteps > 0 ? Math.round((inst.completedSteps / inst.totalSteps) * 100) : 0;
+    const isDone = inst.status === "completed";
+
+    return (
+      <div key={inst.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div
+          className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50"
+          onClick={() => setExpandedInstance(isExpanded ? null : inst.id)}
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-800">{inst.subjectName}</p>
+            <div className="flex items-center gap-3 mt-1">
+              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden max-w-[120px]">
+                <div className={`h-full rounded-full ${isDone ? "bg-emerald-400" : "bg-emerald-500"}`} style={{ width: `${isDone ? 100 : pct}%` }} />
+              </div>
+              <span className="text-xs text-gray-400">{inst.completedSteps}/{inst.totalSteps} done</span>
+            </div>
+          </div>
+          {isDone ? (
+            <span className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>
+          ) : (
+            <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${inst.assignedToName ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
+              {inst.assignedToName ? inst.assignedToName : "No DRI"}
+            </span>
+          )}
+          <span className="text-gray-400 text-xs">{isExpanded ? "▲" : "▼"}</span>
+        </div>
+
+        {isExpanded && (
+          <div className="border-t border-gray-100 px-4 py-3 space-y-2 bg-gray-50/50">
+            {/* DRI: who is accountable for this workflow */}
+            <div className="flex items-center gap-2 pb-2 mb-1 border-b border-gray-100">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Responsible (DRI)</span>
+              {canAssign ? (
+                <select
+                  value={inst.assignedToUid || ""}
+                  onChange={(e) => assignInstance(inst.id, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Unassigned</option>
+                  {assignableTeam.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                </select>
+              ) : (
+                <span className={`text-xs font-medium ${inst.assignedToName ? "text-gray-700" : "text-red-500"}`}>
+                  {inst.assignedToName || "Unassigned"}
+                </span>
+              )}
+            </div>
+            {iSteps.length === 0 && (
+              <p className="text-xs text-gray-400">Loading steps...</p>
+            )}
+            {iSteps.map((s) => {
+              const blockedBy = s.dependsOnStepIds
+                .map((stepId) => iSteps.find((step) => step.id === stepId))
+                .filter((step): step is InstanceStep => step !== undefined && step.status !== "done" && step.status !== "skipped");
+              const isBlocked = s.status === "pending" && blockedBy.length > 0;
+
+              return (
+                <div key={s.id} className="flex items-start gap-3">
+                  <button
+                    onClick={() => markStepDone(inst.id, s.id, s.status)}
+                    disabled={isBlocked}
+                    title={isBlocked ? `Waiting for ${blockedBy.map((step) => step.title).join(", ")}` : undefined}
+                    className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                      s.status === "done"
+                        ? "bg-emerald-500 border-emerald-500"
+                        : isBlocked
+                        ? "border-gray-200 bg-gray-100 cursor-not-allowed"
+                        : "border-gray-300 hover:border-emerald-400"
+                    }`}
+                  >
+                    {s.status === "done" && <span className="text-white text-xs">✓</span>}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${s.status === "done" ? "line-through text-gray-400" : "text-gray-800"}`}>
+                      {s.title}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {s.actionType === "whatsapp" && inst.subjectPhone ? (
+                        <a
+                          href={`https://wa.me/${(inst.subjectPhone || "").replace(/\D/g, "")}?text=${encodeURIComponent(s.message)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-600 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Open WhatsApp
+                        </a>
+                      ) : (
+                        s.message
+                      )}
+                    </p>
+                    {isBlocked && (
+                      <p className="text-xs text-amber-600 mt-0.5">
+                        Waiting for {blockedBy.map((step) => step.title).join(", ")}
+                      </p>
+                    )}
+                    <p className={`text-xs mt-0.5 ${s.dueDate < today && s.status === "pending" ? "text-red-500 font-medium" : "text-gray-300"}`}>
+                      Due {s.dueDate < today && s.status === "pending" ? "overdue · " : ""}{s.dueDate}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded-full ${actionStyle(s.actionType)}`}>
+                    {actionIcon(s.actionType)}
+                  </span>
+                </div>
+              );
+            })}
+            <div className="pt-3 border-t border-gray-100">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
+              <NotesPanel
+                parentPath={`workflow_instances/${inst.id}`}
+                authorName={appUser?.displayName || appUser?.email || "Admin"}
+                authorEmail={appUser?.email || ""}
+                tenantId={tenantId || ""}
+              />
+              {isDone ? (
+                <button
+                  onClick={() => reopenInstance(inst.id)}
+                  className="text-xs text-gray-500 hover:text-gray-800 font-medium mt-3"
+                >
+                  Reopen
+                </button>
+              ) : (
+                <button
+                  onClick={() => completeInstance(inst.id)}
+                  className="text-xs text-gray-500 hover:text-gray-800 font-medium mt-3"
+                >
+                  Mark Complete
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -741,148 +912,16 @@ export default function WorkflowBuilderPage() {
           {activeInstances.length > 0 && (
             <div className="space-y-2 mb-6">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Active</p>
-              {activeInstances.map((inst) => {
-                const isExpanded = expandedInstance === inst.id;
-                const iSteps = instanceSteps[inst.id] || [];
-                const pct = inst.totalSteps > 0 ? Math.round((inst.completedSteps / inst.totalSteps) * 100) : 0;
-
-                return (
-                  <div key={inst.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <div
-                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50"
-                      onClick={() => {
-                        setExpandedInstance(isExpanded ? null : inst.id);
-                      }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800">{inst.subjectName}</p>
-                        <div className="flex items-center gap-3 mt-1">
-                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden max-w-[120px]">
-                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="text-xs text-gray-400">{inst.completedSteps}/{inst.totalSteps} done</span>
-                        </div>
-                      </div>
-                      <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${inst.assignedToName ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
-                        {inst.assignedToName ? inst.assignedToName : "No DRI"}
-                      </span>
-                      <span className="text-gray-400 text-xs">{isExpanded ? "▲" : "▼"}</span>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="border-t border-gray-100 px-4 py-3 space-y-2 bg-gray-50/50">
-                        {/* DRI: who is accountable for this workflow */}
-                        <div className="flex items-center gap-2 pb-2 mb-1 border-b border-gray-100">
-                          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Responsible (DRI)</span>
-                          {canAssign ? (
-                            <select
-                              value={inst.assignedToUid || ""}
-                              onChange={(e) => assignInstance(inst.id, e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            >
-                              <option value="">Unassigned</option>
-                              {assignableTeam.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
-                            </select>
-                          ) : (
-                            <span className={`text-xs font-medium ${inst.assignedToName ? "text-gray-700" : "text-red-500"}`}>
-                              {inst.assignedToName || "Unassigned"}
-                            </span>
-                          )}
-                        </div>
-                        {iSteps.length === 0 && (
-                          <p className="text-xs text-gray-400">Loading steps...</p>
-                        )}
-                        {iSteps.map((s) => {
-                          const blockedBy = s.dependsOnStepIds
-                            .map((stepId) => iSteps.find((step) => step.id === stepId))
-                            .filter((step): step is InstanceStep => step !== undefined && step.status !== "done" && step.status !== "skipped");
-                          const isBlocked = s.status === "pending" && blockedBy.length > 0;
-
-                          return (
-                            <div key={s.id} className="flex items-start gap-3">
-                              <button
-                                onClick={() => markStepDone(inst.id, s.id, s.status)}
-                                disabled={isBlocked}
-                                title={isBlocked ? `Waiting for ${blockedBy.map((step) => step.title).join(", ")}` : undefined}
-                                className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
-                                  s.status === "done"
-                                    ? "bg-emerald-500 border-emerald-500"
-                                    : isBlocked
-                                    ? "border-gray-200 bg-gray-100 cursor-not-allowed"
-                                    : "border-gray-300 hover:border-emerald-400"
-                                }`}
-                              >
-                                {s.status === "done" && <span className="text-white text-xs">✓</span>}
-                              </button>
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium ${s.status === "done" ? "line-through text-gray-400" : "text-gray-800"}`}>
-                                  {s.title}
-                                </p>
-                                <p className="text-xs text-gray-400">
-                                  {s.actionType === "whatsapp" && inst.subjectPhone ? (
-                                    <a
-                                      href={`https://wa.me/${(inst.subjectPhone || "").replace(/\D/g, "")}?text=${encodeURIComponent(s.message)}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-emerald-600 hover:underline"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      Open WhatsApp
-                                    </a>
-                                  ) : (
-                                    s.message
-                                  )}
-                                </p>
-                                {isBlocked && (
-                                  <p className="text-xs text-amber-600 mt-0.5">
-                                    Waiting for {blockedBy.map((step) => step.title).join(", ")}
-                                  </p>
-                                )}
-                                <p className={`text-xs mt-0.5 ${s.dueDate < today && s.status === "pending" ? "text-red-500 font-medium" : "text-gray-300"}`}>
-                                  Due {s.dueDate < today && s.status === "pending" ? "overdue · " : ""}{s.dueDate}
-                                </p>
-                              </div>
-                              <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded-full ${actionStyle(s.actionType)}`}>
-                                {actionIcon(s.actionType)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        <div className="pt-3 border-t border-gray-100">
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
-                          <NotesPanel
-                            parentPath={`workflow_instances/${inst.id}`}
-                            authorName={appUser?.displayName || appUser?.email || "Admin"}
-                            authorEmail={appUser?.email || ""}
-                          />
-                          <button
-                            onClick={() => completeInstance(inst.id)}
-                            className="text-xs text-gray-500 hover:text-gray-800 font-medium mt-3"
-                          >
-                            Mark Complete
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {activeInstances.map((inst) => renderInstanceCard(inst))}
             </div>
           )}
 
-          {/* Completed instances */}
+          {/* Completed instances — expandable so admins can reopen and read the
+              steps and notes after a workflow is closed. */}
           {completedInstances.length > 0 && (
-            <div>
+            <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Completed</p>
-              <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
-                {completedInstances.map((inst) => (
-                  <div key={inst.id} className="flex items-center justify-between px-4 py-3">
-                    <p className="text-sm text-gray-600">{inst.subjectName}</p>
-                    <span className="text-xs text-emerald-600 font-medium">Completed</span>
-                  </div>
-                ))}
-              </div>
+              {completedInstances.map((inst) => renderInstanceCard(inst))}
             </div>
           )}
 
