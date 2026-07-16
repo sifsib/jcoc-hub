@@ -47,22 +47,22 @@ service cloud.firestore {
       return isOwner() || hasRole('admin');
     }
     function canManageMembers() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('branch_admin');
     }
     function canReadMembers() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('member_viewer') || hasRole('viewer') || hasRole('cell_leader') || hasRole('finance') || hasRole('finance_viewer');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('member_viewer') || hasRole('viewer') || hasRole('cell_leader') || hasRole('branch_admin') || hasRole('finance') || hasRole('finance_viewer');
     }
     function canManageAttendance() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('cell_leader') || hasRole('branch_admin');
     }
     function canReadAttendance() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('member_viewer') || hasRole('viewer') || hasRole('cell_leader');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('member_viewer') || hasRole('viewer') || hasRole('cell_leader') || hasRole('branch_admin');
     }
     function canManageFinance() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance');
     }
     function canReadFinance() {
-      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance') || hasRole('finance_viewer') || hasRole('viewer');
+      return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('finance') || hasRole('finance_viewer') || hasRole('viewer') || hasRole('branch_admin');
     }
     function canManageCommunications() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin');
@@ -73,7 +73,7 @@ service cloud.firestore {
     // and their follow-ups regardless of their main role.
     function canDoFollowUp() {
       return isSuperAdmin() || hasRole('owner') || hasRole('admin') || hasRole('member_manager')
-          || hasRole('follow_up')
+          || hasRole('follow_up') || hasRole('branch_admin')
           || userData().get('visitorMinistry', false) == true;
     }
     function sameTenant(resource) {

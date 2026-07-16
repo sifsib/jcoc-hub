@@ -41,6 +41,7 @@ interface Member {
   householdRole?: string;
   faithStatus?: { bornAgain: string; waterBaptized: string };
   consentedToPrivacyPolicy: boolean;
+  branch?: string;
   cellRegion?: string;
   ministryGroup?: string;
   churchRole?: string;
@@ -64,6 +65,8 @@ interface TenantConfig {
   ministries: string[];
   membershipTypes: string[];
   roles: string[];
+  branches: string[];
+  cellGroupBranch: Record<string, string>;
   cellRegions: string[];
   ministryGroups: string[];
   churchRoles: string[];
@@ -94,7 +97,8 @@ interface MemberFormConfig {
 const DEFAULT_FORM_CONFIG: MemberFormConfig = {
   fields: {
     role: { label: "Church Role", enabled: true, required: false, type: "dropdown", options: [] },
-    cellRegion: { label: "Cell Region / Branch", enabled: true, required: false, type: "dropdown", options: [] },
+    branch: { label: "Branch", enabled: true, required: false, type: "dropdown", options: [] },
+    cellRegion: { label: "Cell Group", enabled: true, required: false, type: "dropdown", options: [] },
     ministryGroup: { label: "Ministry Group", enabled: true, required: false, type: "dropdown", options: [] },
     churchRole: { label: "Church Role / Office", enabled: true, required: false, type: "dropdown", options: [] },
     membershipType: { label: "Type of Membership Sought", enabled: true, required: false, type: "dropdown", options: [] },
@@ -114,7 +118,21 @@ const DEFAULT_MINISTRIES = [
 ];
 const DEFAULT_MEMBERSHIP_TYPES = ["Full Active", "Associate"];
 const DEFAULT_ROLES = ["Member", "Pastor", "Youth Leader", "Treasurer", "Branch Administrator"];
+const DEFAULT_BRANCHES: string[] = [];
 const DEFAULT_CELL_REGIONS: string[] = [];
+
+// ─── Branch / Cell Group helpers ────────────────────────────────────────────
+// A cell group belongs to a branch via the cellGroupBranch map. Legacy cell
+// groups with no branch assigned stay visible under every branch so nothing
+// disappears when branches are first switched on.
+function cellGroupsForBranch(
+  cellGroups: string[],
+  cellGroupBranch: Record<string, string>,
+  branch: string,
+): string[] {
+  if (!branch) return cellGroups;
+  return cellGroups.filter(cg => !cellGroupBranch[cg] || cellGroupBranch[cg] === branch);
+}
 const DEFAULT_MINISTRY_GROUPS = ["Youth", "Mens Fellowship", "Womens Ministry", "Seniors"];
 const DEFAULT_CHURCH_ROLES: string[] = ["Elder", "Deacon", "Deaconess", "Trustee"];
 
@@ -135,7 +153,7 @@ const COUNTRY_CODES = [
 const emptyPerson = () => ({
   firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
   countryCode: "27",
-  maritalStatus: "", cellRegion: "", ministryGroup: "", churchRole: "",
+  maritalStatus: "", branch: "", cellRegion: "", ministryGroup: "", churchRole: "",
   address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
   bornAgain: "", waterBaptized: "", membershipType: "", ministries: [] as string[],
   role: "Member",
@@ -301,7 +319,7 @@ function MinChecks({ list, sel: selected, on }: { list: string[]; sel: string[];
 
 function MemberBlock({
   data, set, config, formConfig, showFaith = true, ageRestricted = false,
-  customValues, setCustomValues, addressDisabled = false,
+  customValues, setCustomValues, addressDisabled = false, lockedBranch = "",
 }: {
   data: ReturnType<typeof emptyPerson>;
   set: (k: string, v: any) => void;
@@ -312,10 +330,25 @@ function MemberBlock({
   customValues?: Record<string, string>;
   setCustomValues?: (vals: Record<string, string>) => void;
   addressDisabled?: boolean;
+  lockedBranch?: string;
 }) {
   const fc = formConfig.fields;
   const roleOpts = fc.role?.options?.length ? fc.role.options : config.roles;
-  const cellOpts = fc.cellRegion?.options?.length ? fc.cellRegion.options : config.cellRegions;
+  const branchOpts = fc.branch?.options?.length ? fc.branch.options : config.branches;
+  // A branch admin can only file people under their own branch, so the branch
+  // is fixed and shown read-only rather than as a dropdown.
+  const showBranch = !lockedBranch && branchOpts.length > 1;
+  useEffect(() => {
+    if (lockedBranch) {
+      if (data.branch !== lockedBranch) set("branch", lockedBranch);
+    } else if (branchOpts.length === 1 && !data.branch) {
+      // Single branch: quietly default to it so the record still carries one.
+      set("branch", branchOpts[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchOpts.length, lockedBranch]);
+  const allCellOpts = fc.cellRegion?.options?.length ? fc.cellRegion.options : config.cellRegions;
+  const cellOpts = cellGroupsForBranch(allCellOpts, config.cellGroupBranch || {}, data.branch);
   const mgOpts = fc.ministryGroup?.options?.length ? fc.ministryGroup.options : config.ministryGroups;
   const crOpts = fc.churchRole?.options?.length ? fc.churchRole.options : config.churchRoles;
   const mtOpts = fc.membershipType?.options?.length ? fc.membershipType.options : config.membershipTypes;
@@ -364,8 +397,37 @@ function MemberBlock({
           </select>
         </F>
       )}
+      {lockedBranch && (
+        <F label={fc.branch?.label || "Branch"}>
+          <div className="border border-gray-100 rounded px-3 py-2 text-sm text-gray-500 bg-gray-50">
+            {lockedBranch}
+          </div>
+        </F>
+      )}
+      {showBranch && (fc.branch?.enabled !== false) && (
+        <F label={fc.branch?.label || "Branch"} req={fc.branch?.required}>
+          <select
+            value={data.branch}
+            onChange={e => {
+              const b = e.target.value;
+              set("branch", b);
+              // Drop a cell group that no longer belongs to the chosen branch.
+              const stillValid = cellGroupsForBranch(allCellOpts, config.cellGroupBranch || {}, b);
+              if (data.cellRegion && !stillValid.includes(data.cellRegion)) set("cellRegion", "");
+            }}
+            className={sel}
+            required={fc.branch?.required}
+          >
+            <option value="">Select</option>
+            {data.branch && !branchOpts.includes(data.branch) && (
+              <option value={data.branch}>{data.branch}</option>
+            )}
+            {branchOpts.map(b => <option key={b}>{b}</option>)}
+          </select>
+        </F>
+      )}
       {(fc.cellRegion?.enabled !== false) && (
-        <F label={fc.cellRegion?.label || "Cell Region / Branch"} req={fc.cellRegion?.required}>
+        <F label={fc.cellRegion?.label || "Cell Group"} req={fc.cellRegion?.required}>
           <select value={data.cellRegion} onChange={e => set("cellRegion", e.target.value)} className={sel}>
             <option value="">Select</option>
             {data.cellRegion && !cellOpts.includes(data.cellRegion) && (
@@ -531,6 +593,7 @@ export default function ManageMembershipPage() {
   const [memberSearch, setMemberSearch] = useState("");
   const [filterMinistryGroup, setFilterMinistryGroup] = useState("");
   const [filterMaritalStatus, setFilterMaritalStatus] = useState("");
+  const [filterBranch, setFilterBranch] = useState("");
   const [filterCellRegion, setFilterCellRegion] = useState("");
   const [filterBornAgain, setFilterBornAgain] = useState("");
   const [filterWaterBaptized, setFilterWaterBaptized] = useState("");
@@ -540,6 +603,8 @@ export default function ManageMembershipPage() {
     ministries: DEFAULT_MINISTRIES,
     membershipTypes: DEFAULT_MEMBERSHIP_TYPES,
     roles: DEFAULT_ROLES,
+    branches: DEFAULT_BRANCHES,
+    cellGroupBranch: {},
     cellRegions: DEFAULT_CELL_REGIONS,
     ministryGroups: DEFAULT_MINISTRY_GROUPS,
     churchRoles: DEFAULT_CHURCH_ROLES,
@@ -560,12 +625,16 @@ export default function ManageMembershipPage() {
   // Configure lists state
   const [editMinistries, setEditMinistries] = useState<string[]>([]);
   const [editMembershipTypes, setEditMembershipTypes] = useState<string[]>([]);
+  const [editBranches, setEditBranches] = useState<string[]>([]);
+  const [editCellGroupBranch, setEditCellGroupBranch] = useState<Record<string, string>>({});
   const [editCellRegions, setEditCellRegions] = useState<string[]>([]);
   const [editMinistryGroups, setEditMinistryGroups] = useState<string[]>([]);
   const [editChurchRoles, setEditChurchRoles] = useState<string[]>([]);
   const [newMinistry, setNewMinistry] = useState("");
   const [newMembershipType, setNewMembershipType] = useState("");
+  const [newBranch, setNewBranch] = useState("");
   const [newCellRegion, setNewCellRegion] = useState("");
+  const [newCellRegionBranch, setNewCellRegionBranch] = useState("");
   const [newMinistryGroup, setNewMinistryGroup] = useState("");
   const [newChurchRole, setNewChurchRole] = useState("");
   const [configSaving, setConfigSaving] = useState(false);
@@ -624,6 +693,8 @@ export default function ManageMembershipPage() {
             ministries: td.ministries?.length ? td.ministries : DEFAULT_MINISTRIES,
             membershipTypes: td.membershipTypes?.length ? td.membershipTypes : DEFAULT_MEMBERSHIP_TYPES,
             roles: td.roles?.length ? td.roles : DEFAULT_ROLES,
+            branches: td.branches?.length ? td.branches : DEFAULT_BRANCHES,
+            cellGroupBranch: td.cellGroupBranch || {},
             cellRegions: td.cellRegions?.length ? td.cellRegions : DEFAULT_CELL_REGIONS,
             ministryGroups: td.ministryGroups?.length ? td.ministryGroups : DEFAULT_MINISTRY_GROUPS,
             churchRoles: td.churchRoles?.length ? td.churchRoles : DEFAULT_CHURCH_ROLES,
@@ -646,10 +717,14 @@ export default function ManageMembershipPage() {
             }
           }
         } catch (e) { console.warn("formConfig load failed:", e); }
-        // Cell leaders only see their assigned cell
+        // Cell leaders only see their assigned cell group; branch admins only
+        // see their assigned branch. Everyone else sees the whole tenant.
         const isCellLeader = appUser.role === "cell_leader";
+        const isBranchAdmin = appUser.role === "branch_admin";
         const q = isCellLeader && appUser.assignedCellRegion
           ? query(collection(db, "members"), where("tenantId", "==", appUser.tenantId), where("cellRegion", "==", appUser.assignedCellRegion))
+          : isBranchAdmin && appUser.assignedBranch
+          ? query(collection(db, "members"), where("tenantId", "==", appUser.tenantId), where("branch", "==", appUser.assignedBranch))
           : query(collection(db, "members"), where("tenantId", "==", appUser.tenantId));
         const snap = await getDocs(q);
         const list: Member[] = [];
@@ -973,7 +1048,7 @@ export default function ManageMembershipPage() {
         firstName: primary.firstName.trim(), lastName: primary.lastName.trim(),
         email: primary.email.trim().toLowerCase(), phone: fmtPhone(primary.phone, primary.countryCode || "27"),
         dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus,
-        address: primary.address, role: primary.role, cellRegion: primary.cellRegion.trim(), ministryGroup: primary.ministryGroup.trim(),
+        address: primary.address, role: primary.role, branch: primary.branch.trim(), cellRegion: primary.cellRegion.trim(), ministryGroup: primary.ministryGroup.trim(),
         churchRole: primary.churchRole?.trim() || "",
         membershipType: primary.membershipType, ministries: primary.ministries,
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
@@ -1002,7 +1077,7 @@ export default function ManageMembershipPage() {
           firstName: spouse.firstName.trim(), lastName: spouse.lastName.trim(),
           email: spouse.email.trim().toLowerCase(), phone: fmtPhone(spouse.phone, spouse.countryCode || "27"),
           dob: spouse.dob, gender: spouse.gender, maritalStatus: "Married",
-          address: spouse.address, role: spouse.role, cellRegion: spouse.cellRegion.trim(), ministryGroup: spouse.ministryGroup.trim(),
+          address: spouse.address, role: spouse.role, branch: spouse.branch.trim(), cellRegion: spouse.cellRegion.trim(), ministryGroup: spouse.ministryGroup.trim(),
           churchRole: spouse.churchRole?.trim() || "",
           membershipType: spouse.membershipType, ministries: spouse.ministries,
           faithStatus: { bornAgain: spouse.bornAgain, waterBaptized: spouse.waterBaptized },
@@ -1025,6 +1100,7 @@ export default function ManageMembershipPage() {
           email: "", phone: "", dob: child.dob, gender: child.gender,
           maritalStatus: "Single", role: "Member",
           address: primary.address,
+          branch: primary.branch.trim(),
           cellRegion: primary.cellRegion.trim(),
           householdId: hid, householdRole: "child", parentId: primaryRef.id,
           isMember: true, status: "active", source: "manual",
@@ -1054,12 +1130,16 @@ export default function ManageMembershipPage() {
   const openConfigure = () => {
     setEditMinistries([...config.ministries]);
     setEditMembershipTypes([...config.membershipTypes]);
+    setEditBranches([...config.branches]);
+    setEditCellGroupBranch({ ...(config.cellGroupBranch || {}) });
     setEditCellRegions([...config.cellRegions]);
     setEditMinistryGroups([...config.ministryGroups]);
     setEditChurchRoles([...config.churchRoles]);
     setNewMinistry("");
     setNewMembershipType("");
+    setNewBranch("");
     setNewCellRegion("");
+    setNewCellRegionBranch("");
     setNewMinistryGroup("");
     setNewChurchRole("");
     setView("configure");
@@ -1069,9 +1149,16 @@ export default function ManageMembershipPage() {
     if (!appUser) return;
     setConfigSaving(true);
     try {
+      // Only keep branch mappings for cell groups that still exist.
+      const cleanedCellGroupBranch: Record<string, string> = {};
+      editCellRegions.forEach(cg => {
+        if (editCellGroupBranch[cg]) cleanedCellGroupBranch[cg] = editCellGroupBranch[cg];
+      });
       await updateDoc(doc(db, "tenants", appUser.tenantId), {
         ministries: editMinistries,
         membershipTypes: editMembershipTypes,
+        branches: editBranches,
+        cellGroupBranch: cleanedCellGroupBranch,
         cellRegions: editCellRegions,
         ministryGroups: editMinistryGroups,
         churchRoles: editChurchRoles,
@@ -1080,6 +1167,8 @@ export default function ManageMembershipPage() {
         ...prev,
         ministries: editMinistries,
         membershipTypes: editMembershipTypes,
+        branches: editBranches,
+        cellGroupBranch: cleanedCellGroupBranch,
         cellRegions: editCellRegions,
         ministryGroups: editMinistryGroups,
         churchRoles: editChurchRoles,
@@ -1110,6 +1199,7 @@ export default function ManageMembershipPage() {
       phone: m.phone || "",
       countryCode: (m as any).countryCode || "27",
       maritalStatus: m.maritalStatus || "",
+      branch: m.branch || "",
       cellRegion: m.cellRegion || "",
       ministryGroup: m.ministryGroup || "",
       churchRole: m.churchRole || "",
@@ -1190,6 +1280,7 @@ export default function ManageMembershipPage() {
         maritalStatus: primary.maritalStatus,
         address: primary.address,
         role: primary.role,
+        branch: primary.branch.trim(),
         cellRegion: primary.cellRegion.trim(),
         ministryGroup: primary.ministryGroup.trim(),
         churchRole: primary.churchRole?.trim() || "",
@@ -1381,7 +1472,8 @@ export default function ManageMembershipPage() {
           gender: s(row["Gender"] || row.gender),
           maritalStatus: s(row["Marital Status"] || row.maritalStatus),
           membershipType: s(row["Membership Type"] || row.membershipType),
-          cellRegion: s(row["Cell Region / Branch"] || row["Cell Region"] || row.cellRegion),
+          branch: s(row["Branch"] || row.branch),
+          cellRegion: s(row["Cell Group"] || row["Cell Region / Branch"] || row["Cell Region"] || row.cellRegion),
           ministryGroup: s(row["Ministry Group"] || row.ministryGroup) || assignMinistryGroup(normalizeDob(row["Date of Birth"] || row.dob || row["Date of birth"]), s(row["Gender"] || row.gender), s(row["Marital Status"] || row.maritalStatus)),
           churchRole: s(row["Church Role"] || row.churchRole),
           address: {
@@ -1499,13 +1591,14 @@ export default function ManageMembershipPage() {
     }
     if (filterMinistryGroup && m.ministryGroup !== filterMinistryGroup) return false;
     if (filterMaritalStatus && m.maritalStatus !== filterMaritalStatus) return false;
+    if (filterBranch && m.branch !== filterBranch) return false;
     if (filterCellRegion && m.cellRegion !== filterCellRegion) return false;
     if (filterBornAgain && m.faithStatus?.bornAgain !== filterBornAgain) return false;
     if (filterWaterBaptized && m.faithStatus?.waterBaptized !== filterWaterBaptized) return false;
     if (filterMembershipType && m.membershipType !== filterMembershipType) return false;
     return true;
   });
-  const activeFilters = [filterMinistryGroup, filterMaritalStatus, filterCellRegion, filterBornAgain, filterWaterBaptized, filterMembershipType].filter(Boolean).length;
+  const activeFilters = [filterMinistryGroup, filterMaritalStatus, filterBranch, filterCellRegion, filterBornAgain, filterWaterBaptized, filterMembershipType].filter(Boolean).length;
 
   if (userLoading || loading) {
     return (
@@ -1548,7 +1641,7 @@ export default function ManageMembershipPage() {
           {/* ── SECTION 1: Member Details ── */}
           <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
             <SecHead n={next()} title="Member Details" sub="Primary member's personal information" />
-            <MemberBlock data={primary} set={setP} config={config} formConfig={formConfig} showFaith={false} ageRestricted={isUnder16(primary.dob)} customValues={customFieldValues} setCustomValues={setCustomFieldValues} />
+            <MemberBlock data={primary} set={setP} config={config} formConfig={formConfig} showFaith={false} ageRestricted={isUnder16(primary.dob)} customValues={customFieldValues} setCustomValues={setCustomFieldValues} lockedBranch={appUser?.role === "branch_admin" ? (appUser.assignedBranch || "") : ""} />
             <F label="Marital Status" req>
               <select value={primary.maritalStatus} onChange={e => setP("maritalStatus", e.target.value)} className={sel} required>
                 <option value="">Select</option>
@@ -1639,7 +1732,7 @@ export default function ManageMembershipPage() {
                       className="h-4 w-4 rounded text-blue-600 border-gray-300" />
                     Same residential address as main member
                   </label>
-                  <MemberBlock data={spouse} set={setSp} config={config} formConfig={formConfig} showFaith={true} addressDisabled={spouseSameAddress} />
+                  <MemberBlock data={spouse} set={setSp} config={config} formConfig={formConfig} showFaith={true} addressDisabled={spouseSameAddress} lockedBranch={appUser?.role === "branch_admin" ? (appUser.assignedBranch || "") : ""} />
                 </div>
               )}
             </div>
@@ -2000,24 +2093,84 @@ export default function ManageMembershipPage() {
             </div>
           </div>
 
-          {/* Cell Region / Branch */}
+          {/* Branches */}
           <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4">
             <div>
-              <p className="text-base font-bold text-gray-800">Cell Region / Branch</p>
-              <p className="text-xs text-gray-400 mt-0.5">Required dropdown on the registration form. Add each region or branch name.</p>
+              <p className="text-base font-bold text-gray-800">Branches</p>
+              <p className="text-xs text-gray-400 mt-0.5">Your church campuses or sites. Add one for each branch. When you have more than one, members choose their branch on the form. With a single branch it is filled in automatically.</p>
+            </div>
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+              {editBranches.map((b) => (
+                <div key={b} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-700">{b}</span>
+                  <button
+                    onClick={() => {
+                      setEditBranches(p => p.filter(x => x !== b));
+                      // Unlink any cell groups that pointed at this branch.
+                      setEditCellGroupBranch(prev => {
+                        const next = { ...prev };
+                        Object.keys(next).forEach(cg => { if (next[cg] === b) delete next[cg]; });
+                        return next;
+                      });
+                      if (newCellRegionBranch === b) setNewCellRegionBranch("");
+                    }}
+                    className="text-red-400 hover:text-red-600 text-xs font-bold ml-2"
+                  >Remove</button>
+                </div>
+              ))}
+              {editBranches.length === 0 && <p className="text-xs text-gray-400 italic py-2">No branches added yet. Leave empty if you run a single site.</p>}
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <input value={newBranch} onChange={e => setNewBranch(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); const v = newBranch.trim(); if (v && !editBranches.includes(v)) { setEditBranches(p => [...p, v]); setNewBranch(""); } }}} placeholder="e.g. Main Campus" className={inp} />
+              <button onClick={() => { const v = newBranch.trim(); if (v && !editBranches.includes(v)) { setEditBranches(p => [...p, v]); setNewBranch(""); }}} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0">Add</button>
+            </div>
+          </div>
+
+          {/* Cell Groups */}
+          <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4">
+            <div>
+              <p className="text-base font-bold text-gray-800">Cell Groups</p>
+              <p className="text-xs text-gray-400 mt-0.5">Small groups a member belongs to. If you have branches, pick which branch each cell group sits under so the form shows the right ones.</p>
             </div>
             <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
               {editCellRegions.map((r) => (
                 <div key={r} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-                  <span className="text-sm text-gray-700">{r}</span>
-                  <button onClick={() => setEditCellRegions(p => p.filter(x => x !== r))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-2">Remove</button>
+                  <div className="flex flex-col">
+                    <span className="text-sm text-gray-700">{r}</span>
+                    {editBranches.length > 0 && (
+                      <select
+                        value={editCellGroupBranch[r] || ""}
+                        onChange={e => {
+                          const b = e.target.value;
+                          setEditCellGroupBranch(prev => {
+                            const next = { ...prev };
+                            if (b) next[r] = b; else delete next[r];
+                            return next;
+                          });
+                        }}
+                        className="mt-1 border border-gray-200 rounded px-2 py-1 text-xs text-gray-600 bg-white"
+                      >
+                        <option value="">All branches</option>
+                        {editBranches.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  <button onClick={() => { setEditCellRegions(p => p.filter(x => x !== r)); setEditCellGroupBranch(prev => { const next = { ...prev }; delete next[r]; return next; }); }} className="text-red-400 hover:text-red-600 text-xs font-bold ml-2 shrink-0">Remove</button>
                 </div>
               ))}
-              {editCellRegions.length === 0 && <p className="text-xs text-gray-400 italic py-2">No regions or branches added yet.</p>}
+              {editCellRegions.length === 0 && <p className="text-xs text-gray-400 italic py-2">No cell groups added yet.</p>}
             </div>
-            <div className="flex gap-2 mt-auto">
-              <input value={newCellRegion} onChange={e => setNewCellRegion(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); const v = newCellRegion.trim(); if (v && !editCellRegions.includes(v)) { setEditCellRegions(p => [...p, v]); setNewCellRegion(""); } }}} placeholder="e.g. North Region" className={inp} />
-              <button onClick={() => { const v = newCellRegion.trim(); if (v && !editCellRegions.includes(v)) { setEditCellRegions(p => [...p, v]); setNewCellRegion(""); }}} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0">Add</button>
+            <div className="flex flex-col gap-2 mt-auto">
+              {editBranches.length > 0 && (
+                <select value={newCellRegionBranch} onChange={e => setNewCellRegionBranch(e.target.value)} className={sel}>
+                  <option value="">All branches</option>
+                  {editBranches.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              )}
+              <div className="flex gap-2">
+                <input value={newCellRegion} onChange={e => setNewCellRegion(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); const v = newCellRegion.trim(); if (v && !editCellRegions.includes(v)) { setEditCellRegions(p => [...p, v]); if (newCellRegionBranch) setEditCellGroupBranch(prev => ({ ...prev, [v]: newCellRegionBranch })); setNewCellRegion(""); } }}} placeholder="e.g. Tuesday Night Cell" className={inp} />
+                <button onClick={() => { const v = newCellRegion.trim(); if (v && !editCellRegions.includes(v)) { setEditCellRegions(p => [...p, v]); if (newCellRegionBranch) setEditCellGroupBranch(prev => ({ ...prev, [v]: newCellRegionBranch })); setNewCellRegion(""); }}} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition shrink-0">Add</button>
+              </div>
             </div>
           </div>
 
@@ -2332,10 +2485,12 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
         </div>
         <div className="flex gap-2 flex-wrap">
           {appUser?.role !== "cell_leader" && <>
+          {appUser?.role !== "branch_admin" && (
           <button onClick={openConfigure}
             className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Configure Lists
           </button>
+          )}
           <button onClick={() => setView("import")}
             className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Import Members
@@ -2360,7 +2515,8 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                 MEMBERSHIP_TYPE: m.membershipType || "",
                 GENDER: m.gender || "",
                 DATE_OF_BIRTH: m.dob || "",
-                CELL_REGION: m.cellRegion || "",
+                BRANCH: m.branch || "",
+                CELL_GROUP: m.cellRegion || "",
                 MINISTRY_GROUP: m.ministryGroup || "",
                 MARITAL_STATUS: m.maritalStatus || "",
               };
@@ -2376,7 +2532,8 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               { key: "MEMBERSHIP_TYPE", label: "MEMBERSHIP_TYPE" },
               { key: "GENDER",          label: "GENDER" },
               { key: "DATE_OF_BIRTH",   label: "DATE_OF_BIRTH" },
-              { key: "CELL_REGION",     label: "CELL_REGION" },
+              { key: "BRANCH",          label: "BRANCH" },
+              { key: "CELL_GROUP",      label: "CELL_GROUP" },
               { key: "MINISTRY_GROUP",  label: "MINISTRY_GROUP" },
               { key: "MARITAL_STATUS",  label: "MARITAL_STATUS" },
             ]}
@@ -2475,7 +2632,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
             <button
               onClick={() => {
                 setFilterMinistryGroup(""); setFilterMaritalStatus("");
-                setFilterCellRegion(""); setFilterBornAgain("");
+                setFilterBranch(""); setFilterCellRegion(""); setFilterBornAgain("");
                 setFilterWaterBaptized(""); setFilterMembershipType("");
               }}
               className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
@@ -2516,11 +2673,29 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               </select>
             </div>
 
-            {/* Cell Region / Branch */}
+            {/* Branch */}
+            {config.branches.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  Branch
+                  <InfoTooltip text="The church campus or site a member is attached to." why="Lets branch pastors pull their own list without seeing the whole church." />
+                </label>
+                <select
+                  value={filterBranch}
+                  onChange={(e) => setFilterBranch(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All</option>
+                  {config.branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* Cell Group */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
-                Cell Region / Branch
-                <InfoTooltip text="The geographic cell group or branch campus a member is attached to." why="Helps cell leaders and branch pastors pull their own list without seeing the whole church." />
+                Cell Group
+                <InfoTooltip text="The small group a member is attached to." why="Helps cell leaders pull their own list without seeing the whole church." />
               </label>
               <select
                 value={filterCellRegion}
@@ -2528,7 +2703,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All</option>
-                {config.cellRegions.map((r) => <option key={r} value={r}>{r}</option>)}
+                {cellGroupsForBranch(config.cellRegions, config.cellGroupBranch || {}, filterBranch).map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
 

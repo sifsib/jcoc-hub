@@ -25,24 +25,24 @@ interface TeamMember {
   displayName: string;
   role: string;
   status: string;
-  branchId: string | null;
+  assignedBranch: string | null;
   assignedCellRegion: string | null;
   visitorMinistry: boolean;
   createdAt: string;
 }
 
-interface TenantBranch {
-  id: string;
-  name: string;
-}
-
-type AssignableRole = "admin" | "viewer" | "finance" | "member_manager" | "member_viewer" | "cell_leader" | "follow_up";
+type AssignableRole = "admin" | "branch_admin" | "viewer" | "finance" | "member_manager" | "member_viewer" | "cell_leader" | "follow_up";
 
 const ROLE_META: Record<AssignableRole, { label: string; description: string; color: string }> = {
   admin: {
     label: "Admin",
     description: "Full access to all modules and church settings. Only the owner can manage the team.",
     color: "bg-purple-50 text-purple-700 border border-purple-200",
+  },
+  branch_admin: {
+    label: "Branch Admin",
+    description: "Manages members, attendance, and first-time guests for their assigned branch only, plus finance viewing. No church settings, team, or other branches.",
+    color: "bg-indigo-50 text-indigo-700 border border-indigo-200",
   },
   viewer: {
     label: "View Only",
@@ -104,7 +104,7 @@ export default function TeamPage() {
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState("");
-  const [branches, setBranches] = useState<TenantBranch[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
   const [cellRegions, setCellRegions] = useState<string[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [showInvite, setShowInvite] = useState(false);
@@ -123,6 +123,7 @@ export default function TeamPage() {
   const [editingUid, setEditingUid] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<AssignableRole>("viewer");
   const [editCellRegion, setEditCellRegion] = useState("");
+  const [editBranch, setEditBranch] = useState("");
   const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
@@ -135,6 +136,7 @@ export default function TeamPage() {
   const [promotingUid, setPromotingUid] = useState<string | null>(null);
   const [promoteRole, setPromoteRole] = useState<AssignableRole>("cell_leader");
   const [promoteCellRegion, setPromoteCellRegion] = useState("");
+  const [promoteBranch, setPromoteBranch] = useState("");
   const [promoteLoading, setPromoteLoading] = useState(false);
   const [promoteError, setPromoteError] = useState("");
   const [allCongregationMembers, setAllCongregationMembers] = useState<TeamMember[]>([]);
@@ -187,7 +189,7 @@ export default function TeamPage() {
         displayName: d.data().displayName || d.data().name || d.data().email || "-",
         role: d.data().role || "viewer",
         status: d.data().status || "active",
-        branchId: d.data().branchId || null,
+        assignedBranch: d.data().assignedBranch || null,
         assignedCellRegion: d.data().assignedCellRegion || null,
         visitorMinistry: d.data().visitorMinistry === true,
         createdAt: d.data().createdAt || "",
@@ -212,24 +214,30 @@ export default function TeamPage() {
 
   async function handlePromote(targetUid: string) {
     if (promoteRole === "cell_leader" && !promoteCellRegion.trim()) {
-      setPromoteError("Select a cell region for this leader.");
+      setPromoteError("Select a cell group for this leader.");
+      return;
+    }
+    if (promoteRole === "branch_admin" && !promoteBranch.trim()) {
+      setPromoteError("Select a branch for this admin.");
       return;
     }
     setPromoteLoading(true);
     setPromoteError("");
     const newRegion = promoteRole === "cell_leader" ? promoteCellRegion.trim() : null;
+    const newBranch = promoteRole === "branch_admin" ? promoteBranch.trim() : null;
     try {
-      await updateDoc(doc(db, "users", targetUid), { role: promoteRole, assignedCellRegion: newRegion });
+      await updateDoc(doc(db, "users", targetUid), { role: promoteRole, assignedCellRegion: newRegion, assignedBranch: newBranch });
       // Move from congregation list to team list
       const promoted = allCongregationMembers.find((m) => m.uid === targetUid);
       if (promoted) {
-        setMembers((prev) => [...prev, { ...promoted, role: promoteRole, assignedCellRegion: newRegion }]);
+        setMembers((prev) => [...prev, { ...promoted, role: promoteRole, assignedCellRegion: newRegion, assignedBranch: newBranch }]);
         setAllCongregationMembers((prev) => prev.filter((m) => m.uid !== targetUid));
       }
       setPromotingUid(null);
       setPromoteSearch("");
       setPromoteResults([]);
       setPromoteCellRegion("");
+      setPromoteBranch("");
     } catch (err) {
       console.error(err);
       setPromoteError("Could not save. Please try again.");
@@ -252,7 +260,7 @@ export default function TeamPage() {
           email: inviteEmail,
           displayName: inviteName,
           role: inviteRole,
-          branchId: inviteBranch || null,
+          assignedBranch: inviteRole === "branch_admin" ? inviteBranch : null,
           assignedCellRegion: inviteRole === "cell_leader" ? inviteCellRegion : null,
         }),
       });
@@ -278,16 +286,21 @@ export default function TeamPage() {
 
   async function handleRoleChange(targetUid: string) {
     if (editRole === "cell_leader" && !editCellRegion.trim()) {
-      setEditError("Select a cell region for this leader.");
+      setEditError("Select a cell group for this leader.");
+      return;
+    }
+    if (editRole === "branch_admin" && !editBranch.trim()) {
+      setEditError("Select a branch for this admin.");
       return;
     }
     setEditLoading(true);
     setEditError("");
     const newRegion = editRole === "cell_leader" ? editCellRegion.trim() : null;
+    const newBranch = editRole === "branch_admin" ? editBranch.trim() : null;
     try {
-      await updateDoc(doc(db, "users", targetUid), { role: editRole, assignedCellRegion: newRegion });
+      await updateDoc(doc(db, "users", targetUid), { role: editRole, assignedCellRegion: newRegion, assignedBranch: newBranch });
       setMembers((prev) =>
-        prev.map((m) => (m.uid === targetUid ? { ...m, role: editRole, assignedCellRegion: newRegion } : m))
+        prev.map((m) => (m.uid === targetUid ? { ...m, role: editRole, assignedCellRegion: newRegion, assignedBranch: newBranch } : m))
       );
       setEditingUid(null);
     } catch (err) {
@@ -477,8 +490,8 @@ export default function TeamPage() {
                   {inviteRole === "cell_leader" && (
                     <div>
                       <label className="flex items-center gap-1 text-xs font-bold text-gray-600 mb-1">
-                        Assigned Cell Region <span className="text-red-500">*</span>
-                        <InfoTooltip text="The cell or region this leader is responsible for." why="It scopes what they can see so a cell leader only works with their own people, not the whole church. This is what keeps each leader's view private to their group." />
+                        Assigned Cell Group <span className="text-red-500">*</span>
+                        <InfoTooltip text="The cell group this leader is responsible for." why="It scopes what they can see so a cell leader only works with their own people, not the whole church. This is what keeps each leader's view private to their group." />
                       </label>
                       {cellRegions.length > 0 ? (
                         <select
@@ -503,20 +516,30 @@ export default function TeamPage() {
                       <p className="text-xs text-gray-400 mt-1">This leader will only see members and attendance in this cell.</p>
                     </div>
                   )}
-                  {branches.length > 0 && (
+                  {inviteRole === "branch_admin" && (
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1">Branch (optional)</label>
-                      <select
-                        value={inviteBranch}
-                        onChange={(e) => setInviteBranch(e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      >
-                        <option value="">All branches (no restriction)</option>
-                        {branches.map((b) => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-400 mt-1">Leave blank if this user should see the whole church.</p>
+                      <label className="flex items-center gap-1 text-xs font-bold text-gray-600 mb-1">
+                        Assigned Branch <span className="text-red-500">*</span>
+                        <InfoTooltip text="The branch this admin is responsible for." why="It scopes what they can see so a branch admin only works with their own campus, not the whole church." />
+                      </label>
+                      {branches.length > 0 ? (
+                        <select
+                          required
+                          value={inviteBranch}
+                          onChange={(e) => setInviteBranch(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="">Select a branch</option>
+                          {branches.map((b) => (
+                            <option key={b} value={b}>{b}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          No branches configured yet. Add them under Membership Management &rarr; Configure Lists &rarr; Branches first.
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-1">This admin will only see members and attendance in this branch.</p>
                     </div>
                   )}
                   {inviteError && (
@@ -613,6 +636,7 @@ export default function TeamPage() {
                                 setEditRole(next);
                                 setEditError("");
                                 if (next !== "cell_leader") setEditCellRegion("");
+                                if (next !== "branch_admin") setEditBranch("");
                               }}
                               className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                             >
@@ -633,7 +657,7 @@ export default function TeamPage() {
                                 onChange={(e) => setEditCellRegion(e.target.value)}
                                 className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                               >
-                                <option value="">Select a cell region</option>
+                                <option value="">Select a cell group</option>
                                 {cellRegions.map((r) => (
                                   <option key={r} value={r}>{r}</option>
                                 ))}
@@ -648,6 +672,22 @@ export default function TeamPage() {
                               />
                             )
                           )}
+                          {editRole === "branch_admin" && (
+                            branches.length > 0 ? (
+                              <select
+                                value={editBranch}
+                                onChange={(e) => setEditBranch(e.target.value)}
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              >
+                                <option value="">Select a branch</option>
+                                {branches.map((b) => (
+                                  <option key={b} value={b}>{b}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <p className="text-xs text-amber-600">Add branches in Configure Lists first.</p>
+                            )
+                          )}
                           {editError && <p className="text-xs text-red-600">{editError}</p>}
                         </div>
                       ) : (
@@ -655,8 +695,10 @@ export default function TeamPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-gray-500 text-xs">
-                      {m.branchId
-                        ? branches.find((b) => b.id === m.branchId)?.name || m.branchId
+                      {m.assignedBranch
+                        ? m.assignedBranch
+                        : m.assignedCellRegion
+                        ? <span className="text-gray-400">Cell: {m.assignedCellRegion}</span>
                         : <span className="text-gray-400">All branches</span>}
                     </td>
                     <td className="px-6 py-4">
@@ -679,7 +721,7 @@ export default function TeamPage() {
                       <div className="flex items-center justify-end gap-2">
                         {editingUid !== m.uid && (
                           <button
-                            onClick={() => { setEditingUid(m.uid); setEditRole(m.role as AssignableRole); setEditCellRegion(m.assignedCellRegion || ""); setEditError(""); }}
+                            onClick={() => { setEditingUid(m.uid); setEditRole(m.role as AssignableRole); setEditCellRegion(m.assignedCellRegion || ""); setEditBranch(m.assignedBranch || ""); setEditError(""); }}
                             className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition"
                           >
                             Change Role
@@ -832,15 +874,35 @@ export default function TeamPage() {
 
               {promoteRole === "cell_leader" && cellRegions.length > 0 && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1.5">Cell Region</label>
+                  <label className="block text-xs font-bold text-gray-600 mb-1.5">Cell Group</label>
                   <select
                     value={promoteCellRegion}
                     onChange={(e) => setPromoteCellRegion(e.target.value)}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="">Select a region...</option>
+                    <option value="">Select a group...</option>
                     {cellRegions.map((r) => <option key={r} value={r}>{r}</option>)}
                   </select>
+                </div>
+              )}
+
+              {promoteRole === "branch_admin" && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1.5">Branch</label>
+                  {branches.length > 0 ? (
+                    <select
+                      value={promoteBranch}
+                      onChange={(e) => setPromoteBranch(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">Select a branch...</option>
+                      {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  ) : (
+                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      No branches configured yet. Add them under Membership Management &rarr; Configure Lists &rarr; Branches first.
+                    </p>
+                  )}
                 </div>
               )}
 

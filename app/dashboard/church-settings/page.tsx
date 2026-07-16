@@ -65,8 +65,15 @@ const DEFAULT_MEMBER_FIELDS: Record<string, FieldConfig> = {
     type: "dropdown",
     options: ["Member", "Pastor", "Youth Leader", "Treasurer", "Branch Administrator"],
   },
+  branch: {
+    label: "Branch",
+    enabled: true,
+    required: false,
+    type: "dropdown",
+    options: [],
+  },
   cellRegion: {
-    label: "Cell Region / Branch",
+    label: "Cell Group",
     enabled: true,
     required: false,
     type: "dropdown",

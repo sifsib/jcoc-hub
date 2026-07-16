@@ -256,7 +256,7 @@ export async function POST(req: NextRequest) {
       role: "owner",
       tenantId,
       status: "active",
-      branchId: null,
+      assignedBranch: null,
       createdAt: ts,
       invitedBy: null,
     });

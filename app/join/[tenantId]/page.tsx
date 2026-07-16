@@ -17,8 +17,21 @@ interface TenantInfo {
 
 interface TenantConfig {
   membershipTypes: string[];
+  branches: string[];
+  cellGroupBranch: Record<string, string>;
   cellRegions: string[];
   ministryGroups: string[];
+}
+
+// A cell group belongs to a branch via cellGroupBranch. Cell groups with no
+// branch assigned stay visible under every branch (legacy-safe).
+function cellGroupsForBranch(
+  cellGroups: string[],
+  cellGroupBranch: Record<string, string>,
+  branch: string,
+): string[] {
+  if (!branch) return cellGroups;
+  return cellGroups.filter(cg => !cellGroupBranch[cg] || cellGroupBranch[cg] === branch);
 }
 
 interface Address {
@@ -41,6 +54,7 @@ interface PersonFields {
   bornAgain: string;
   waterBaptized: string;
   membershipType: string;
+  branch: string;
   cellRegion: string;
   ministryGroup: string;
 }
@@ -76,6 +90,7 @@ interface ConsentState {
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_MEMBERSHIP_TYPES = ["Full Active", "Associate"];
+const DEFAULT_BRANCHES: string[] = [];
 const DEFAULT_CELL_REGIONS: string[] = [];
 const DEFAULT_MINISTRY_GROUPS = ["Youth", "Mens Fellowship", "Womens Ministry", "Seniors"];
 
@@ -84,7 +99,7 @@ function emptyPerson(): PersonFields {
     firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
     address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
     maritalStatus: "", bornAgain: "", waterBaptized: "", membershipType: "",
-    cellRegion: "", ministryGroup: "",
+    branch: "", cellRegion: "", ministryGroup: "",
   };
 }
 
@@ -127,6 +142,8 @@ export default function JoinPage() {
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [config, setConfig] = useState<TenantConfig>({
     membershipTypes: DEFAULT_MEMBERSHIP_TYPES,
+    branches: DEFAULT_BRANCHES,
+    cellGroupBranch: {},
     cellRegions: DEFAULT_CELL_REGIONS,
     ministryGroups: DEFAULT_MINISTRY_GROUPS,
   });
@@ -173,6 +190,8 @@ export default function JoinPage() {
         setTenant({ name: td.name, primaryColor: td.primaryColor, logoUrl: td.logoUrl });
         setConfig({
           membershipTypes: td.membershipTypes?.length ? td.membershipTypes : DEFAULT_MEMBERSHIP_TYPES,
+          branches:        td.branches?.length        ? td.branches        : DEFAULT_BRANCHES,
+          cellGroupBranch: td.cellGroupBranch || {},
           cellRegions:     td.cellRegions?.length     ? td.cellRegions     : DEFAULT_CELL_REGIONS,
           ministryGroups:  td.ministryGroups?.length  ? td.ministryGroups  : DEFAULT_MINISTRY_GROUPS,
         });
@@ -181,12 +200,20 @@ export default function JoinPage() {
       .catch(() => { setNotFound(true); setLoading(false); });
   }, [tenantId]);
 
+  // When the church runs a single branch, fill it in automatically so the
+  // member record still carries a branch without showing a one-option dropdown.
+  useEffect(() => {
+    if (config.branches.length === 1 && !primary.branch) setP("branch", config.branches[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.branches]);
+
   // ─── Validation ───────────────────────────────────────────────────────────
 
   const validate = () => {
     const e: Record<string, string> = {};
     if (!primary.firstName.trim()) e.firstName = "Required";
     if (!primary.lastName.trim()) e.lastName = "Required";
+    if (config.branches.length > 1 && !primary.branch) e.branch = "Please choose your branch";
     if (!primary.dob) e.dob = "Required";
     if (!primary.gender) e.gender = "Required";
     if (!primary.phone.trim()) e.phone = "Required";
@@ -234,6 +261,7 @@ export default function JoinPage() {
         householdRole: "primary",
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
         membershipType: primary.membershipType,
+        branch: primary.branch,
         cellRegion: primary.cellRegion,
         ministryGroup: primary.ministryGroup,
         // Non-member spouse stored as nested detail only
@@ -263,6 +291,7 @@ export default function JoinPage() {
           linkedPrimaryRequestId: primaryRef.id,
           faithStatus: { bornAgain: spouseBasic.bornAgain, waterBaptized: spouseBasic.waterBaptized },
           membershipType: spouseBasic.membershipType,
+          branch: primary.branch,
           ministryGroup: spouseBasic.ministryGroup,
           consentedToPrivacyPolicy: true,
           consentedToSpecialInfo: consent.special,
@@ -291,6 +320,7 @@ export default function JoinPage() {
           linkedPrimaryRequestId: primaryRef.id,
           faithStatus: { bornAgain: "", waterBaptized: "" },
           membershipType: "",
+          branch: primary.branch,
           ministryGroup: "",
           consentedToPrivacyPolicy: true,
           consentedToSpecialInfo: false,
@@ -459,8 +489,17 @@ export default function JoinPage() {
               </select>
             </F>
 
+            {config.branches.length > 1 && (
+              <F label="Branch">
+                <select value={primary.branch} onChange={e => setP("branch", e.target.value)} className={sel} required>
+                  <option value="">Select...</option>
+                  {config.branches.map(b => <option key={b}>{b}</option>)}
+                </select>
+              </F>
+            )}
+
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-semibold text-gray-400">Cell Region / Branch</label>
+              <label className="text-sm font-semibold text-gray-400">Cell Group</label>
               <div className="border border-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-400 bg-gray-50 cursor-not-allowed">
                 Assigned by administrator
               </div>

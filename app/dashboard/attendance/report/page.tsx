@@ -13,12 +13,24 @@ import {
   doc,
 } from "firebase/firestore";
 
+// Cell groups belong to a branch via cellGroupBranch. Groups with no branch
+// assigned stay visible under every branch (legacy-safe).
+function cellGroupsForBranch(
+  cellGroups: string[],
+  cellGroupBranch: Record<string, string>,
+  branch: string,
+): string[] {
+  if (!branch || branch === "all") return cellGroups;
+  return cellGroups.filter(cg => !cellGroupBranch[cg] || cellGroupBranch[cg] === branch);
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface Member {
   id: string;
   fullName: string;
   role: string;
+  branch?: string;
   cellRegion?: string;
   ministryGroup?: string;
 }
@@ -113,10 +125,24 @@ function getPctColor(pct: number) {
 export default function AttendanceReportPage() {
   const { appUser, loading: userLoading } = useAppUser();
 
-  const [members, setMembers] = useState<Member[]>([]);
+  const [allMembers, setMembers] = useState<Member[]>([]);
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([]);
   const [sessions, setSessions] = useState<ServiceSession[]>([]);
-  const [cellRegions, setCellRegions] = useState<string[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [cellGroupBranch, setCellGroupBranch] = useState<Record<string, string>>({});
+  const [allCellRegions, setAllCellRegions] = useState<string[]>([]);
+  const [branchFilter, setBranchFilter] = useState("all");
+
+  // Everything downstream reads these branch-scoped lists, so switching branch
+  // narrows the whole report at once.
+  const members = useMemo(
+    () => branchFilter === "all" ? allMembers : allMembers.filter(m => m.branch === branchFilter),
+    [allMembers, branchFilter],
+  );
+  const cellRegions = useMemo(
+    () => cellGroupsForBranch(allCellRegions, cellGroupBranch, branchFilter),
+    [allCellRegions, cellGroupBranch, branchFilter],
+  );
   const [loading, setLoading] = useState(true);
 
   // UI state
@@ -142,12 +168,18 @@ export default function AttendanceReportPage() {
         const tenantSnap = await getDoc(doc(db, "tenants", tenantId));
         const td = tenantSnap.data() || {};
         setSessions(td.serviceSessions || []);
-        setCellRegions(td.cellRegions || []);
+        setBranches(td.branches || []);
+        setCellGroupBranch(td.cellGroupBranch || {});
+        setAllCellRegions(td.cellRegions || []);
 
-        // Members
+        // Members. Cell leaders are scoped to their cell group; branch admins
+        // to their branch.
         const isCellLeader = appUser.role === "cell_leader";
+        const isBranchAdmin = appUser.role === "branch_admin";
         const mQuery = isCellLeader && appUser.assignedCellRegion
           ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("cellRegion", "==", appUser.assignedCellRegion))
+          : isBranchAdmin && appUser.assignedBranch
+          ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("branch", "==", appUser.assignedBranch))
           : query(collection(db, "members"), where("tenantId", "==", tenantId));
         const mSnap = await getDocs(mQuery);
         const mList: Member[] = [];
@@ -393,7 +425,7 @@ export default function AttendanceReportPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-800">Attendance Report</h1>
         <p className="text-gray-500 text-sm mt-1">
-          Analyse attendance trends across services, regions, and members
+          Analyse attendance trends across services, branches, cell groups, and members
         </p>
       </div>
 
@@ -458,13 +490,37 @@ export default function AttendanceReportPage() {
             ))}
           </div>
         )}
+
+        {/* Branch filter — scopes the whole report to one campus */}
+        {branches.length > 1 && (
+          <div className="flex flex-wrap gap-2 pt-1 border-t border-gray-100">
+            <span className="text-xs text-gray-400 font-medium self-center">Branch:</span>
+            <button
+              onClick={() => { setBranchFilter("all"); setRegionFilter("all"); }}
+              className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${
+                branchFilter === "all" ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              All
+            </button>
+            {branches.map(b => (
+              <button key={b} onClick={() => { setBranchFilter(b); setRegionFilter("all"); }}
+                className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${
+                  branchFilter === b ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Section tabs */}
       <div className="flex gap-2 border-b border-gray-200 pb-0">
         {[
           { label: "Overview", value: "overview" as View },
-          { label: "By Region", value: "region" as View },
+          { label: "By Cell Group", value: "region" as View },
           { label: "By Member", value: "person" as View },
           { label: `Falling Off${fallingOff.length > 0 ? ` (${fallingOff.length})` : ""}`, value: "dropoff" as View },
         ].map(tab => (
@@ -506,7 +562,7 @@ export default function AttendanceReportPage() {
               {cellRegions.length > 0 && (
                 <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                   <div className="px-4 py-3 border-b bg-gray-50">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Regions at a Glance</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cell Groups at a Glance</p>
                   </div>
                   <div className="divide-y divide-gray-100">
                     {cellRegions
@@ -550,20 +606,20 @@ export default function AttendanceReportPage() {
         <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
           {cellRegions.length === 0 ? (
             <p className="p-8 text-center text-sm text-gray-400">
-              No Cell Regions configured. Add them in Configure Lists to enable region reporting.
+              No Cell Groups configured. Add them in Configure Lists to enable cell group reporting.
             </p>
           ) : servicesInPeriod.length === 0 ? (
             <p className="p-8 text-center text-sm text-gray-400">No attendance data for this period.</p>
           ) : (
             <>
               <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Region Breakdown</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cell Group Breakdown</p>
                 <select
                   value={regionFilter}
                   onChange={e => setRegionFilter(e.target.value)}
                   className="text-xs border rounded p-1 text-gray-600 focus:outline-blue-500"
                 >
-                  <option value="all">All regions</option>
+                  <option value="all">All cell groups</option>
                   {cellRegions.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
@@ -627,7 +683,7 @@ export default function AttendanceReportPage() {
               onChange={e => setRegionFilter(e.target.value)}
               className="text-xs border rounded p-1 text-gray-600 focus:outline-blue-500"
             >
-              <option value="all">All regions</option>
+              <option value="all">All cell groups</option>
               {cellRegions.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>

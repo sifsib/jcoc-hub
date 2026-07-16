@@ -26,6 +26,7 @@ interface Member {
   firstName?: string;
   lastName?: string;
   role: string;
+  branch?: string;
   cellRegion?: string;
   ministryGroup?: string;
   absenceException?: { tag: string } | null;
@@ -69,8 +70,9 @@ export default function AttendancePage() {
   const [dateError, setDateError] = useState("");
 
   // Attendance filter state
-  const [filterType, setFilterType] = useState<"all" | "cellRegion" | "ministryGroup">("all");
+  const [filterType, setFilterType] = useState<"all" | "branch" | "cellRegion" | "ministryGroup">("all");
   const [filterValue, setFilterValue] = useState("");
+  const [configBranches, setConfigBranches] = useState<string[]>([]);
   const [configCellRegions, setConfigCellRegions] = useState<string[]>([]);
   const [configMinistryGroups, setConfigMinistryGroups] = useState<string[]>([]);
 
@@ -99,6 +101,7 @@ export default function AttendancePage() {
         const loaded: ServiceSession[] = td.serviceSessions || [];
         setSessions(loaded);
         setTrackingStartDate(td.trackingStartDate || "");
+        setConfigBranches(td.branches || []);
         setConfigCellRegions(td.cellRegions || []);
         setConfigMinistryGroups(td.ministryGroups || []);
 
@@ -200,10 +203,14 @@ export default function AttendancePage() {
       const serviceId = `${selectedDate}_${activeSession.id}`;
 
       try {
-        // Cell leaders only see their assigned cell region
+        // Cell leaders only see their assigned cell group; branch admins only
+        // see their assigned branch.
         const isCellLeader = appUser.role === "cell_leader";
+        const isBranchAdmin = appUser.role === "branch_admin";
         const qMembers = isCellLeader && appUser.assignedCellRegion
           ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("cellRegion", "==", appUser.assignedCellRegion))
+          : isBranchAdmin && appUser.assignedBranch
+          ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("branch", "==", appUser.assignedBranch))
           : query(collection(db, "members"), where("tenantId", "==", tenantId));
         const membersSnap = await getDocs(qMembers);
         const memberList: Member[] = [];
@@ -347,6 +354,7 @@ export default function AttendancePage() {
     // Hide members from services that pre-date their capture.
     const eligibleFrom = earliestEligibleDate(m);
     if (eligibleFrom && selectedDate && selectedDate < eligibleFrom) return false;
+    if (filterType === "branch") return m.branch === filterValue;
     if (filterType === "cellRegion") return m.cellRegion === filterValue;
     if (filterType === "ministryGroup") return m.ministryGroup === filterValue;
     return true;
@@ -377,6 +385,7 @@ export default function AttendancePage() {
         firstName: m.firstName || parts[0] || "",
         lastName: m.lastName || parts.slice(1).join(" ") || "",
         role: m.role || "-",
+        branch: m.branch || "-",
         cellRegion: m.cellRegion || "-",
         ministryGroup: m.ministryGroup || "-",
         status,
@@ -397,7 +406,8 @@ export default function AttendancePage() {
     { key: "firstName" as const, label: "First Name" },
     { key: "lastName" as const, label: "Last Name" },
     { key: "role" as const, label: "Role" },
-    { key: "cellRegion" as const, label: "Cell Region" },
+    { key: "branch" as const, label: "Branch" },
+    { key: "cellRegion" as const, label: "Cell Group" },
     { key: "ministryGroup" as const, label: "Ministry Group" },
     { key: "status" as const, label: "Status" },
     { key: "absenceReported" as const, label: "Absence Reported" },
@@ -495,9 +505,21 @@ export default function AttendancePage() {
                   All ({members.length})
                 </button>
 
+                {configBranches.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs text-gray-400 font-medium">Branch:</span>
+                    {configBranches.map(b => (
+                      <button key={b} onClick={() => { setFilterType("branch"); setFilterValue(b); }}
+                        className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "branch" && filterValue === b ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
+                        {b}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {configCellRegions.length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-xs text-gray-400 font-medium">Region:</span>
+                    <span className="text-xs text-gray-400 font-medium">Cell Group:</span>
                     {configCellRegions.map(r => (
                       <button key={r} onClick={() => { setFilterType("cellRegion"); setFilterValue(r); }}
                         className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "cellRegion" && filterValue === r ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
@@ -519,8 +541,8 @@ export default function AttendancePage() {
                   </div>
                 )}
 
-                {configCellRegions.length === 0 && configMinistryGroups.length === 0 && (
-                  <span className="text-xs text-gray-400 italic">Add Cell Regions and Ministry Groups in Configure Lists to enable filtering.</span>
+                {configBranches.length === 0 && configCellRegions.length === 0 && configMinistryGroups.length === 0 && (
+                  <span className="text-xs text-gray-400 italic">Add Branches, Cell Groups and Ministry Groups in Configure Lists to enable filtering.</span>
                 )}
               </>
             )}
