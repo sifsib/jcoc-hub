@@ -31,6 +31,17 @@ function addDays(date: Date, n: number): Date {
   return d;
 }
 
+// Normalize a SA cell number to international E.164 format for Brevo SMS/WhatsApp.
+// "082 123 4567" -> "+27821234567". Returns "" if it doesn't look usable.
+function normalizePhone(raw: string): string {
+  const digits = (raw || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("27")) return `+${digits}`;
+  if (digits.startsWith("0")) return `+27${digits.slice(1)}`;
+  if (raw.trim().startsWith("+")) return `+${digits}`;
+  return `+${digits}`;
+}
+
 function resolveAccountType(email: string, code: string): "internal" | "beta" | "standard" {
   if (email === INTERNAL_EMAIL) return "internal";
   if (email === "kfwc@kfwc.org.za") return "internal"; // Lifetime free access
@@ -46,6 +57,7 @@ async function notifyAdminOfSignup(
   churchName: string,
   adminName: string,
   email: string,
+  phone: string,
   accountType: string
 ): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY;
@@ -72,6 +84,7 @@ async function notifyAdminOfSignup(
               <tr><td style="padding:6px 0;color:#64748b;width:130px;">Church</td><td style="padding:6px 0;font-weight:700;">${churchName}</td></tr>
               <tr><td style="padding:6px 0;color:#64748b;">Admin</td><td style="padding:6px 0;">${adminName}</td></tr>
               <tr><td style="padding:6px 0;color:#64748b;">Email</td><td style="padding:6px 0;"><a href="mailto:${email}" style="color:#059669;">${email}</a></td></tr>
+              <tr><td style="padding:6px 0;color:#64748b;">Cell</td><td style="padding:6px 0;">${phone ? `<a href="tel:${phone}" style="color:#059669;">${phone}</a>` : "Not provided"}</td></tr>
               <tr><td style="padding:6px 0;color:#64748b;">Account Type</td><td style="padding:6px 0;">${accountType.charAt(0).toUpperCase() + accountType.slice(1)}</td></tr>
             </table>
             <div style="margin-top:20px;">
@@ -93,6 +106,7 @@ async function addContactToBrevo(
   email: string,
   firstName: string,
   churchName: string,
+  phone: string,
   accountType: string,
   trialEndsAt: string | null
 ): Promise<void> {
@@ -126,6 +140,8 @@ async function addContactToBrevo(
         CHURCH_NAME: churchName,
         ACCOUNT_TYPE: accountType,
         TRIAL_ENDS_AT: trialEndFormatted,
+        // Brevo's built-in SMS attribute expects E.164 (+27...). Enables SMS/WhatsApp outreach.
+        ...(phone ? { SMS: phone, WHATSAPP: phone } : {}),
       },
       listIds: [listId],
       updateEnabled: true, // update if contact already exists
@@ -189,10 +205,14 @@ function buildBillingFields(
 
 export async function POST(req: NextRequest) {
   try {
-    const { churchName, adminName, email, password, accessCode = "", congregants = "" } = await req.json();
+    const { churchName, adminName, email, phone = "", password, accessCode = "", congregants = "" } = await req.json();
 
-    if (!churchName?.trim() || !adminName?.trim() || !email?.trim() || !password) {
+    if (!churchName?.trim() || !adminName?.trim() || !email?.trim() || !phone?.trim() || !password) {
       return NextResponse.json({ error: "All fields are required." }, { status: 400 });
+    }
+    const normalizedPhone = normalizePhone(phone);
+    if (normalizedPhone.replace(/\D/g, "").length < 10) {
+      return NextResponse.json({ error: "Please enter a valid cell number." }, { status: 400 });
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
@@ -237,6 +257,7 @@ export async function POST(req: NextRequest) {
       name: churchName.trim(),
       ownerEmail: normalizedEmail,
       ownerName: adminName.trim(),
+      ownerPhone: normalizedPhone,
       plan: "small_church",
       accountType,
       status: billing.billingPhase === "trial" ? "trial" : "active",
@@ -252,6 +273,7 @@ export async function POST(req: NextRequest) {
     // 3. Create user document with owner role
     await adminDb.collection("users").doc(uid).set({
       email: normalizedEmail,
+      phone: normalizedPhone,
       displayName: adminName.trim(),
       role: "owner",
       tenantId,
@@ -269,6 +291,7 @@ export async function POST(req: NextRequest) {
       churchName: churchName.trim(),
       adminName: adminName.trim(),
       email: normalizedEmail,
+      phone: normalizedPhone,
       accountType,
       ...billing,
       status: "pending_welcome",
@@ -281,6 +304,7 @@ export async function POST(req: NextRequest) {
       normalizedEmail,
       adminName.trim(),
       churchName.trim(),
+      normalizedPhone,
       accountType,
       billing.trialEndsAt ?? null
     ).catch((err) => console.error("[Brevo] Failed to add contact:", err));
@@ -290,6 +314,7 @@ export async function POST(req: NextRequest) {
       churchName.trim(),
       adminName.trim(),
       normalizedEmail,
+      normalizedPhone,
       accountType
     ).catch((err) => console.error("[Brevo] Admin signup notification failed:", err));
 
