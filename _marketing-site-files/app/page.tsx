@@ -9,7 +9,7 @@ export default function Home() {
       <section className="py-20 px-6 text-center">
         <div className="max-w-3xl mx-auto">
           <span className="inline-block mb-4 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            Built for South African churches
+            Built for a growing church
           </span>
           <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white mb-5 leading-[1.1]">
             Ministry management,<br />
