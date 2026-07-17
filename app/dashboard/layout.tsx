@@ -24,7 +24,11 @@ export default async function DashboardLayout({
   let tenantData = null;
 
   try {
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+    // checkRevoked=false: verify the cookie's signature without a live network
+    // round-trip to Google on every page load. Faster logins/navigation. The
+    // trade-off is a revoked session stays valid until the cookie expires;
+    // acceptable here, and Secure Logout now clears the cookie anyway.
+    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, false);
 
     const userDoc = await adminDb.collection("users").doc(decodedToken.uid).get();
 

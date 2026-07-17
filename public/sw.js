@@ -4,7 +4,7 @@
  * Firebase SDK handles its own offline persistence via IndexedDB
  */
 
-const CACHE_NAME = 'kereke-hub-v1';
+const CACHE_NAME = 'kereke-hub-v2';
 const CACHE_ASSETS = [
   '/',
   '/offline.html',
@@ -55,22 +55,28 @@ self.addEventListener('fetch', event => {
     return; // pass through to network
   }
 
-  // For navigation requests, serve from cache with network fallback
+  // For navigation requests, go to the NETWORK FIRST so the freshly deployed
+  // HTML (which references the current CSS/JS chunk hashes) is always used.
+  // Only fall back to a cached page or the offline page when truly offline.
+  // Serving cached HTML first was causing unstyled pages after deploys, because
+  // the old HTML pointed at CSS files whose hashed names no longer existed.
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match(request).then(response => {
-        if (response) return response;
-        return fetch(request).then(response => {
+      fetch(request)
+        .then(response => {
           if (response && response.status === 200) {
             const copy = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
           }
           return response;
-        }).catch(() => {
-          return caches.match('/offline.html').catch(() => new Response('Offline'));
-        });
-      })
+        })
+        .catch(() =>
+          caches.match(request).then(
+            cached => cached || caches.match('/offline.html').then(off => off || new Response('Offline'))
+          )
+        )
     );
+    return;
   }
 
   // For other requests: network first, fallback to cache

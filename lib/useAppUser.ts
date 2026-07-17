@@ -27,14 +27,25 @@ interface UseAppUserReturn {
   loading: boolean;
 }
 
+// Module-level cache of the merged user doc, keyed by uid. Survives client-side
+// navigation between dashboard pages, so we don't re-read the user doc from
+// Firestore on every page. Cleared on full reload (login/logout do a full
+// reload, so a different account never reuses a stale cache).
+let cachedUid: string | null = null;
+let cachedAppUser: AppUser | null = null;
+
 export function useAppUser(): UseAppUserReturn {
   const [user, setUser] = useState<User | null>(null);
-  const [appUser, setAppUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [appUser, setAppUser] = useState<AppUser | null>(
+    cachedAppUser
+  );
+  const [loading, setLoading] = useState(!cachedAppUser);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (!firebaseUser) {
+        cachedUid = null;
+        cachedAppUser = null;
         setUser(null);
         setAppUser(null);
         setLoading(false);
@@ -43,10 +54,18 @@ export function useAppUser(): UseAppUserReturn {
 
       setUser(firebaseUser);
 
+      // Serve the cached doc instantly if it's for this same user, so the page
+      // renders without waiting on a Firestore read.
+      if (cachedUid === firebaseUser.uid && cachedAppUser) {
+        setAppUser(cachedAppUser);
+        setLoading(false);
+        return;
+      }
+
       try {
         const userSnap = await getDoc(doc(db, "users", firebaseUser.uid));
         const data = userSnap.data() ?? {};
-        setAppUser({
+        const merged: AppUser = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
@@ -57,7 +76,10 @@ export function useAppUser(): UseAppUserReturn {
           role: data.role ?? "",
           assignedCellRegion: data.assignedCellRegion ?? "",
           assignedBranch: data.assignedBranch ?? "",
-        });
+        };
+        cachedUid = firebaseUser.uid;
+        cachedAppUser = merged;
+        setAppUser(merged);
       } catch (err) {
         console.error("useAppUser: failed to load user doc", err);
         setAppUser({
