@@ -4,7 +4,7 @@
 // PayFast POSTs here after every successful payment event.
 // We verify the payload and update the tenant's payment status.
 //
-// No auth required — PayFast calls this directly.
+// No auth required. PayFast calls this directly.
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
@@ -45,10 +45,17 @@ export async function POST(req: NextRequest) {
       const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const invoiceNumber = `INV-${period.replace("-", "")}-${tenantId.slice(0, 6).toUpperCase()}`;
 
-      // Update tenant billing status. A completed payment also lifts the church
-      // onto the paid tier: unlimited members (memberLimit null) at R159/mo. This
-      // is what turns a free upgrade into an actual paid account.
-      await adminDb.collection("tenants").doc(tenantId).update({
+      // A successful payment clears any past-due state. If the dunning job had
+      // auto-suspended this church for non-payment, bring it straight back.
+      // A manual suspension (suspendedReason not "billing_auto") is left alone,
+      // so a payment never silently overrides an admin's deliberate suspension.
+      const tenantRef = adminDb.collection("tenants").doc(tenantId);
+      const tenantSnap = await tenantRef.get();
+      const tenantData = tenantSnap.data() || {};
+      const wasAutoSuspended =
+        tenantData.status === "suspended" && tenantData.suspendedReason === "billing_auto";
+
+      const update: Record<string, unknown> = {
         paymentStatus: "active",
         billingPhase: "active",
         tier: "paid",
@@ -56,8 +63,15 @@ export async function POST(req: NextRequest) {
         currentRate: 159,
         lastPaymentAt: now.toISOString(),
         lastPaymentAmount: amount,
+        pastDueSince: null,
+        lastDunningDay: null,
         updatedAt: now,
-      });
+      };
+      if (wasAutoSuspended) {
+        update.status = "active";
+        update.suspendedReason = null;
+      }
+      await tenantRef.update(update);
 
       // Log to payments collection for invoice generation
       await adminDb.collection("payments").add({
@@ -70,13 +84,40 @@ export async function POST(req: NextRequest) {
         createdAt: now.toISOString(),
       });
 
+      // Record the auto-reactivation in the admin audit trail.
+      if (wasAutoSuspended) {
+        await adminDb.collection("admin_audit").add({
+          action: "tenant.auto_reactivate",
+          targetType: "tenant",
+          targetId: tenantId,
+          targetName: tenantData.name || "",
+          actorUid: "system",
+          actorEmail: "",
+          meta: { reason: "payment_received", period },
+          at: now,
+        });
+      }
+
       console.log(`[itn] Payment confirmed for tenant ${tenantId}, period ${period}`);
-    } else if (payment_status === "CANCELLED") {
-      await adminDb.collection("tenants").doc(tenantId).update({
-        paymentStatus: "cancelled",
-        updatedAt: new Date(),
-      });
-      console.log(`[itn] Payment cancelled for tenant ${tenantId}`);
+    } else if (payment_status === "CANCELLED" || payment_status === "FAILED") {
+      // A cancelled or failed payment does not suspend immediately. We stamp the
+      // church as past due (once) so the daily dunning job can send reminders and,
+      // after the grace period, auto-suspend. Only paid-tier churches enter this
+      // flow; trials and beta churches have no recurring payment to miss.
+      const now = new Date();
+      const tenantRef = adminDb.collection("tenants").doc(tenantId);
+      const tenantSnap = await tenantRef.get();
+      const tenantData = tenantSnap.data() || {};
+
+      const update: Record<string, unknown> = {
+        paymentStatus: payment_status === "FAILED" ? "failed" : "cancelled",
+        updatedAt: now,
+      };
+      if (tenantData.tier === "paid" && !tenantData.pastDueSince) {
+        update.pastDueSince = now.toISOString();
+      }
+      await tenantRef.update(update);
+      console.log(`[itn] Payment ${payment_status.toLowerCase()} for tenant ${tenantId}`);
     }
 
     return new NextResponse("OK", { status: 200 });

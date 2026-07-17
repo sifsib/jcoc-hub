@@ -64,6 +64,33 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Block suspended churches ─────────────────────────────────────────
+    // A suspended tenant must not be able to sign in. We check the tenant's
+    // status here, after verifying the user but BEFORE the session cookie is
+    // attached to the response below, so a suspended account never gets a
+    // working session. Super admins have no tenantId, so they are unaffected.
+    try {
+      const loginUser = userSnap.exists ? userSnap.data() : (await userRef.get()).data();
+      const tenantId = loginUser?.tenantId;
+      if (tenantId) {
+        const tenantSnap = await adminDb.collection("tenants").doc(tenantId).get();
+        if (tenantSnap.exists && tenantSnap.data()?.status === "suspended") {
+          return NextResponse.json(
+            {
+              error:
+                "This church account is currently suspended. Please contact Kereke Hub support to restore access.",
+              suspended: true,
+            },
+            { status: 403 }
+          );
+        }
+      }
+    } catch (suspendErr) {
+      // If the tenant lookup itself fails, do not lock a valid user out. Log and
+      // continue; the dashboard layout backstop will catch a suspended tenant.
+      console.error("[POST /api/login] Suspension check failed:", suspendErr);
+    }
+
     // ── Sign-in audit trail ──────────────────────────────────────────────
     // Record who signed in and when. Written server-side with the admin SDK so
     // it cannot be tampered with from the browser. We read the freshest user doc
@@ -87,7 +114,7 @@ export async function POST(req: NextRequest) {
       console.error("[POST /api/login] Audit write failed:", auditErr);
     }
 
-    // Set the session cookie — httpOnly so JS can't touch it
+    // Set the session cookie. httpOnly so JS can't touch it.
     const response = NextResponse.json({ success: true });
     response.cookies.set("session", sessionCookie, {
       httpOnly: true,

@@ -761,6 +761,175 @@ export const billingReminder = onSchedule(
 );
 
 // ─────────────────────────────────────────────────────────────
+// TRIGGER 3b: DUNNING + AUTO-SUSPENSION ON A MISSED PAYMENT
+//
+// Runs daily. Looks at paid-tier churches that the PayFast ITN handler marked
+// past due (pastDueSince set after a cancelled or failed payment). It sends a
+// short reminder sequence, then auto-suspends after a grace period.
+//
+//   Day 1, 3, 7 past due : send a "payment failed, please update" email.
+//   Day 10 (GRACE_DAYS)  : auto-suspend (status = "suspended",
+//                          suspendedReason = "billing_auto") and email the owner.
+//
+// A later successful payment (see the ITN handler) clears pastDueSince and, if
+// the church was auto-suspended, reactivates it automatically.
+//
+// Protected from auto-suspension:
+//   - accountType "internal" (Sifiso's own / test churches)
+//   - any church flagged billingHold === true (manual escape hatch, e.g. the
+//     grandfathered sister churches)
+// ─────────────────────────────────────────────────────────────
+const GRACE_DAYS = 10;
+const DUNNING_EMAIL_DAYS = [1, 3, 7];
+
+export const dunning = onSchedule(
+  {
+    schedule: "0 7 * * *",   // 07:00 UTC = 09:00 SAST, an hour after billingReminder
+    timeZone: "Africa/Johannesburg",
+    secrets: [SYSTEM_GMAIL_USER, SYSTEM_GMAIL_APP_PASSWORD],
+  },
+  async () => {
+    const gmailUser = SYSTEM_GMAIL_USER.value();
+    const gmailPass = SYSTEM_GMAIL_APP_PASSWORD.value();
+    if (!gmailUser || !gmailPass) {
+      console.error("[dunning] System Gmail secrets not configured.");
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+
+    const now = new Date();
+    const billingUrl = "https://hub.kerekehub.co.za/dashboard/billing";
+
+    // Only paid-tier churches that have been stamped past due.
+    const snap = await db.collection("tenants").where("tier", "==", "paid").get();
+
+    let emailed = 0;
+    let suspended = 0;
+
+    for (const tenantDoc of snap.docs) {
+      const t = tenantDoc.data();
+      if (!t.pastDueSince) continue;                 // not past due
+      if (t.paymentStatus === "active") continue;    // already paid, safety
+      if (t.accountType === "internal") continue;    // protected account type
+      if (t.billingHold === true) continue;          // manual protection
+
+      const daysPastDue = Math.floor(
+        (now.getTime() - new Date(t.pastDueSince).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysPastDue < 1) continue;
+
+      const { ownerEmail, ownerName, name: churchName } = t;
+
+      // ── Auto-suspend once the grace period is up ──────────────────────────
+      if (daysPastDue >= GRACE_DAYS) {
+        if (t.status !== "suspended") {
+          try {
+            await tenantDoc.ref.update({
+              status: "suspended",
+              suspendedReason: "billing_auto",
+              updatedAt: now,
+            });
+            await db.collection("admin_audit").add({
+              action: "tenant.auto_suspend",
+              targetType: "tenant",
+              targetId: tenantDoc.id,
+              targetName: churchName || "",
+              actorUid: "system",
+              actorEmail: "",
+              meta: { daysPastDue, graceDays: GRACE_DAYS },
+              at: now,
+            });
+            suspended++;
+
+            if (ownerEmail) {
+              await transporter.sendMail({
+                from: `"Kereke Hub" <${gmailUser}>`,
+                to: ownerEmail,
+                subject: `Access paused for ${churchName}`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 40px; border-radius: 10px;">
+                    <h2 style="color: #F59E0B; margin-top: 0;">Your account access is paused</h2>
+                    <p style="color: #F8FAFC;">Hi ${ownerName || "there"},</p>
+                    <p style="color: #CBD5E1;">
+                      We were not able to collect payment for <strong>${churchName}</strong>, and the
+                      account is now paused after ${GRACE_DAYS} days. Your data is safe and nothing has
+                      been deleted.
+                    </p>
+                    <p style="color: #CBD5E1;">
+                      To restore access straight away, please update your payment method.
+                    </p>
+                    <div style="text-align: center; margin: 32px 0;">
+                      <a href="${billingUrl}" style="background: #3B9A5F; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
+                        Update Payment
+                      </a>
+                    </div>
+                    <p style="color: #94A3B8; font-size: 14px;">
+                      Need help? Reply to this email or visit
+                      <a href="https://kerekehub.co.za/contact" style="color: #3B9A5F;">kerekehub.co.za/contact</a>.
+                    </p>
+                  </div>
+                `,
+              });
+            }
+            console.log(`[dunning] Auto-suspended ${churchName} (${daysPastDue} days past due).`);
+          } catch (err) {
+            console.error(`[dunning] Failed to auto-suspend ${tenantDoc.id}:`, err);
+          }
+        }
+        continue; // suspended churches get no more reminder emails
+      }
+
+      // ── Reminder emails on day 1, 3, 7 ────────────────────────────────────
+      // lastDunningDay stops the same day's email going out twice if the job
+      // runs more than once, and lets us catch up if a run was missed.
+      if (!DUNNING_EMAIL_DAYS.includes(daysPastDue)) continue;
+      if (t.lastDunningDay === daysPastDue) continue;
+      if (!ownerEmail) continue;
+
+      const daysLeft = GRACE_DAYS - daysPastDue;
+      try {
+        await transporter.sendMail({
+          from: `"Kereke Hub" <${gmailUser}>`,
+          to: ownerEmail,
+          subject: `Payment failed for ${churchName}. Please update your details`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 40px; border-radius: 10px;">
+              <h2 style="color: #F59E0B; margin-top: 0;">We could not process your payment</h2>
+              <p style="color: #F8FAFC;">Hi ${ownerName || "there"},</p>
+              <p style="color: #CBD5E1;">
+                A recent payment for <strong>${churchName}</strong> did not go through. To avoid any
+                interruption, please update your payment method. Access will be paused in
+                <strong>${daysLeft} day${daysLeft === 1 ? "" : "s"}</strong> if the payment is not settled.
+              </p>
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${billingUrl}" style="background: #3B9A5F; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
+                  Update Payment
+                </a>
+              </div>
+              <p style="color: #94A3B8; font-size: 14px;">
+                Already paid? You can ignore this. Questions? Reply to this email or visit
+                <a href="https://kerekehub.co.za/contact" style="color: #3B9A5F;">kerekehub.co.za/contact</a>.
+              </p>
+            </div>
+          `,
+        });
+        await tenantDoc.ref.update({ lastDunningDay: daysPastDue });
+        emailed++;
+        console.log(`[dunning] Reminder sent to ${ownerEmail} (day ${daysPastDue} past due).`);
+      } catch (err) {
+        console.error(`[dunning] Failed to email ${ownerEmail}:`, err);
+      }
+    }
+
+    console.log(`[dunning] Done. ${emailed} reminder(s) sent, ${suspended} church(es) auto-suspended.`);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
 // TRIGGER 4: SUPPORT TICKET NOTIFICATIONS
 //
 // Fires when a new document is created in /support_tickets/{ticketId}.

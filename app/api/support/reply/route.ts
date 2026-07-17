@@ -9,6 +9,7 @@ import { cookies } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { sendSupportEmail, emailShell, SUPPORT_INBOX } from "@/lib/supportEmail";
+import { writeAudit } from "@/lib/audit";
 
 const esc = (s: string) =>
   String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -83,6 +84,17 @@ export async function POST(req: NextRequest) {
   };
   if (ticket.status === "open") update.status = "in_progress";
   await ticketRef.update(update);
+
+  // Audit trail: record that an admin replied to this ticket.
+  await writeAudit({
+    action: "ticket.reply",
+    targetType: "ticket",
+    targetId: ticketId,
+    targetName: refLabel,
+    actorUid: uid,
+    actorEmail: me.email || "",
+    meta: { churchName: ticket.churchName || "", to },
+  });
 
   return NextResponse.json({ ok: true, reply });
 }

@@ -137,6 +137,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Platform admin audit trail. Records destructive/important admin actions
+    // (suspend, reactivate, delete, ticket reply, convert to beta, auto actions).
+    // Written ONLY by server routes using the Admin SDK, which bypass these
+    // rules. Clients may never write here, keeping the trail tamper proof. Only
+    // super admins may read it.
+    match /admin_audit/{id} {
+      allow read: if isSignedIn() && isSuperAdmin();
+      allow write: if false;
+    }
+
     // ============================================
     // TENANTS COLLECTION
     // ============================================

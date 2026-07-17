@@ -53,6 +53,14 @@ export default async function DashboardLayout({
   const userName = userDocData?.displayName || userDocData?.name || "Member";
   const tenantId = userDocData?.tenantId || "";
 
+  // Backstop for existing sessions: if a tenant is suspended after a user is
+  // already logged in, bounce them to the suspended notice. The login route
+  // blocks new sign-ins; this catches sessions minted before the suspension.
+  // Super admins have no tenant, so they are never affected.
+  if (userRole !== "super_admin" && tenantData?.status === "suspended") {
+    redirect("/suspended");
+  }
+
   const churchName = tenantData?.name || "KerekeHub";
   const primaryColor = tenantData?.primaryColor || "#059669";
   const tenantSlug = tenantData?.slug || "";
@@ -101,6 +109,7 @@ export default async function DashboardLayout({
     { name: "Signups", href: "/dashboard/admin/signups", icon: "✍️" },
     { name: "Demo Requests", href: "/dashboard/admin/demos", icon: "📣" },
     { name: "Support Tickets", href: "/dashboard/admin/tickets", icon: "🎧" },
+    { name: "Audit Log", href: "/dashboard/admin/audit", icon: "📜" },
   ];
 
   let openTicketCount = 0;
@@ -251,7 +260,7 @@ export default async function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
-            {/* Member App shortcut — visible on mobile only, always in the header */}
+            {/* Member App shortcut. Visible on mobile only, always in the header. */}
             {/* No target="_blank" on mobile: keeps PWA context and avoids exiting the app */}
             {tenantSlug && userMemberId && (
               <a

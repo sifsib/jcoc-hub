@@ -2,17 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { db } from "../../../../lib/firebase";
-import {
-  collection,
-  getDocs,
-  query,
-  orderBy,
-  where,
-  doc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-} from "firebase/firestore";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { AdminGuard, TenantRecord, formatDate, statusBadge } from "../adminShared";
 
 export default function AdminTenantsPage() {
@@ -59,10 +49,22 @@ export default function AdminTenantsPage() {
   const updateTenantStatus = async (tenantId: string, newStatus: "active" | "suspended") => {
     setActionLoading(tenantId);
     try {
-      await updateDoc(doc(db, "tenants", tenantId), { status: newStatus });
+      // Server route verifies super admin and writes an audit entry. It also
+      // enforces the suspension (login + dashboard are blocked for suspended
+      // tenants), so this is more than a cosmetic status flag.
+      const res = await fetch("/api/admin/tenant-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, status: newStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Status update failed.");
+      }
       setTenants((prev) => prev.map((t) => (t.id === tenantId ? { ...t, status: newStatus } : t)));
     } catch (err) {
       console.error("Failed to update tenant status:", err);
+      alert(err instanceof Error ? err.message : "Could not update the church status.");
     } finally {
       setActionLoading(null);
     }
@@ -72,34 +74,23 @@ export default function AdminTenantsPage() {
     if (!deleteConfirm) return;
     setDeleteConfirm((prev) => (prev ? { ...prev, deleting: true } : null));
     try {
-      const tenantCollections = [
-        "members", "households", "events", "event_rsvps",
-        "attendance", "groups", "group_members", "group_attendance",
-        "group_attendance_records", "visitors", "careTierNotes",
-        "forms", "form_submissions", "workflows", "workflow_steps",
-        "workflow_instances", "workflow_instance_steps",
-        "finance_categories", "transactions", "giving_records",
-        "communications",
-      ];
-      for (const col of tenantCollections) {
-        const snap = await getDocs(query(collection(db, col), where("tenantId", "==", tenantId)));
-        if (!snap.empty) {
-          const batch = writeBatch(db);
-          snap.docs.forEach((d) => batch.delete(d.ref));
-          await batch.commit();
-        }
+      // Server route does the full wipe: Firestore data, nested subcollections,
+      // Firebase Auth logins, and Storage files. It is safe to re-run if it
+      // fails partway, and it writes an audit entry.
+      const res = await fetch("/api/admin/delete-tenant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, confirmName: deleteConfirm.tenantName }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Deletion failed.");
       }
-      const userSnap = await getDocs(query(collection(db, "users"), where("tenantId", "==", tenantId)));
-      if (!userSnap.empty) {
-        const batch = writeBatch(db);
-        userSnap.docs.forEach((d) => batch.delete(d.ref));
-        await batch.commit();
-      }
-      await deleteDoc(doc(db, "tenants", tenantId));
       setTenants((prev) => prev.filter((t) => t.id !== tenantId));
       setDeleteConfirm(null);
     } catch (err) {
       console.error("Delete tenant failed:", err);
+      alert(err instanceof Error ? err.message : "Could not delete the church.");
       setDeleteConfirm((prev) => (prev ? { ...prev, deleting: false } : null));
     }
   };

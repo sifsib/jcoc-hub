@@ -40,7 +40,10 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to establish session on the server.");
+        // Read the server's message so specific cases (like a suspended church)
+        // show a clear reason instead of a generic failure.
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to establish session on the server.");
       }
 
       // Full-page navigation (not router.push) so the client-side route cache is
@@ -139,7 +142,7 @@ export default function LoginPage() {
         </form>
       </div>
 
-      {/* Forgot password modal — renders as an overlay when triggered */}
+      {/* Forgot password modal. Renders as an overlay when triggered. */}
       {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
     </div>
   );

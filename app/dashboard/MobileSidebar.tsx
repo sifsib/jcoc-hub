@@ -25,6 +25,7 @@ const ADMIN_NAV: NavItem[] = [
   { name: "Signups", href: "/dashboard/admin/signups", icon: "✍️" },
   { name: "Demo Requests", href: "/dashboard/admin/demos", icon: "📣" },
   { name: "Support Tickets", href: "/dashboard/admin/tickets", icon: "🎧" },
+  { name: "Audit Log", href: "/dashboard/admin/audit", icon: "📜" },
 ];
 
 export default function MobileSidebar({
@@ -40,7 +41,7 @@ export default function MobileSidebar({
 
   return (
     <>
-      {/* Hamburger button — only visible on mobile */}
+      {/* Hamburger button. Only visible on mobile. */}
       <button
         className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition"
         onClick={() => setOpen(true)}
