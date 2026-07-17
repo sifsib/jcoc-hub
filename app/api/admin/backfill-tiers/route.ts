@@ -31,8 +31,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
 
-  const callerSnap = await adminDb.collection("tenants").doc(uid).get();
-  if (!callerSnap.exists || callerSnap.data()!.accountType !== "internal") {
+  // Allow the platform owner (user role super_admin) OR an internal-type tenant.
+  const [userSnap, callerTenantSnap] = await Promise.all([
+    adminDb.collection("users").doc(uid).get(),
+    adminDb.collection("tenants").doc(uid).get(),
+  ]);
+  const isSuperAdmin = userSnap.data()?.role === "super_admin";
+  const isInternal = callerTenantSnap.exists && callerTenantSnap.data()!.accountType === "internal";
+  if (!isSuperAdmin && !isInternal) {
     return NextResponse.json({ error: "Access denied." }, { status: 403 });
   }
 
