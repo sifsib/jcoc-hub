@@ -786,6 +786,13 @@ export const onSupportTicketCreated = onDocumentCreated(
     const ticket = event.data?.data();
     if (!ticket) return;
 
+    // Dashboard tickets are now created and emailed by the Next.js API route
+    // (/api/support/ticket). Skip those here to avoid double notifications.
+    if (ticket.emailedVia === "api") {
+      console.log("[onSupportTicketCreated] Skipped — already handled by API route.");
+      return;
+    }
+
     const ticketId = event.params.ticketId;
     const gmailUser = SYSTEM_GMAIL_USER.value();
     const gmailPass = SYSTEM_GMAIL_APP_PASSWORD.value();

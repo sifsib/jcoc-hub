@@ -94,6 +94,29 @@ export default async function DashboardLayout({
 
   const navigation = allNavigation.filter(item => item.roles.includes(userRole));
 
+  // Super-admin only: standalone admin sections + a live open-ticket count for
+  // the badge on the Tickets link.
+  const adminNavigation = [
+    { name: "Tenants", href: "/dashboard/admin/tenants", icon: "⛪" },
+    { name: "Signups", href: "/dashboard/admin/signups", icon: "✍️" },
+    { name: "Demo Requests", href: "/dashboard/admin/demos", icon: "📣" },
+    { name: "Support Tickets", href: "/dashboard/admin/tickets", icon: "🎧" },
+  ];
+
+  let openTicketCount = 0;
+  if (userRole === "super_admin") {
+    try {
+      const cnt = await adminDb
+        .collection("support_tickets")
+        .where("status", "==", "open")
+        .count()
+        .get();
+      openTicketCount = cnt.data().count;
+    } catch (err) {
+      console.error("Open ticket count failed:", err);
+    }
+  }
+
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-900 antialiased">
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col z-20 hidden md:flex shrink-0">
@@ -146,15 +169,30 @@ export default async function DashboardLayout({
             })}
 
             {userRole === "super_admin" && (
-              <li>
-                <Link
-                  href="/dashboard/admin-settings"
-                  className="flex items-center gap-3 px-6 py-3 text-sm font-bold text-amber-700 bg-amber-50/50 border-l-4 border-amber-500"
-                >
-                  <span className="text-base">⚙️</span>
-                  System Admin Panel
-                </Link>
-              </li>
+              <>
+                <li className="px-6 pt-5 pb-2">
+                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Admin</p>
+                </li>
+                {adminNavigation.map((item) => {
+                  const isTickets = item.href === "/dashboard/admin/tickets";
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className="flex items-center gap-3 px-6 py-3 text-sm font-medium text-amber-800 hover:bg-amber-50 border-l-4 border-transparent hover:border-amber-400"
+                      >
+                        <span className="text-base opacity-70">{item.icon}</span>
+                        <span>{item.name}</span>
+                        {isTickets && openTicketCount > 0 && (
+                          <span className="ml-auto text-[10px] font-black text-white bg-red-500 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                            {openTicketCount}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </>
             )}
           </ul>
         </nav>
@@ -207,6 +245,7 @@ export default async function DashboardLayout({
               userRole={userRole}
               tenantSlug={tenantSlug}
               userMemberId={userMemberId}
+              openTicketCount={openTicketCount}
             />
             <div className="text-lg font-semibold text-gray-800">Dashboard</div>
           </div>

@@ -17,7 +17,15 @@ interface MobileSidebarProps {
   userRole: string;
   tenantSlug?: string;
   userMemberId?: string;
+  openTicketCount?: number;
 }
+
+const ADMIN_NAV: NavItem[] = [
+  { name: "Tenants", href: "/dashboard/admin/tenants", icon: "⛪" },
+  { name: "Signups", href: "/dashboard/admin/signups", icon: "✍️" },
+  { name: "Demo Requests", href: "/dashboard/admin/demos", icon: "📣" },
+  { name: "Support Tickets", href: "/dashboard/admin/tickets", icon: "🎧" },
+];
 
 export default function MobileSidebar({
   navigation,
@@ -26,6 +34,7 @@ export default function MobileSidebar({
   userRole,
   tenantSlug,
   userMemberId,
+  openTicketCount = 0,
 }: MobileSidebarProps) {
   const [open, setOpen] = useState(false);
 
@@ -95,16 +104,31 @@ export default function MobileSidebar({
             ))}
 
             {userRole === "super_admin" && (
-              <li>
-                <Link
-                  href="/dashboard/admin-settings"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-6 py-3 text-sm font-bold text-amber-700 bg-amber-50/50 border-l-4 border-amber-500"
-                >
-                  <span className="text-base">⚙️</span>
-                  System Admin Panel
-                </Link>
-              </li>
+              <>
+                <li className="px-6 pt-5 pb-2">
+                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Admin</p>
+                </li>
+                {ADMIN_NAV.map((item) => {
+                  const isTickets = item.href === "/dashboard/admin/tickets";
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-3 px-6 py-3 text-sm font-medium text-amber-800 hover:bg-amber-50 border-l-4 border-transparent hover:border-amber-400"
+                      >
+                        <span className="text-base opacity-70">{item.icon}</span>
+                        <span>{item.name}</span>
+                        {isTickets && openTicketCount > 0 && (
+                          <span className="ml-auto text-[10px] font-black text-white bg-red-500 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                            {openTicketCount}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </>
             )}
           </ul>
         </nav>

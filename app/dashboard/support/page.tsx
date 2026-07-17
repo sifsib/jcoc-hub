@@ -10,8 +10,6 @@ import {
   where,
   orderBy,
   getDocs,
-  addDoc,
-  serverTimestamp,
 } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -118,21 +116,27 @@ export default function SupportPage() {
     setSuccessRef("");
 
     try {
-      const docRef = await addDoc(collection(db, "support_tickets"), {
-        ...form,
-        name: user.displayName || user.email,
-        email: user.email,
-        tenantId: tenantId || null,
-        churchName: churchName || null,
-        source: "dashboard",
-        status: "open",
-        ticketRef: "",       // Cloud Function writes this back within seconds
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      // The API route creates the ticket, stamps the reference, and sends both
+      // the admin notification and the customer auto-reply in one call.
+      const res = await fetch("/api/support/ticket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          subject: form.subject,
+          message: form.message,
+          category: form.category,
+          priority: form.priority,
+          phone: form.phone,
+        }),
       });
+      const data = await res.json();
+      if (!res.ok) {
+        setSubmitError(data.error || "Something went wrong. Please try again.");
+        setSubmitting(false);
+        return;
+      }
 
-      // Optimistically show a ref while the Cloud Function stamps the real one
-      setSuccessRef(docRef.id.slice(0, 6).toUpperCase());
+      setSuccessRef((data.ticketRef || "").replace(/^TK-/, ""));
       setForm(emptyForm());
 
       // Reload ticket history
