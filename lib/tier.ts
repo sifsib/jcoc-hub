@@ -6,11 +6,18 @@ export const FREE_MEMBER_LIMIT = 50;
 
 export type Tier = "free" | "paid";
 
-// A tenant counts as "paid" for feature access when its tier is anything other
-// than "free". Comped accounts (internal, beta) are stored as tier "paid", so
-// they get full access through this same check.
+// A tenant counts as "paid" for feature access unless its tier is explicitly
+// "free". Comped accounts (internal, beta) are stored as tier "paid", so they
+// get full access through this same check.
+//
+// Unset/null tier is treated as paid ON PURPOSE. A church that predates the
+// tier backfill has no tier field yet, and the Firestore rules (callerIsPaid)
+// are permissive for that same case. This keeps the UI in step with the rules
+// so those older churches are never shown a lock before the backfill runs.
+// Safe because every signup path writes an explicit tier, so only pre-backfill
+// tenants ever have an unset tier.
 export function isPaidTier(tier?: string | null): boolean {
-  return tier != null && tier !== "free";
+  return tier !== "free";
 }
 
 // The features locked to the paid plan. `key` is used in code, `label` in the UI.
