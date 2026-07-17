@@ -63,12 +63,24 @@ export async function GET(req: NextRequest) {
 
   const changed: Array<Record<string, unknown>> = [];
   const skipped: Array<Record<string, unknown>> = [];
+  const roster: Array<Record<string, unknown>> = [];
   let writes = 0;
 
   for (const t of tenantsSnap.docs) {
     const data = t.data();
     const activeMembers = activeCountByTenant[t.id] || 0;
     const hasTier = typeof data.tier === "string" && data.tier.length > 0;
+
+    // Diagnostic roster so we can see every church's current state at a glance.
+    roster.push({
+      tenantId: t.id,
+      church: data.churchName || "(unnamed)",
+      tier: data.tier ?? "(unset)",
+      accountType: data.accountType ?? "(unset)",
+      activeMembers,
+      grandfathered: data.grandfathered ?? false,
+      createdAt: data.createdAt ?? null,
+    });
 
     if (hasTier) {
       // Already has a tier. Only refresh the count if it drifted, so existing
@@ -126,5 +138,6 @@ export async function GET(req: NextRequest) {
     writesPerformed: writes,
     changed,
     skippedCount: skipped.length,
+    roster,
   });
 }
