@@ -45,6 +45,14 @@ export async function GET(req: NextRequest) {
   // ---- 2. Dry-run unless ?apply=true ------------------------------------
   const apply = req.nextUrl.searchParams.get("apply") === "true";
 
+  // Optional: force specific tenants to comped paid even if they already have a
+  // tier (e.g. churches that predate the paywall but were stamped "free").
+  // ?grandfather=<tenantId>,<tenantId>
+  const grandfatherIds = (req.nextUrl.searchParams.get("grandfather") || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   // ---- 3. Count active members per tenant in one pass -------------------
   // members is a flat collection; each doc carries tenantId + status.
   const membersSnap = await adminDb
@@ -81,6 +89,34 @@ export async function GET(req: NextRequest) {
       grandfathered: data.grandfathered ?? false,
       createdAt: data.createdAt ?? null,
     });
+
+    // Forced grandfather: overrides whatever tier the church currently has.
+    if (grandfatherIds.includes(t.id)) {
+      const gUpdate = {
+        tier: "paid",
+        memberLimit: null,
+        activeMemberCount: activeMembers,
+        billingPhase: "free",
+        currentRate: 0,
+        trialEndsAt: null,
+        evaluationEndsAt: null,
+        fullRateStartsAt: null,
+        grandfathered: true,
+        backfilledAt: new Date().toISOString(),
+      };
+      if (apply) {
+        await t.ref.update(gUpdate);
+        writes++;
+      }
+      changed.push({
+        tenantId: t.id,
+        church: data.churchName || "(unnamed)",
+        action: "forced-grandfather-to-paid",
+        fromTier: data.tier ?? "(unset)",
+        activeMembers,
+      });
+      continue;
+    }
 
     if (hasTier) {
       // Already has a tier. Only refresh the count if it drifted, so existing
