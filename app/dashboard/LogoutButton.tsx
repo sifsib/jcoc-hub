@@ -1,19 +1,20 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { auth } from "../../lib/firebase";
 import { signOut } from "firebase/auth";
 
 export default function LogoutButton() {
-  const router = useRouter();
-
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // Kill server session via a simple logout call or clear cookie
-      router.push("/login");
+      // Clear the server session cookie so the session truly ends.
+      await fetch("/api/logout", { method: "POST" }).catch(() => {});
     } catch (error) {
       console.error("Failed to log out:", error);
+    } finally {
+      // Full-page navigation wipes the client route cache, so no stale sidebar
+      // from the previous account survives into the next login.
+      window.location.href = "/login";
     }
   };
 

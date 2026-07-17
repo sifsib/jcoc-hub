@@ -43,10 +43,11 @@ export default function LoginPage() {
         throw new Error("Failed to establish session on the server.");
       }
 
-      // Keep loading=true during navigation so the button stays in its loading
-      // state rather than snapping back to idle while the page transitions.
-      router.push("/dashboard");
-      router.refresh();
+      // Full-page navigation (not router.push) so the client-side route cache is
+      // wiped and the dashboard layout is re-rendered fresh for THIS account.
+      // Prevents the previous account's sidebar (e.g. KFWC church vs super admin)
+      // from lingering when switching accounts in the same browser.
+      window.location.href = "/dashboard";
     } catch (err: any) {
       console.error("Login error details:", err);
       setError(err.message || "Invalid email or password.");
