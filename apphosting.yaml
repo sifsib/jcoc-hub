@@ -23,3 +23,12 @@ env:
 
   - variable: NEXT_PUBLIC_APP_URL
     value: https://hub.kerekehub.co.za
+
+  # WhatsApp service (Kapso). Runs as the kereke-hub service on Render with
+  # root directory kereke-whatsapp. WHATSAPP_SERVICE_KEY must match SERVICE_KEY
+  # there exactly - it is the only thing authenticating this app to the service.
+  - variable: WHATSAPP_SERVICE_URL
+    value: https://kereke-hub.onrender.com
+
+  - variable: WHATSAPP_SERVICE_KEY
+    secret: WHATSAPP_SERVICE_KEY

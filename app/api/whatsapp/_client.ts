@@ -25,15 +25,27 @@ export class ApiError extends Error {
   }
 }
 
+// No RAILWAY_* fallbacks. They were kept during the migration so nothing broke
+// mid-flight, but a leftover RAILWAY_WHATSAPP_URL pointing at the retired
+// Railway/Evolution host silently wins over an unset WHATSAPP_SERVICE_URL and
+// produces a bare 404 that looks like a bug in this service. Requiring the
+// explicit names turns that into an actionable error instead.
 export function getServiceConfig() {
-  const baseUrl = (
-    process.env.WHATSAPP_SERVICE_URL
-    || process.env.RAILWAY_WHATSAPP_URL
-  )?.replace(/\/+$/, "");
-  const serviceKey = process.env.WHATSAPP_SERVICE_KEY || process.env.RAILWAY_SERVICE_KEY;
+  const baseUrl = process.env.WHATSAPP_SERVICE_URL?.replace(/\/+$/, "");
+  const serviceKey = process.env.WHATSAPP_SERVICE_KEY;
 
-  if (!baseUrl) throw new ApiError("WhatsApp service URL is not configured.", 500);
-  if (!serviceKey) throw new ApiError("WhatsApp service key is not configured.", 500);
+  if (!baseUrl) {
+    throw new ApiError(
+      "WHATSAPP_SERVICE_URL is not set. Point it at the WhatsApp service, e.g. https://kereke-hub.onrender.com",
+      500
+    );
+  }
+  if (!serviceKey) {
+    throw new ApiError(
+      "WHATSAPP_SERVICE_KEY is not set. It must match SERVICE_KEY on the WhatsApp service.",
+      500
+    );
+  }
 
   return { baseUrl, serviceKey };
 }
