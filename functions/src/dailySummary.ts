@@ -28,6 +28,8 @@ import {
   zonedDayStartUTC,
   addDaysStr,
   renderMessage,
+  dateLabel,
+  formatRand,
 } from "./summaryFormat";
 
 // The deployed Baileys WhatsApp service (kereke-whatsapp on Railway).
@@ -112,8 +114,16 @@ async function sendWhatsApp(
   serviceKey: string,
   tenantId: string,
   phone: string,
-  message: string
+  summaryDate: string,
+  counts: SummaryCounts
 ): Promise<{ messageId: string | null }> {
+  // The summary now goes out as the approved `daily_summary` template rather
+  // than free text. Two reasons this is not optional:
+  //   - It is business-initiated, so outside the 24h window Meta only allows
+  //     templates.
+  //   - The old rendered message was multi-line, and template parameters
+  //     cannot contain newlines. Each figure is therefore its own variable and
+  //     the line breaks live in the approved template body.
   const url = `${baseUrl.replace(/\/+$/, "")}/message/send`;
   const res = await fetch(url, {
     method: "POST",
@@ -122,7 +132,18 @@ async function sendWhatsApp(
       "X-Service-Key": serviceKey,
       "X-Tenant-Id": tenantId,
     },
-    body: JSON.stringify({ phoneNumber: phone, message }),
+    body: JSON.stringify({
+      to: phone,
+      templateKey: "daily_summary",
+      extraValues: {
+        summary_date: summaryDate,
+        new_members: String(counts.newMembers),
+        new_visitors: String(counts.newVisitors),
+        payment_count: String(counts.paymentCount),
+        payment_total: formatRand(counts.paymentTotal),
+        follow_ups: String(counts.followUps),
+      },
+    }),
   });
   const text = await res.text();
   if (!res.ok) {
@@ -245,7 +266,14 @@ export const dailySummary = onSchedule(
       }
 
       try {
-        const { messageId } = await sendWhatsApp(baseUrl, serviceKey, tenantId, phone, message);
+        const { messageId } = await sendWhatsApp(
+          baseUrl,
+          serviceKey,
+          tenantId,
+          phone,
+          dateLabel(tz, dateStr),
+          counts
+        );
         await writeAudit(db, {
           tenantId,
           recipientPhone: phone,
