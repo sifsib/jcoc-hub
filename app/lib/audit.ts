@@ -19,7 +19,8 @@ export type AuditAction =
   | "tenant.auto_suspend"
   | "tenant.auto_reactivate"
   | "ticket.reply"
-  | "signup.convert_beta";
+  | "signup.convert_beta"
+  | "email.sent";
 
 interface AuditEntry {
   action: AuditAction;

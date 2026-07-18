@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../../lib/firebase";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
-import { AdminGuard, TenantRecord, formatDate, statusBadge } from "../adminShared";
+import { AdminGuard, TenantRecord, formatDate, statusBadge, daysSince, INACTIVITY_THRESHOLD_DAYS } from "../adminShared";
 
 export default function AdminTenantsPage() {
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
@@ -37,6 +37,10 @@ export default function AdminTenantsPage() {
             plan: d.data().plan || "trial",
             createdAt: d.data().createdAt || "",
             primaryColor: d.data().primaryColor || "#059669",
+            activeMemberCount: d.data().activeMemberCount ?? null,
+            lastServiceDate: d.data().lastServiceDate || null,
+            lastServiceAttendance: d.data().lastServiceAttendance ?? null,
+            lastLoginAt: d.data().lastLoginAt || null,
           }))
         );
       } catch (err) {
@@ -131,6 +135,9 @@ export default function AdminTenantsPage() {
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Church</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Owner Email</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Members</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Last Service</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Last Login</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Plan</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Registered</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -147,6 +154,30 @@ export default function AdminTenantsPage() {
                     </td>
                     <td className="px-6 py-4 text-gray-500">{tenant.ownerEmail}</td>
                     <td className="px-6 py-4"><span className={statusBadge(tenant.status)}>{tenant.status}</span></td>
+                    <td className="px-6 py-4 text-gray-600">{tenant.activeMemberCount ?? "-"}</td>
+                    <td className="px-6 py-4 text-gray-600">
+                      {tenant.lastServiceDate ? (
+                        <>
+                          <span className="font-semibold">{tenant.lastServiceAttendance ?? 0}</span>
+                          <span className="text-gray-400"> on {formatDate(tenant.lastServiceDate)}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">No data yet</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {(() => {
+                        const d = daysSince(tenant.lastLoginAt);
+                        if (d === null) return <span className="text-gray-400">Never</span>;
+                        const stale = d >= INACTIVITY_THRESHOLD_DAYS && tenant.status !== "suspended";
+                        return (
+                          <span className={stale ? "text-amber-600 font-semibold" : "text-gray-600"}>
+                            {d === 0 ? "Today" : `${d}d ago`}
+                            {stale && " ⚠️"}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="px-6 py-4 text-gray-600 capitalize">{tenant.plan}</td>
                     <td className="px-6 py-4 text-gray-500">{formatDate(tenant.createdAt)}</td>
                     <td className="px-6 py-4 text-right">

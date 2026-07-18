@@ -25,6 +25,7 @@ const ADMIN_NAV: NavItem[] = [
   { name: "Signups", href: "/dashboard/admin/signups", icon: "✍️" },
   { name: "Demo Requests", href: "/dashboard/admin/demos", icon: "📣" },
   { name: "Support Tickets", href: "/dashboard/admin/tickets", icon: "🎧" },
+  { name: "Email Churches", href: "/dashboard/admin/email", icon: "✉️" },
   { name: "Audit Log", href: "/dashboard/admin/audit", icon: "📜" },
 ];
 

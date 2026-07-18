@@ -18,6 +18,21 @@ export interface TenantRecord {
   plan: string;
   createdAt: string;
   primaryColor: string;
+  activeMemberCount: number | null;
+  lastServiceDate: string | null;
+  lastServiceAttendance: number | null;
+  lastLoginAt: string | null;
+}
+
+// Days since a church last logged in before we flag it as going quiet.
+// Kept in one place so the dashboard badge and any future tooling agree.
+export const INACTIVITY_THRESHOLD_DAYS = 14;
+
+export function daysSince(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
 }
 
 export interface DemoRequest {

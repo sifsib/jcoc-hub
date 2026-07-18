@@ -109,6 +109,19 @@ export async function POST(req: NextRequest) {
         ip,
         at: FieldValue.serverTimestamp(),
       });
+
+      // Stamp the tenant's last-login so the super admin dashboard can show
+      // how long ago a church was last active, and the inactivity check can
+      // decide who to nudge. Skipped for super admins (no tenantId).
+      if (freshUser.tenantId) {
+        adminDb.collection("tenants").doc(freshUser.tenantId).set(
+          {
+            lastLoginAt: new Date().toISOString(),
+            lastLoginEmail: freshUser.email ?? decodedToken.email ?? "",
+          },
+          { merge: true }
+        ).catch((err) => console.error("[POST /api/login] lastLoginAt write failed:", err));
+      }
     } catch (auditErr) {
       // Never block a valid login just because the audit write failed.
       console.error("[POST /api/login] Audit write failed:", auditErr);

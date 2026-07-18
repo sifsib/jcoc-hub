@@ -780,7 +780,6 @@ export const billingReminder = onSchedule(
 //     grandfathered sister churches)
 // ─────────────────────────────────────────────────────────────
 const GRACE_DAYS = 10;
-const DUNNING_EMAIL_DAYS = [1, 3, 7];
 
 export const dunning = onSchedule(
   {
@@ -807,7 +806,6 @@ export const dunning = onSchedule(
     // Only paid-tier churches that have been stamped past due.
     const snap = await db.collection("tenants").where("tier", "==", "paid").get();
 
-    let emailed = 0;
     let suspended = 0;
 
     for (const tenantDoc of snap.docs) {
@@ -883,49 +881,15 @@ export const dunning = onSchedule(
         continue; // suspended churches get no more reminder emails
       }
 
-      // ── Reminder emails on day 1, 3, 7 ────────────────────────────────────
-      // lastDunningDay stops the same day's email going out twice if the job
-      // runs more than once, and lets us catch up if a run was missed.
-      if (!DUNNING_EMAIL_DAYS.includes(daysPastDue)) continue;
-      if (t.lastDunningDay === daysPastDue) continue;
-      if (!ownerEmail) continue;
-
-      const daysLeft = GRACE_DAYS - daysPastDue;
-      try {
-        await transporter.sendMail({
-          from: `"Kereke Hub" <${gmailUser}>`,
-          to: ownerEmail,
-          subject: `Payment failed for ${churchName}. Please update your details`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 40px; border-radius: 10px;">
-              <h2 style="color: #F59E0B; margin-top: 0;">We could not process your payment</h2>
-              <p style="color: #F8FAFC;">Hi ${ownerName || "there"},</p>
-              <p style="color: #CBD5E1;">
-                A recent payment for <strong>${churchName}</strong> did not go through. To avoid any
-                interruption, please update your payment method. Access will be paused in
-                <strong>${daysLeft} day${daysLeft === 1 ? "" : "s"}</strong> if the payment is not settled.
-              </p>
-              <div style="text-align: center; margin: 32px 0;">
-                <a href="${billingUrl}" style="background: #3B9A5F; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
-                  Update Payment
-                </a>
-              </div>
-              <p style="color: #94A3B8; font-size: 14px;">
-                Already paid? You can ignore this. Questions? Reply to this email or visit
-                <a href="https://kerekehub.co.za/contact" style="color: #3B9A5F;">kerekehub.co.za/contact</a>.
-              </p>
-            </div>
-          `,
-        });
-        await tenantDoc.ref.update({ lastDunningDay: daysPastDue });
-        emailed++;
-        console.log(`[dunning] Reminder sent to ${ownerEmail} (day ${daysPastDue} past due).`);
-      } catch (err) {
-        console.error(`[dunning] Failed to email ${ownerEmail}:`, err);
-      }
+      // ── Day 1, 3, 7 reminder emails now live in Brevo ─────────────────────
+      // These used to be sent here over Gmail. They have moved to Brevo
+      // Automations (see brevo-billing-emails/BREVO_SETUP_GUIDE.md): the app adds
+      // the owner to the "Past Due Churches" list on a failed payment, and a
+      // Brevo automation sends day 1, 3, 7 with wait steps. This function keeps
+      // only the day 10 auto-suspend above. Nothing more to send here.
     }
 
-    console.log(`[dunning] Done. ${emailed} reminder(s) sent, ${suspended} church(es) auto-suspended.`);
+    console.log(`[dunning] Done. ${suspended} church(es) auto-suspended.`);
   }
 );
 
@@ -1404,5 +1368,151 @@ export const onMemberCountWrite = onDocumentWritten(
         err
       );
     }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// ATTENDANCE ROLLUP
+// Keeps tenants/{tenantId}.lastServiceDate / lastServiceAttendance in sync
+// so the super admin dashboard can show each church's most recent
+// headcount without querying the whole attendance collection per tenant.
+//
+// Attendance is stored as one doc per member per service. Every time one
+// of those docs is written, we recompute the present-count for that
+// service date (cheap: one filtered query) and, if that date is the
+// tenant's most recent, write it onto the tenant doc. Older-date writes
+// (edits to a past service) are skipped since they cannot change what
+// the "latest" numbers are.
+// ─────────────────────────────────────────────────────────────
+export const onAttendanceWrite = onDocumentWritten(
+  "attendance/{recordId}",
+  async (event) => {
+    const after = event.data?.after?.data();
+    const before = event.data?.before?.data();
+    const rec = after ?? before;
+    const tenantId = rec?.tenantId;
+    const serviceDate = rec?.serviceDate;
+    if (!tenantId || !serviceDate) return;
+
+    try {
+      const tenantSnap = await db.doc(`tenants/${tenantId}`).get();
+      const currentLastDate = tenantSnap.data()?.lastServiceDate;
+      // This write can't be the latest service, so it can't change the
+      // headcount we show. Skip the recompute.
+      if (currentLastDate && serviceDate < currentLastDate) return;
+
+      const presentSnap = await db
+        .collection("attendance")
+        .where("tenantId", "==", tenantId)
+        .where("serviceDate", "==", serviceDate)
+        .where("status", "==", "present")
+        .get();
+
+      await db.doc(`tenants/${tenantId}`).set(
+        {
+          lastServiceDate: serviceDate,
+          lastServiceAttendance: presentSnap.size,
+          lastServiceUpdatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.error(`[onAttendanceWrite] Failed to roll up attendance for tenant ${tenantId}:`, err);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// INACTIVITY CHECK
+// Runs daily. Flags active churches that have not logged in for a while
+// (tenants/{tenantId}.lastLoginAt is stamped by /api/login on every
+// sign-in) and emails the owner a nudge. Re-sends at most once every
+// INACTIVITY_EMAIL_COOLDOWN_DAYS so it doesn't nag daily.
+//
+// Skipped for: suspended/trial tenants (not relevant), internal/test
+// accounts, and any church with no ownerEmail on file.
+// ─────────────────────────────────────────────────────────────
+const INACTIVITY_DAYS = 14;
+const INACTIVITY_EMAIL_COOLDOWN_DAYS = 14;
+
+export const inactivityCheck = onSchedule(
+  {
+    schedule: "0 8 * * *", // 08:00 UTC = 10:00 SAST
+    timeZone: "Africa/Johannesburg",
+    secrets: [SYSTEM_GMAIL_USER, SYSTEM_GMAIL_APP_PASSWORD],
+  },
+  async () => {
+    const gmailUser = SYSTEM_GMAIL_USER.value();
+    const gmailPass = SYSTEM_GMAIL_APP_PASSWORD.value();
+    if (!gmailUser || !gmailPass) {
+      console.error("[inactivityCheck] System Gmail secrets not configured.");
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+
+    const now = new Date();
+    const loginUrl = "https://hub.kerekehub.co.za/login";
+
+    const snap = await db.collection("tenants").where("status", "==", "active").get();
+    let emailed = 0;
+
+    for (const tenantDoc of snap.docs) {
+      const t = tenantDoc.data();
+      if (t.accountType === "internal") continue;
+      if (!t.ownerEmail) continue;
+
+      const lastActive = t.lastLoginAt || t.createdAt;
+      if (!lastActive) continue;
+
+      const daysSince = Math.floor((now.getTime() - new Date(lastActive).getTime()) / 86400000);
+      if (daysSince < INACTIVITY_DAYS) continue;
+
+      const lastSent = t.lastInactivityEmailSentAt;
+      if (lastSent) {
+        const daysSinceSent = Math.floor((now.getTime() - new Date(lastSent).getTime()) / 86400000);
+        if (daysSinceSent < INACTIVITY_EMAIL_COOLDOWN_DAYS) continue;
+      }
+
+      try {
+        await transporter.sendMail({
+          from: `"Kereke Hub" <${gmailUser}>`,
+          to: t.ownerEmail,
+          subject: `We haven't seen ${t.name || "your church"} on Kereke Hub in a while`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 40px; border-radius: 10px;">
+              <h2 style="color: #3B9A5F; margin-top: 0;">It's been ${daysSince} days</h2>
+              <p style="color: #F8FAFC;">Hi ${t.ownerName || "there"},</p>
+              <p style="color: #CBD5E1;">
+                Nobody from <strong>${t.name || "your church"}</strong> has logged into Kereke Hub in
+                about ${daysSince} days. If you've hit a snag or something isn't working the way you
+                expect, just reply to this email and we'll help sort it out.
+              </p>
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${loginUrl}" style="background: #3B9A5F; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
+                  Log In
+                </a>
+              </div>
+              <p style="color: #94A3B8; font-size: 14px;">
+                Kereke Hub. Church Administration Made Simple.
+              </p>
+            </div>
+          `,
+        });
+
+        await tenantDoc.ref.set(
+          { lastInactivityEmailSentAt: now.toISOString() },
+          { merge: true }
+        );
+        emailed++;
+      } catch (err) {
+        console.error(`[inactivityCheck] Failed to email tenant ${tenantDoc.id}:`, err);
+      }
+    }
+
+    console.log(`[inactivityCheck] Done. ${emailed} reminder(s) sent.`);
   }
 );
