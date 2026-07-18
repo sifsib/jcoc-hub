@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { db } from "../../../lib/firebase";
+import Link from "next/link";
+import { auth, db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
@@ -19,14 +20,38 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface WaBroadcast {
+interface WaJob {
+  id?: string;
+  jobId?: string;
+  status: "queued" | "sending" | "completed" | "failed";
+  templateKey?: string;
+  values?: { message?: string; church_name?: string; signature?: string };
+  createdBy?: string | null;
+  createdAt?: { seconds: number } | null;
+  counts?: {
+    requested?: number;
+    invalid?: number;
+    suppressed?: number;
+    queued?: number;
+    sent?: number;
+    failed?: number;
+  };
+  warnings?: string[];
+  invalidNumbers?: string[];
+  error?: string;
+}
+
+interface WaBranding {
+  churchName: string | null;
+  signature: string | null;
+  bannerUrl: string | null;
+}
+
+interface WaMember {
   id: string;
-  type: "whatsapp_broadcast";
-  message: string;
-  sentBy: string;
-  sentByName: string;
-  tenantId: string;
-  createdAt: { seconds: number } | null;
+  name: string;
+  phone: string;
+  groupId?: string;
 }
 
 interface EmailBroadcast {
@@ -63,8 +88,25 @@ function formatDate(ts: { seconds: number } | string | null) {
   });
 }
 
-function buildWaLink(message: string) {
-  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+// Authenticated call to the WhatsApp API routes. They verify the Firebase ID
+// token server-side and resolve the tenant, so the token must be attached.
+async function waFetch(path: string, init: RequestInit = {}) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Your session has expired. Please sign in again.");
+  const token = await user.getIdToken();
+
+  const res = await fetch(path, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
 }
 
 // Plain text → minimal HTML for Brevo
@@ -118,13 +160,38 @@ export default function CommunicationsPage() {
   const [smsSendSuccess, setSmsSendSuccess] = useState("");
 
   // ── WhatsApp state ──
+  // Messages now go through the central Kereke Hub number via the WhatsApp
+  // service, not a wa.me share link. Broadcasts are async jobs we poll.
   const [waTab, setWaTab] = useState<"compose" | "history">("compose");
-  const [waBroadcasts, setWaBroadcasts] = useState<WaBroadcast[]>([]);
+  const [waBroadcasts, setWaBroadcasts] = useState<WaJob[]>([]);
   const [waHistoryLoading, setWaHistoryLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [waSubmitting, setWaSubmitting] = useState(false);
   const [waError, setWaError] = useState("");
   const [waSuccessId, setWaSuccessId] = useState("");
+  // Branding (banner + signature) comes from the WhatsApp Identity page.
+  const [waBranding, setWaBranding] = useState<WaBranding | null>(null);
+  // Audience
+  const [waAudience, setWaAudience] = useState<"all" | "group" | "individuals" | "manual">("all");
+  const [waGroups, setWaGroups] = useState<{ id: string; name: string }[]>([]);
+  const [waGroupId, setWaGroupId] = useState("");
+  const [waAllMembers, setWaAllMembers] = useState<WaMember[]>([]);
+  const [waMemberSearch, setWaMemberSearch] = useState("");
+  const [waSelectedIds, setWaSelectedIds] = useState<string[]>([]);
+  const [waLoadedCount, setWaLoadedCount] = useState<number | null>(null);
+  const [waManualNumbers, setWaManualNumbers] = useState("");
+  // Template + AI refinement
+  const [waTemplateKey, setWaTemplateKey] = useState<"announcement" | "service_reminder" | "prayer_request">("announcement");
+  const [waEventName, setWaEventName] = useState("");
+  const [waEventWhen, setWaEventWhen] = useState("");
+  const [waTone, setWaTone] = useState("warm");
+  const [waRefining, setWaRefining] = useState(false);
+  const [waPreRefineDraft, setWaPreRefineDraft] = useState<string | null>(null);
+  // Live job progress
+  const [waJob, setWaJob] = useState<WaJob | null>(null);
+  const [waTestNumber, setWaTestNumber] = useState("");
+  const [waTesting, setWaTesting] = useState(false);
+  const [waNotice, setWaNotice] = useState("");
 
   // ── Email state ──
   const [emailTab, setEmailTab] = useState<"compose" | "history" | "setup">("compose");
@@ -167,24 +234,79 @@ export default function CommunicationsPage() {
   const [savingTemplates, setSavingTemplates] = useState(false);
   const [templateSaveMsg, setTemplateSaveMsg] = useState("");
 
-  // ── Load WhatsApp history ──
+  // ── Load WhatsApp history from the service (not Firestore) ──
   useEffect(() => {
     if (!tenantId || channel !== "whatsapp") return;
     setWaHistoryLoading(true);
-    getDocs(
-      query(
-        collection(db, "communications"),
-        where("tenantId", "==", tenantId),
-        where("type", "==", "whatsapp_broadcast"),
-        orderBy("createdAt", "desc")
-      )
-    )
-      .then((snap) =>
-        setWaBroadcasts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as WaBroadcast)))
-      )
-      .catch(console.error)
+    waFetch("/api/whatsapp/broadcast?limit=25")
+      .then((data) => setWaBroadcasts(((data as { broadcasts?: WaJob[] }).broadcasts) ?? []))
+      .catch((err) => console.error("WhatsApp history load failed:", err))
       .finally(() => setWaHistoryLoading(false));
   }, [tenantId, channel, waSuccessId]);
+
+  // ── Load branding so the composer can preview it and warn if it is missing ──
+  useEffect(() => {
+    if (!tenantId || channel !== "whatsapp" || waBranding) return;
+    waFetch("/api/whatsapp/branding")
+      .then((data) => setWaBranding(data as WaBranding))
+      .catch(() => setWaBranding({ churchName: null, signature: null, bannerUrl: null }));
+  }, [tenantId, channel, waBranding]);
+
+  // ── Load groups + members once for the WhatsApp composer ──
+  useEffect(() => {
+    if (channel !== "whatsapp" || !tenantId || waLoadedCount !== null) return;
+    (async () => {
+      try {
+        const [gSnap, mSnap] = await Promise.all([
+          getDocs(query(collection(db, "groups"), where("tenantId", "==", tenantId))),
+          getDocs(
+            query(
+              collection(db, "members"),
+              where("tenantId", "==", tenantId),
+              where("status", "==", "active")
+            )
+          ),
+        ]);
+        setWaGroups(gSnap.docs.map((d) => ({ id: d.id, name: d.data().name || "Unnamed group" })));
+        const members = mSnap.docs
+          .map((d) => {
+            const x = d.data();
+            return {
+              id: d.id,
+              name:
+                x.fullName ||
+                [x.firstName, x.lastName].filter(Boolean).join(" ") ||
+                "Unnamed",
+              phone: x.phone || x.cellphone || "",
+              groupId: x.groupId || "",
+            };
+          })
+          .filter((m) => m.phone);
+        setWaAllMembers(members);
+        setWaLoadedCount(members.length);
+      } catch (e) {
+        console.error("WhatsApp composer load failed:", e);
+        setWaLoadedCount(0);
+      }
+    })();
+  }, [channel, tenantId, waLoadedCount]);
+
+  // ── Poll an in-flight broadcast until it finishes ──
+  useEffect(() => {
+    const jobId = waJob?.jobId ?? waJob?.id;
+    if (!jobId || waJob?.status === "completed" || waJob?.status === "failed") return;
+
+    const interval = setInterval(async () => {
+      try {
+        const data = (await waFetch(`/api/whatsapp/broadcast/${jobId}`)) as WaJob;
+        setWaJob({ ...data, jobId });
+      } catch {
+        /* transient - keep polling */
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [waJob]);
 
   // ── Load Brevo status + member count when Email channel opens ──
   const loadBrevoStatus = useCallback(async () => {
@@ -396,29 +518,126 @@ export default function CommunicationsPage() {
     }).finally(() => setMailingLoading(false));
   }, [channel, mailingSettings]);
 
-  // ── WhatsApp send ──
+  // ── WhatsApp recipients ──
+  // Resolved to raw phone numbers here; the service normalises them to E.164,
+  // removes duplicates and drops anyone who has opted out.
+  function waRecipients(): string[] {
+    if (waAudience === "manual") {
+      return waManualNumbers
+        .split(/[\n,;]+/)
+        .map((n) => n.trim())
+        .filter(Boolean);
+    }
+    if (waAudience === "group") {
+      return waAllMembers.filter((m) => m.groupId === waGroupId).map((m) => m.phone);
+    }
+    if (waAudience === "individuals") {
+      return waAllMembers.filter((m) => waSelectedIds.includes(m.id)).map((m) => m.phone);
+    }
+    return waAllMembers.map((m) => m.phone);
+  }
+
+  // ── WhatsApp AI refinement ──
+  async function handleWaRefine() {
+    if (!message.trim()) { setWaError("Type a draft first, then refine it."); return; }
+    setWaRefining(true);
+    setWaError("");
+    setWaNotice("");
+    try {
+      const data = (await waFetch("/api/whatsapp/refine", {
+        method: "POST",
+        body: JSON.stringify({ draft: message.trim(), tone: waTone }),
+      })) as { refined: string; original: string };
+      setWaPreRefineDraft(data.original);
+      setMessage(data.refined);
+      setWaNotice("Message refined. You can undo if you prefer your original.");
+    } catch (err) {
+      setWaError(err instanceof Error ? err.message : "Could not refine the message.");
+    } finally {
+      setWaRefining(false);
+    }
+  }
+
+  function handleWaUndoRefine() {
+    if (waPreRefineDraft === null) return;
+    setMessage(waPreRefineDraft);
+    setWaPreRefineDraft(null);
+    setWaNotice("");
+  }
+
+  // ── WhatsApp test send ──
+  async function handleWaTest() {
+    if (!message.trim()) { setWaError("Type a message first."); return; }
+    if (!waTestNumber.trim()) { setWaError("Enter a number to send the test to."); return; }
+    setWaTesting(true);
+    setWaError("");
+    setWaNotice("");
+    try {
+      await waFetch("/api/whatsapp/send-test", {
+        method: "POST",
+        body: JSON.stringify({
+          to: waTestNumber.trim(),
+          message: message.trim(),
+          templateKey: waTemplateKey,
+          extraValues: waTemplateExtras(),
+        }),
+      });
+      setWaNotice(`Test sent to ${waTestNumber.trim()}.`);
+    } catch (err) {
+      setWaError(err instanceof Error ? err.message : "Test send failed.");
+    } finally {
+      setWaTesting(false);
+    }
+  }
+
+  function waTemplateExtras() {
+    return waTemplateKey === "service_reminder"
+      ? { event_name: waEventName.trim(), event_when: waEventWhen.trim() }
+      : {};
+  }
+
+  // ── WhatsApp broadcast ──
   async function handleWaSend(e: React.FormEvent) {
     e.preventDefault();
+    setWaError("");
+    setWaNotice("");
+
     if (!message.trim()) { setWaError("Please type a message before sending."); return; }
     if (!tenantId || !appUser) { setWaError("Session error. Please refresh and try again."); return; }
+    if (!waBranding?.churchName) {
+      setWaError("Set your church name on the WhatsApp Identity page before sending.");
+      return;
+    }
+    if (waTemplateKey === "service_reminder" && (!waEventName.trim() || !waEventWhen.trim())) {
+      setWaError("Event name and date/time are required for a service reminder.");
+      return;
+    }
+
+    const recipients = waRecipients();
+    if (recipients.length === 0) {
+      setWaError("No recipients selected.");
+      return;
+    }
+
     setWaSubmitting(true);
-    setWaError("");
-    setWaSuccessId("");
+    setWaJob(null);
     try {
-      const docRef = await addDoc(collection(db, "communications"), {
-        type: "whatsapp_broadcast",
-        message: message.trim(),
-        sentBy: appUser.uid,
-        sentByName: appUser.email || "Unknown",
-        tenantId,
-        createdAt: serverTimestamp(),
-      });
-      window.open(buildWaLink(message.trim()), "_blank", "noopener,noreferrer");
-      setWaSuccessId(docRef.id);
+      const data = (await waFetch("/api/whatsapp/broadcast", {
+        method: "POST",
+        body: JSON.stringify({
+          recipients,
+          message: message.trim(),
+          templateKey: waTemplateKey,
+          extraValues: waTemplateExtras(),
+        }),
+      })) as WaJob;
+
+      setWaJob(data);
+      setWaSuccessId(data.jobId ?? "sent");
       setMessage("");
-      setWaTab("history");
-    } catch {
-      setWaError("Something went wrong. Please try again.");
+      setWaPreRefineDraft(null);
+    } catch (err) {
+      setWaError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setWaSubmitting(false);
     }
@@ -646,6 +865,145 @@ export default function CommunicationsPage() {
                     WhatsApp Broadcast
                   </span>
                 </div>
+                {/* Branding gate: the church name is what identifies them on the shared number. */}
+                {waBranding && !waBranding.churchName && (
+                  <div className="bg-amber-900/20 border border-amber-700/40 rounded-lg px-4 py-3 text-xs text-amber-300">
+                    Your church name is not set, so congregants would not know who the message is
+                    from.{" "}
+                    <Link href="/dashboard/whatsapp" className="underline hover:text-amber-200">
+                      Set it on the WhatsApp Identity page
+                    </Link>
+                    .
+                  </div>
+                )}
+
+                {/* Message type */}
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-300">Message type</label>
+                  <select
+                    value={waTemplateKey}
+                    onChange={(e) => setWaTemplateKey(e.target.value as typeof waTemplateKey)}
+                    className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                  >
+                    <option value="announcement">Announcement</option>
+                    <option value="service_reminder">Service / event reminder</option>
+                    <option value="prayer_request">Prayer request</option>
+                  </select>
+                </div>
+
+                {waTemplateKey === "service_reminder" && (
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-slate-300">Event name</label>
+                      <input
+                        value={waEventName}
+                        onChange={(e) => setWaEventName(e.target.value.slice(0, 60))}
+                        placeholder="Midweek Bible Study"
+                        className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-slate-300">When</label>
+                      <input
+                        value={waEventWhen}
+                        onChange={(e) => setWaEventWhen(e.target.value.slice(0, 60))}
+                        placeholder="Wednesday at 18:30"
+                        className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Audience */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-300">Send to</label>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      ["all", `Everyone${waLoadedCount !== null ? ` (${waLoadedCount})` : ""}`],
+                      ["group", "A group"],
+                      ["individuals", "Chosen people"],
+                      ["manual", "Typed numbers"],
+                    ] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setWaAudience(key)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                          waAudience === key
+                            ? "bg-emerald-900/40 text-emerald-300 border-emerald-700/50"
+                            : "bg-slate-900/40 text-slate-400 border-slate-700 hover:text-slate-200"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {waAudience === "group" && (
+                    <select
+                      value={waGroupId}
+                      onChange={(e) => setWaGroupId(e.target.value)}
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition"
+                    >
+                      <option value="">Choose a group…</option>
+                      {waGroups.map((g) => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {waAudience === "individuals" && (
+                    <div className="space-y-2">
+                      <input
+                        value={waMemberSearch}
+                        onChange={(e) => setWaMemberSearch(e.target.value)}
+                        placeholder="Search members…"
+                        className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition"
+                      />
+                      <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-700 divide-y divide-slate-700/60">
+                        {waAllMembers
+                          .filter((m) =>
+                            m.name.toLowerCase().includes(waMemberSearch.toLowerCase())
+                          )
+                          .slice(0, 100)
+                          .map((m) => (
+                            <label
+                              key={m.id}
+                              className="flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/60 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={waSelectedIds.includes(m.id)}
+                                onChange={(e) =>
+                                  setWaSelectedIds((prev) =>
+                                    e.target.checked
+                                      ? [...prev, m.id]
+                                      : prev.filter((id) => id !== m.id)
+                                  )
+                                }
+                                className="accent-emerald-500"
+                              />
+                              <span className="flex-1">{m.name}</span>
+                              <span className="text-xs text-slate-500">{m.phone}</span>
+                            </label>
+                          ))}
+                      </div>
+                      <p className="text-xs text-slate-500">{waSelectedIds.length} selected</p>
+                    </div>
+                  )}
+
+                  {waAudience === "manual" && (
+                    <textarea
+                      value={waManualNumbers}
+                      onChange={(e) => setWaManualNumbers(e.target.value)}
+                      rows={3}
+                      placeholder="0821234567, 0839990000&#10;One per line or comma separated"
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none transition"
+                    />
+                  )}
+                </div>
+
+                {/* Message */}
                 <div className="space-y-1.5">
                   <label className="block text-sm font-medium text-slate-300">Message</label>
                   <textarea
@@ -655,14 +1013,156 @@ export default function CommunicationsPage() {
                     placeholder="Type your broadcast message here..."
                     className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 resize-none transition"
                   />
-                  <p className="text-xs text-slate-500 text-right">{message.length} characters</p>
+                  <div className="flex justify-between items-center">
+                    {/* WhatsApp strips line breaks from template variables, so warn early. */}
+                    {/\n/.test(message) ? (
+                      <p className="text-xs text-amber-400">
+                        Line breaks will be removed — WhatsApp does not allow them. Refine to fix.
+                      </p>
+                    ) : <span />}
+                    <p className={`text-xs ${message.length > 700 ? "text-red-400" : "text-slate-500"}`}>
+                      {message.length}/700
+                    </p>
+                  </div>
                 </div>
-                <div className="bg-slate-900/40 border border-slate-700/50 rounded-lg px-4 py-3 text-xs text-slate-400">
-                  Clicking <span className="text-slate-200 font-medium">Send Broadcast</span> will log this message and open WhatsApp with the text pre-filled so you can share it to your groups or contacts.
+
+                {/* AI refinement */}
+                <div className="bg-slate-900/40 border border-slate-700/50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-xs font-medium text-slate-300">Refine with AI</p>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={waTone}
+                        onChange={(e) => setWaTone(e.target.value)}
+                        className="bg-slate-900/60 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                      >
+                        <option value="warm">Warm</option>
+                        <option value="formal">Formal</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="celebratory">Celebratory</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleWaRefine}
+                        disabled={waRefining || !message.trim()}
+                        className="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-100 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        {waRefining ? (
+                          <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Refining…</>
+                        ) : "Refine"}
+                      </button>
+                      {waPreRefineDraft !== null && (
+                        <button
+                          type="button"
+                          onClick={handleWaUndoRefine}
+                          className="text-xs text-slate-400 hover:text-slate-200 underline transition-colors"
+                        >
+                          Undo
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Tidies wording and fits it into one paragraph. Dates, times and names are kept
+                    exactly as you wrote them.
+                  </p>
                 </div>
+
+                {/* Test send */}
+                <div className="flex gap-2 items-end flex-wrap">
+                  <div className="flex-1 min-w-[180px] space-y-1.5">
+                    <label className="block text-xs font-medium text-slate-400">
+                      Send a test to yourself first
+                    </label>
+                    <input
+                      value={waTestNumber}
+                      onChange={(e) => setWaTestNumber(e.target.value)}
+                      placeholder="0821234567"
+                      className="w-full bg-slate-900/60 border border-slate-600 rounded-lg px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleWaTest}
+                    disabled={waTesting || !message.trim() || !waTestNumber.trim()}
+                    className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-100 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                  >
+                    {waTesting ? "Sending…" : "Send test"}
+                  </button>
+                </div>
+
+                {/* Preview */}
+                {message.trim() && (
+                  <div className="bg-[#0b141a] rounded-xl p-4">
+                    <div className="bg-[#005c4b] rounded-lg overflow-hidden max-w-sm ml-auto">
+                      {waBranding?.bannerUrl && (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={waBranding.bannerUrl} alt="" className="w-full h-20 object-cover" />
+                      )}
+                      <div className="p-3 space-y-2">
+                        <p className="text-[13px] text-white leading-relaxed">
+                          {waTemplateKey === "prayer_request" ? "🙏 Prayer request from " : waTemplateKey === "announcement" ? "📢 Announcement from " : ""}
+                          <span className="font-bold">{waBranding?.churchName || "Your Church"}</span>
+                        </p>
+                        {waTemplateKey === "service_reminder" && waEventName && (
+                          <p className="text-[13px] text-white/90">
+                            Reminder: <span className="font-bold">{waEventName}</span> is on {waEventWhen || "…"}.
+                          </p>
+                        )}
+                        <p className="text-[13px] text-white/90 leading-relaxed">
+                          {message.replace(/\n{2,}/g, " — ").replace(/\n/g, " ")}
+                        </p>
+                        <p className="text-[13px] text-white/70 italic">
+                          {waBranding?.signature || waBranding?.churchName || "Your signature"}
+                        </p>
+                        <p className="text-[11px] text-white/50">Sent via Kereke Hub</p>
+                      </div>
+                      <div className="border-t border-white/10 py-2 text-center text-[13px] text-[#53bdeb]">
+                        Stop messages
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {waNotice && (
+                  <p className="text-sm text-emerald-400 bg-emerald-900/20 border border-emerald-700/40 rounded-lg px-4 py-2">{waNotice}</p>
+                )}
                 {waError && (
                   <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-2">{waError}</p>
                 )}
+
+                {/* Live broadcast progress */}
+                {waJob && (
+                  <div className="bg-slate-900/40 border border-slate-700/50 rounded-lg p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-slate-200">
+                        {waJob.status === "completed" ? "Broadcast complete" :
+                         waJob.status === "failed" ? "Broadcast failed" : "Sending…"}
+                      </p>
+                      {waJob.status !== "completed" && waJob.status !== "failed" && (
+                        <span className="w-4 h-4 border-2 border-slate-600 border-t-emerald-400 rounded-full animate-spin" />
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                      <span>Queued: {waJob.counts?.queued ?? 0}</span>
+                      <span className="text-emerald-400">Sent: {waJob.counts?.sent ?? 0}</span>
+                      {(waJob.counts?.failed ?? 0) > 0 && (
+                        <span className="text-red-400">Failed: {waJob.counts?.failed}</span>
+                      )}
+                      {(waJob.counts?.suppressed ?? 0) > 0 && (
+                        <span className="text-amber-400">Opted out: {waJob.counts?.suppressed}</span>
+                      )}
+                      {(waJob.counts?.invalid ?? 0) > 0 && (
+                        <span className="text-slate-500">Invalid numbers: {waJob.counts?.invalid}</span>
+                      )}
+                    </div>
+                    {waJob.warnings?.map((w, i) => (
+                      <p key={i} className="text-xs text-amber-400">{w}</p>
+                    ))}
+                    {waJob.error && <p className="text-xs text-red-400">{waJob.error}</p>}
+                  </div>
+                )}
+
                 <div className="flex justify-end">
                   <button
                     type="submit"
@@ -696,20 +1196,39 @@ export default function CommunicationsPage() {
                 <div className="text-center py-16 text-slate-500 text-sm">No WhatsApp broadcasts sent yet.</div>
               ) : (
                 waBroadcasts.map((b) => (
-                  <div key={b.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2">
+                  <div key={b.id ?? b.jobId} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2">
                     <div className="flex items-center justify-between gap-4">
                       <span className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-medium">
                         <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.858L.057 23.5a.5.5 0 0 0 .623.606l5.765-1.51A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.947 0-3.766-.527-5.323-1.445l-.378-.224-3.92 1.026 1.046-3.81-.247-.393A9.956 9.956 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-                        WhatsApp Broadcast
+                        {b.templateKey === "service_reminder" ? "Service reminder"
+                          : b.templateKey === "prayer_request" ? "Prayer request"
+                          : "Announcement"}
                       </span>
-                      <span className="text-xs text-slate-500">{formatDate(b.createdAt)}</span>
+                      <span className="text-xs text-slate-500">{formatDate(b.createdAt ?? null)}</span>
                     </div>
-                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{b.message}</p>
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs text-slate-500">Sent by {b.sentByName}</span>
-                      <a href={buildWaLink(b.message)} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
-                        Resend via WhatsApp
-                      </a>
+                    <p className="text-sm text-slate-200 leading-relaxed">{b.values?.message ?? "—"}</p>
+                    <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+                      <span className="text-xs text-slate-500">Sent by {b.createdBy ?? "—"}</span>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-emerald-400">{b.counts?.sent ?? 0} delivered</span>
+                        {(b.counts?.failed ?? 0) > 0 && (
+                          <span className="text-red-400">{b.counts?.failed} failed</span>
+                        )}
+                        {(b.counts?.suppressed ?? 0) > 0 && (
+                          <span className="text-amber-400">{b.counts?.suppressed} opted out</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMessage(b.values?.message ?? "");
+                            setWaTemplateKey((b.templateKey as typeof waTemplateKey) ?? "announcement");
+                            setWaTab("compose");
+                          }}
+                          className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                        >
+                          Reuse
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))

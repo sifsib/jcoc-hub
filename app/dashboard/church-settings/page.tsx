@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from "firebase/firestore";
-import { WhatsAppLinker } from "../../../components/WhatsAppLinker";
+import Link from "next/link";
 import InfoTooltip from "../../components/InfoTooltip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -522,8 +522,17 @@ export default function ChurchSettingsPage() {
       {/* WhatsApp messaging */}
       <div className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-2 dark:text-gray-100">WhatsApp Messaging</h2>
-        <p className="text-sm text-gray-500 mb-4 dark:text-gray-400">Connect your church WhatsApp number to send messages directly from the hub.</p>
-        <WhatsAppLinker />
+        <p className="text-sm text-gray-500 mb-4 dark:text-gray-400">
+          Kereke Hub now sends WhatsApp messages for you through its own number — there is no phone
+          to link. Set your church banner and signature so your congregation knows the message is
+          from you.
+        </p>
+        <Link
+          href="/dashboard/whatsapp"
+          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        >
+          Set up WhatsApp identity
+        </Link>
       </div>
 
       {/* Embed Membership Form */}
