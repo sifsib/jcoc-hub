@@ -34,9 +34,18 @@ function parseServiceAccount(rawKey) {
 }
 
 try {
-  const serviceAccount = parseServiceAccount(config.firebase.serviceAccountKey);
+  const serviceAccount =
+    config.firebase.kind === 'json'
+      ? parseServiceAccount(config.firebase.serviceAccountKey)
+      : {
+          projectId: config.firebase.projectId,
+          clientEmail: config.firebase.clientEmail,
+          // The three-part form is usually stored with escaped newlines.
+          privateKey: config.firebase.privateKey.replace(/\\n/g, '\n'),
+        };
+
   admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-  console.log('[STARTUP] Firebase Admin initialized');
+  console.log(`[STARTUP] Firebase Admin initialized (${config.firebase.kind} credentials)`);
 } catch (err) {
   console.error('[FATAL] Firebase Admin init failed:', err.message);
   process.exit(1);

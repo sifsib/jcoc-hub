@@ -5,6 +5,7 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
+    "build": "node --check src/server.js && echo \"no build step required\"",
     "start": "node src/server.js",
     "dev": "NODE_ENV=development node --watch src/server.js",
     "provision:templates": "node scripts/provision-templates.mjs",
