@@ -8,7 +8,7 @@ import express from 'express';
 import cors from 'cors';
 
 import { config } from './config.js';
-import './firebase.js'; // side-effect: initialise Admin SDK before anything uses it
+import { verifyFirestoreAccess } from './firebase.js'; // also initialises the Admin SDK
 import { errorHandler, verifyTenant } from './auth.js';
 import { webhookHandler } from './webhook.js';
 import { createBroadcast, getBroadcast, listBroadcasts, sendSingle } from './broadcast.js';
@@ -203,4 +203,6 @@ app.use(errorHandler);
 
 app.listen(config.port, () => {
   console.log(`[STARTUP] Kereke WhatsApp service (Kapso) listening on port ${config.port}`);
+  // Fire-and-forget: surfaces bad Firebase credentials in the deploy logs.
+  verifyFirestoreAccess();
 });
