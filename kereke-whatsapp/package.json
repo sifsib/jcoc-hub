@@ -1,0 +1,24 @@
+{
+  "name": "kereke-whatsapp",
+  "version": "2.0.0",
+  "description": "Kapso-backed WhatsApp service for Kereke Hub - one central number, many churches",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node --watch src/server.js",
+    "provision:templates": "node scripts/provision-templates.mjs",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.7.0",
+    "openai": "^6.48.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=20"
+  }
+}
