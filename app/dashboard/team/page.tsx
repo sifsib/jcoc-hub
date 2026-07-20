@@ -612,7 +612,12 @@ export default function TeamPage() {
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Role</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch</th>
-                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Follow-Up Team</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <span className="flex items-center gap-1">
+                      Follow-Up Team
+                      <InfoTooltip text="The people the system hands follow-ups to automatically." why="Any team member can be assigned a follow-up by hand. This toggle only decides who gets the automatic ones, so switch it on for the people who actually do the calling. If nobody is switched on, automatic follow-ups spread across the whole team." />
+                    </span>
+                  </th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Added</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>

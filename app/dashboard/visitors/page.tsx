@@ -6,7 +6,7 @@ import { db } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import DateInput from "../../../components/ui/DateInput";
 import { useTeamMembers } from "../../../lib/useTeamMembers";
-import { getVisitorMinistryUsers, pickLeastLoadedAssignee, notifyAssignee } from "../../../lib/visitorMinistry";
+import { pickAutoAssignee, notifyAssignee } from "../../../lib/visitorMinistry";
 import {
   collection, query, where, getDocs, addDoc,
   updateDoc, doc, serverTimestamp, getDoc,
@@ -113,8 +113,11 @@ export default function VisitorsPage() {
   // The Follow-Up Team is the only group allowed to be assigned: anyone flagged
   // with the toggle, plus anyone whose role is the dedicated follow_up role. If
   // nobody qualifies yet we fall back to the whole team so capture never breaks.
+  // Anyone on the team can be handed a follow-up. The Follow-Up Team flag only
+  // decides who auto-assignment rotates through, so we still track it to label
+  // those people and to word the auto-assign option properly.
   const ministryTeam = team.filter((t) => t.visitorMinistry || t.role === "follow_up");
-  const assignableTeam = ministryTeam.length > 0 ? ministryTeam : team;
+  const assignableTeam = team;
   const ministryConfigured = ministryTeam.length > 0;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -316,8 +319,7 @@ export default function VisitorsPage() {
         : null;
       if (!assignee && needsFollowUp) {
         try {
-          const ministry = await getVisitorMinistryUsers(appUser.tenantId);
-          const picked = await pickLeastLoadedAssignee(appUser.tenantId, ministry);
+          const picked = await pickAutoAssignee(appUser.tenantId);
           if (picked) assignee = { uid: picked.uid, name: picked.name };
         } catch (e) { console.warn("Auto-assign skipped:", e); }
       }
@@ -682,16 +684,20 @@ export default function VisitorsPage() {
               <div className="flex flex-col gap-1">
                 <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Assign Follow-Up To
-                  <InfoTooltip text="The team member responsible for reaching out to this visitor." why="Only people on your Follow-Up Team show up here. Assigning someone gives them a clear owner so nobody slips through the cracks, and they get notified it is theirs. Leave it blank to let the system auto-assign." />
+                  <InfoTooltip text="The team member responsible for reaching out to this visitor." why="Any team member can be given a follow-up. Assigning someone gives them a clear owner so nobody slips through the cracks, and they get notified it is theirs. Leave it blank to let the system auto-assign." />
                 </label>
                 <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={sel}>
-                  <option value="">{ministryConfigured ? "Auto-assign from Visitor Ministry" : "Auto-assign (or pick later)"}</option>
-                  {assignableTeam.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                  <option value="">{ministryConfigured ? "Auto-assign to the Follow-Up Team" : "Auto-assign (or pick later)"}</option>
+                  {assignableTeam.map((t) => (
+                    <option key={t.uid} value={t.uid}>
+                      {t.name}{(t.visitorMinistry || t.role === "follow_up") ? " (Follow-Up Team)" : ""}
+                    </option>
+                  ))}
                 </select>
                 <p className="text-xs text-gray-400">
                   {ministryConfigured
-                    ? "Only Visitor Ministry members are shown. Leave blank to auto-assign the least-busy one."
-                    : "Tip: mark your Visitor Ministry team on the Team page to lock this list. For now, all team members are shown."}
+                    ? "Any team member can be picked. Leave blank and the least-busy Follow-Up Team member gets it."
+                    : "Any team member can be picked. Leave blank and the least-busy person on the team gets it."}
                 </p>
               </div>
             )}

@@ -38,6 +38,9 @@ export function useTeamMembers(tenantId?: string | null) {
             };
           })
           .filter((m) => m.status !== "inactive")
+          // Congregants with a login are not staff, so they must never appear in
+          // a "who is responsible" dropdown. Everyone else on the team can.
+          .filter((m) => m.role !== "congregation_member")
           .sort((a, b) => a.name.localeCompare(b.name))
           .map(({ status, ...m }) => m as TeamMemberLite);
         setTeam(list);

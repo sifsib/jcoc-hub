@@ -1,12 +1,15 @@
 "use client";
 
-// Helpers for the "Visitor Ministry" group: the subset of team members who are
-// allowed to be assigned to visitors and follow-up workflows.
+// Helpers for working out who can carry a follow-up.
 //
-// A person is in the ministry when their user doc has visitorMinistry === true
-// (toggled on the Team page). These helpers are used to (a) lock assignee
-// dropdowns and (b) auto-pick a responsible person (DRI) on auto-started
-// workflows, spreading the load evenly.
+// ANYONE on the team can be assigned a follow-up. Use getAssignableUsers() to
+// populate assignee dropdowns.
+//
+// The "Follow-Up Team" toggle (visitorMinistry === true on the user doc, set on
+// the Team page) no longer restricts who you may pick. It now only decides who
+// the system auto-assigns to when nobody was chosen by hand, via
+// getVisitorMinistryUsers() + pickLeastLoadedAssignee(). If no one is flagged,
+// auto-assign falls back to the whole team.
 
 import { db } from "./firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
@@ -15,12 +18,38 @@ export interface MinistryUser {
   uid: string;
   name: string;
   email: string;
+  onFollowUpTeam?: boolean;
 }
 
-// Load active users who make up the follow-up team for a tenant: anyone switched
-// on in the "Follow-Up Team" toggle (visitorMinistry === true) PLUS anyone whose
-// main role is the dedicated follow_up role. Two queries merged by uid, since
-// Firestore can't OR across two different fields in a single query.
+// Every active team member, so any of them can be put on a follow-up. The
+// Follow-Up Team flag comes back with each person purely so the UI can label
+// them, not to filter anyone out.
+export async function getAssignableUsers(tenantId: string): Promise<MinistryUser[]> {
+  const snap = await getDocs(query(collection(db, "users"), where("tenantId", "==", tenantId)));
+  return snap.docs
+    .filter((d) => (d.data().status || "active") !== "inactive")
+    // Congregants with a login are not staff, so they are not assignable. The
+    // owner and every other team role IS, including yourself.
+    .filter((d) => d.data().role !== "congregation_member")
+    .map((d) => {
+      const x = d.data();
+      return {
+        uid: d.id,
+        name: x.displayName || x.email || "Unnamed",
+        email: x.email || "",
+        onFollowUpTeam: x.visitorMinistry === true || x.role === "follow_up",
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The Follow-Up Team: anyone switched on with the toggle (visitorMinistry ===
+// true) PLUS anyone whose main role is the dedicated follow_up role. Two queries
+// merged by uid, since Firestore can't OR across two different fields in one
+// query.
+//
+// Only used to decide who AUTO-assignment rotates through. It does not limit
+// who an admin can pick by hand, that is getAssignableUsers().
 export async function getVisitorMinistryUsers(tenantId: string): Promise<MinistryUser[]> {
   const [flaggedSnap, roleSnap] = await Promise.all([
     getDocs(
@@ -75,6 +104,15 @@ export async function pickLeastLoadedAssignee(
   });
 
   return users.reduce((best, u) => (load[u.uid] < load[best.uid] ? u : best), users[0]);
+}
+
+// Who should the system hand this to when nobody was picked by hand?
+// The Follow-Up Team gets first refusal. If that team is empty, the whole team
+// is fair game, so auto-assign never silently leaves a follow-up ownerless.
+export async function pickAutoAssignee(tenantId: string): Promise<MinistryUser | null> {
+  let pool = await getVisitorMinistryUsers(tenantId);
+  if (pool.length === 0) pool = await getAssignableUsers(tenantId);
+  return pickLeastLoadedAssignee(tenantId, pool);
 }
 
 // Fire-and-forget email to the assignee. Never throws; assignment must succeed

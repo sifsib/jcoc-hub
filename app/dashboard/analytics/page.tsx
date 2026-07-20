@@ -9,7 +9,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import InfoTooltip from "../../components/InfoTooltip";
-import { getVisitorMinistryUsers, notifyAssignee, MinistryUser } from "../../../lib/visitorMinistry";
+import { getAssignableUsers, notifyAssignee, MinistryUser } from "../../../lib/visitorMinistry";
 import { startCareFollowUp, ensureStandardWorkflows, NoStepsError, CareFollowUp } from "../../../lib/standardWorkflows";
 
 interface CareTierMember {
@@ -268,9 +268,9 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (!appUser?.tenantId) return;
 
-    getVisitorMinistryUsers(appUser.tenantId)
+    getAssignableUsers(appUser.tenantId)
       .then(setMinistry)
-      .catch((e) => console.warn("Could not load follow-up team:", e));
+      .catch((e) => console.warn("Could not load team:", e));
 
     const loadCareWorkflows = async () => {
       const read = async () => {
@@ -815,11 +815,11 @@ export default function AnalyticsPage() {
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Responsible Person
-                <InfoTooltip text="The person who will personally reach this member." why="Follow-ups quietly die when they belong to everyone. One name on the task means someone actually owns it, and they get an email the moment you assign it." />
+                <InfoTooltip text="The person who will personally reach this member." why="Follow-ups quietly die when they belong to everyone. One name on the task means someone actually owns it, and they get an email the moment you assign it. Anyone on your team can be picked." />
               </label>
               {ministry.length === 0 ? (
                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  Nobody is on the Follow-Up Team yet. Open Team and switch on Follow-Up Team for the people who do pastoral care.
+                  No active team members found. Invite your team on the Team page first.
                 </p>
               ) : (
                 <select
@@ -829,7 +829,9 @@ export default function AnalyticsPage() {
                 >
                   <option value="">Choose a person...</option>
                   {ministry.map((m) => (
-                    <option key={m.uid} value={m.uid}>{m.name}</option>
+                    <option key={m.uid} value={m.uid}>
+                      {m.name}{m.onFollowUpTeam ? " (Follow-Up Team)" : ""}
+                    </option>
                   ))}
                 </select>
               )}

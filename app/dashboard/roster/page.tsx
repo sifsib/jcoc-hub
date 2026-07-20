@@ -5,7 +5,7 @@ import Link from "next/link";
 import { db } from "../../../lib/firebase";
 import DateInput from "../../../components/ui/DateInput";
 import { useAppUser } from "../../../lib/useAppUser";
-import { getVisitorMinistryUsers, pickLeastLoadedAssignee, notifyAssignee } from "../../../lib/visitorMinistry";
+import { pickAutoAssignee, notifyAssignee } from "../../../lib/visitorMinistry";
 import {
   collection, query, where, getDocs, addDoc,
   updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot,
@@ -927,11 +927,11 @@ export default function ManageMembershipPage() {
           return d.toISOString().split("T")[0];
         };
 
-        // Auto-assign a responsible person from the Visitor Ministry, spreading load.
+        // Auto-assign a responsible person, spreading load. Prefers the
+        // Follow-Up Team, falls back to the whole team when none is set.
         let assignee: { uid: string; name: string } | null = null;
         try {
-          const ministry = await getVisitorMinistryUsers(appUser.tenantId);
-          const picked = await pickLeastLoadedAssignee(appUser.tenantId, ministry);
+          const picked = await pickAutoAssignee(appUser.tenantId);
           if (picked) assignee = { uid: picked.uid, name: picked.name };
         } catch (e) { console.warn("Auto-assign skipped:", e); }
 
