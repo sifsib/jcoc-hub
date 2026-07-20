@@ -7,6 +7,7 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { useTenantTier } from "../../../lib/useTenantTier";
 import { isPaidTier } from "../../../lib/tier";
 import PaidFeatureLock from "../../components/PaidFeatureLock";
+import { ensureStandardWorkflows } from "../../../lib/standardWorkflows";
 import InfoTooltip from "../../components/InfoTooltip";
 import {
   collection,
@@ -18,7 +19,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 
-type TriggerType = "visitor_added" | "member_added" | "birthday" | "manual";
+type TriggerType = "visitor_added" | "member_added" | "care_tier" | "birthday" | "manual";
 
 interface Workflow {
   id: string;
@@ -28,6 +29,8 @@ interface Workflow {
   active: boolean;
   stepCount: number;
   instanceCount: number;
+  isSystem?: boolean;
+  systemKey?: string;
   createdAt: any;
 }
 
@@ -44,13 +47,14 @@ interface WorkflowInstance {
 
 const TRIGGERS: { value: TriggerType; label: string; icon: string; description: string }[] = [
   { value: "visitor_added", label: "New Visitor", icon: "👋", description: "Starts when a first-time guest is added" },
-  { value: "member_added", label: "New Member", icon: "🎉", description: "Starts when a new member joins" },
+  { value: "member_added", label: "New Member", icon: "🎉", description: "Starts when a new membership form is approved" },
+  { value: "care_tier", label: "Care Follow-Up", icon: "❤️", description: "Started from Care Tier Alerts for absent members" },
   { value: "birthday", label: "Birthday", icon: "🎂", description: "Starts on a member's birthday" },
   { value: "manual", label: "Manual", icon: "▶️", description: "Started manually for any person" },
 ];
 
 function triggerInfo(t: TriggerType) {
-  return TRIGGERS.find((x) => x.value === t) || TRIGGERS[3];
+  return TRIGGERS.find((x) => x.value === t) || TRIGGERS[TRIGGERS.length - 1];
 }
 
 export default function WorkflowsPage() {
@@ -64,6 +68,14 @@ export default function WorkflowsPage() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", trigger: "visitor_added" as TriggerType });
   const [creating, setCreating] = useState(false);
+
+  // Every church gets the three standard workflows (Visitor Follow-Up, Care
+  // Follow-Up, New Member Onboarding) created empty for them to design. Cheap
+  // and idempotent, so it is safe to run on every visit.
+  useEffect(() => {
+    if (!tenantId || !isPaidTier(tier)) return;
+    ensureStandardWorkflows(tenantId).catch((e) => console.warn("Standard workflow seed skipped:", e));
+  }, [tenantId, tier]);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -220,11 +232,21 @@ export default function WorkflowsPage() {
                   </span>
                 </div>
 
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
                   <span className="bg-gray-100 px-2 py-0.5 rounded-full">{info.label}</span>
-                  <span className="mx-2">·</span>
+                  {wf.isSystem && (
+                    <span className="bg-slate-100 text-slate-600 font-semibold px-2 py-0.5 rounded-full">Standard</span>
+                  )}
+                  <span>·</span>
                   <span>{wf.stepCount || 0} step{wf.stepCount !== 1 ? "s" : ""}</span>
                 </div>
+
+                {/* A standard workflow with no steps does nothing yet. Nudge them. */}
+                {wf.isSystem && !wf.stepCount && (
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                    Design your steps to switch this on
+                  </p>
+                )}
 
                 <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
                   <span className="text-gray-500">{activeInstances.length} active</span>

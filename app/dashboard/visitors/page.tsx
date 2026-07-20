@@ -258,6 +258,10 @@ export default function VisitorsPage() {
           subjectName: visitorName, subjectPhone: visitorPhone,
           subjectType: "visitor", status: "active",
           completedSteps: 0, totalSteps: steps.length, startedAt: serverTimestamp(),
+          // Needed for the Workflows dashboard, which sorts active instances by
+          // nextDueDate. Without it the instance is invisible on that list.
+          nextDueDate: addDays(steps[0]?.delayDays || 0),
+          overdueCount: 0, dueTodayCount: 0,
           ...(assignee ? { assignedToUid: assignee.uid, assignedToName: assignee.name } : {}),
         });
 

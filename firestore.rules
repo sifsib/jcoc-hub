@@ -215,6 +215,14 @@ service cloud.firestore {
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageMembers();
+      // Follow-up team: may touch the care follow-up stamp ONLY, so completing a
+      // care workflow moves the member off the Care Tier Alerts list. No other
+      // member field can be changed through this rule.
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && canDoFollowUp()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['careFollowUp']);
       allow delete: if isSignedIn()
                     && tenantAllowed(resource)
                     && canManageMembers();

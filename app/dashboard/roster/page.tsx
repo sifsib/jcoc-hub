@@ -946,6 +946,11 @@ export default function ManageMembershipPage() {
           status: "active",
           completedSteps: 0,
           totalSteps: steps.length,
+          // Needed for the Workflows dashboard, which sorts active instances by
+          // nextDueDate. Without it the instance is invisible on that list.
+          nextDueDate: addDays(steps[0]?.delayDays || 0),
+          overdueCount: 0,
+          dueTodayCount: 0,
           startedAt: serverTimestamp(),
           ...(assignee ? { assignedToUid: assignee.uid, assignedToName: assignee.name } : {}),
         });

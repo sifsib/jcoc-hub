@@ -24,7 +24,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
-type TriggerType = "visitor_added" | "member_added" | "birthday" | "manual";
+type TriggerType = "visitor_added" | "member_added" | "care_tier" | "birthday" | "manual";
 type ActionType = "task" | "whatsapp" | "email" | "note";
 type InstanceStatus = "active" | "completed" | "paused";
 type StepStatus = "pending" | "done" | "skipped";
@@ -58,6 +58,7 @@ interface WorkflowInstance {
   subjectName: string;
   subjectPhone?: string;
   subjectType: "visitor" | "member";
+  careTier?: number;        // set when started from Care Tier Alerts
   status: InstanceStatus;
   startedAt: Timestamp | null;
   completedSteps: number;
@@ -99,6 +100,7 @@ const ACTION_TYPES: { value: ActionType; label: string; icon: string; color: str
 const TRIGGER_LABELS: Record<TriggerType, string> = {
   visitor_added: "New Visitor",
   member_added: "New Member",
+  care_tier: "Care Follow-Up",
   birthday: "Birthday",
   manual: "Manual",
 };
@@ -415,17 +417,38 @@ export default function WorkflowBuilderPage() {
   // workflow for a visitor finishes, mark that guest as followed up so they drop
   // off the "Follow-Up Required" list and the dashboard pending widget. If the
   // workflow is reopened, put them back on the pending list.
-  async function syncVisitorFollowUp(instanceId: string, completed: boolean) {
+  // Keep the person's own record in step with their workflow.
+  //
+  // Guests move in and out of "Follow-Up Required". Members on a care follow-up
+  // stay on the Care Tier Alerts list while the workflow is running, and only
+  // move to "Followed up" once it is completed. Marking them present clears the
+  // tier on its own, since tiers are calculated from attendance.
+  async function syncSubjectFollowUp(instanceId: string, completed: boolean) {
     const inst = instances.find((i) => i.id === instanceId);
-    if (!inst || inst.subjectType !== "visitor" || !inst.subjectId) return;
-    try {
-      await updateDoc(doc(db, "visitors", inst.subjectId), {
-        followUpStatus: completed ? "done" : "pending",
-        followedUpBy: appUser?.email || "Workflow",
-        followedUpAt: completed ? serverTimestamp() : null,
-      });
-    } catch (err) {
-      console.error("Could not sync visitor follow-up status:", err);
+    if (!inst || !inst.subjectId) return;
+
+    if (inst.subjectType === "visitor") {
+      try {
+        await updateDoc(doc(db, "visitors", inst.subjectId), {
+          followUpStatus: completed ? "done" : "pending",
+          followedUpBy: appUser?.email || "Workflow",
+          followedUpAt: completed ? serverTimestamp() : null,
+        });
+      } catch (err) {
+        console.error("Could not sync visitor follow-up status:", err);
+      }
+      return;
+    }
+
+    if (inst.subjectType === "member" && inst.careTier !== undefined) {
+      try {
+        await updateDoc(doc(db, "members", inst.subjectId), {
+          "careFollowUp.status": completed ? "completed" : "active",
+          "careFollowUp.completedAt": completed ? serverTimestamp() : null,
+        });
+      } catch (err) {
+        console.error("Could not sync care follow-up status:", err);
+      }
     }
   }
 
@@ -452,19 +475,19 @@ export default function WorkflowBuilderPage() {
       completedSteps: completedCount,
       status: allDone ? "completed" : "active",
     });
-    await syncVisitorFollowUp(instanceId, allDone);
+    await syncSubjectFollowUp(instanceId, allDone);
   }
 
   async function completeInstance(instanceId: string) {
     await updateDoc(doc(db, "workflow_instances", instanceId), { status: "completed" });
-    await syncVisitorFollowUp(instanceId, true);
+    await syncSubjectFollowUp(instanceId, true);
   }
 
   // Reopen a completed workflow: put it back to active and return the guest to
   // the pending follow-up list.
   async function reopenInstance(instanceId: string) {
     await updateDoc(doc(db, "workflow_instances", instanceId), { status: "active" });
-    await syncVisitorFollowUp(instanceId, false);
+    await syncSubjectFollowUp(instanceId, false);
   }
 
   // Assign (or change) the DRI for a running workflow. onSnapshot refreshes the list.
@@ -500,6 +523,13 @@ export default function WorkflowBuilderPage() {
   }
 
   async function deleteWorkflow() {
+    // Standard workflows are part of the system. They can be switched off but
+    // never deleted, otherwise visitors, care alerts and new members would have
+    // nothing to attach to.
+    if ((workflow as any)?.isSystem) {
+      alert("This is a standard Kereke Hub workflow, so it cannot be deleted. Untick \"Workflow is active\" if you do not want it running.");
+      return;
+    }
     if (!confirm(`Delete "${workflow?.name}"? This cannot be undone.`)) return;
     await deleteDoc(doc(db, "workflows", workflowId));
     router.push("/dashboard/workflows");
@@ -1031,12 +1061,18 @@ export default function WorkflowBuilderPage() {
               >
                 {savingSettings ? "Saving..." : settingsSaved ? "Saved!" : "Save Changes"}
               </button>
-              <button
-                onClick={deleteWorkflow}
-                className="text-sm text-red-500 hover:text-red-700 font-medium ml-auto"
-              >
-                Delete Workflow
-              </button>
+              {(workflow as any)?.isSystem ? (
+                <span className="text-xs text-gray-400 ml-auto self-center">
+                  Standard workflow. It can be switched off but not deleted.
+                </span>
+              ) : (
+                <button
+                  onClick={deleteWorkflow}
+                  className="text-sm text-red-500 hover:text-red-700 font-medium ml-auto"
+                >
+                  Delete Workflow
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -9,6 +9,8 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import InfoTooltip from "../../components/InfoTooltip";
+import { getVisitorMinistryUsers, notifyAssignee, MinistryUser } from "../../../lib/visitorMinistry";
+import { startCareFollowUp, ensureStandardWorkflows, NoStepsError, CareFollowUp } from "../../../lib/standardWorkflows";
 
 interface CareTierMember {
   id: string;
@@ -16,6 +18,8 @@ interface CareTierMember {
   phone: string;
   daysAbsent: number;
   absenceException?: { tag: string; note?: string } | null;
+  careFollowUp?: CareFollowUp | null;
+  tier?: number;
 }
 
 interface CareTiers {
@@ -24,6 +28,7 @@ interface CareTiers {
   tier3: CareTierMember[];
   neverAttended: CareTierMember[];
   exceptions: CareTierMember[];
+  followedUp: CareTierMember[];
 }
 
 interface MemberData {
@@ -60,8 +65,20 @@ export default function AnalyticsPage() {
     tier3: [],
     neverAttended: [],
     exceptions: [],
+    followedUp: [],
   });
   const [removingException, setRemovingException] = useState<string | null>(null);
+
+  // Assign-and-start-workflow state
+  const [assignModal, setAssignModal] = useState<{ member: CareTierMember; tier: number } | null>(null);
+  const [ministry, setMinistry] = useState<MinistryUser[]>([]);
+  const [careWorkflows, setCareWorkflows] = useState<{ id: string; name: string; stepCount: number }[]>([]);
+  const [assignUid, setAssignUid] = useState("");
+  const [assignWorkflowId, setAssignWorkflowId] = useState("");
+  const [assignNote, setAssignNote] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState("");
+  const [showFollowedUp, setShowFollowedUp] = useState(false);
 
   // Notes modal state
   const [notesModal, setNotesModal] = useState<{ member: CareTierMember; tier: number } | null>(null);
@@ -127,7 +144,7 @@ export default function AnalyticsPage() {
         // Sort all recorded Sunday dates descending (most recent first)
         const sortedSundays = Array.from(allSundayDates).sort((a, b) => b.localeCompare(a));
 
-        const tiers: CareTiers = { tier1: [], tier2: [], tier3: [], neverAttended: [], exceptions: [] };
+        const tiers: CareTiers = { tier1: [], tier2: [], tier3: [], neverAttended: [], exceptions: [], followedUp: [] };
 
         const membersForTiers: CareTierMember[] = [];
         querySnapshot.forEach((docSnap) => {
@@ -138,8 +155,20 @@ export default function AnalyticsPage() {
             phone: data.phone || "",
             daysAbsent: 0,
             absenceException: data.absenceException || null,
+            careFollowUp: (data.careFollowUp as CareFollowUp) || null,
           });
         });
+
+        // A member whose care workflow is finished drops out of the live alert
+        // list into "Followed up". They only come back if they miss again after
+        // being marked present, because tiers rebuild from attendance each time.
+        const parkIfFollowedUp = (m: CareTierMember, tier: number) => {
+          if (m.careFollowUp?.status === "completed") {
+            tiers.followedUp.push({ ...m, tier });
+            return true;
+          }
+          return false;
+        };
 
         membersForTiers.forEach((member) => {
           // Skip tier calc for members on an absence exception
@@ -170,13 +199,25 @@ export default function AnalyticsPage() {
             }
           }
 
+          // Marked present again, so the care episode is over. Clear the stamp
+          // so a future absence starts a fresh alert instead of landing them
+          // straight into "Followed up".
+          if (consecutiveAbsent === 0 && member.careFollowUp) {
+            updateDoc(doc(db, "members", member.id), { careFollowUp: null })
+              .catch((e) => console.warn("Could not clear care follow-up:", e));
+            member.careFollowUp = null;
+          }
+
           // Apply tier rules (highest applicable tier wins)
           if (consecutiveAbsent >= 5) {
-            tiers.tier3.push({ ...member, daysAbsent: consecutiveAbsent });
+            if (!parkIfFollowedUp({ ...member, daysAbsent: consecutiveAbsent }, 3))
+              tiers.tier3.push({ ...member, daysAbsent: consecutiveAbsent, tier: 3 });
           } else if (consecutiveAbsent === 4) {
-            tiers.tier2.push({ ...member, daysAbsent: consecutiveAbsent });
+            if (!parkIfFollowedUp({ ...member, daysAbsent: consecutiveAbsent }, 2))
+              tiers.tier2.push({ ...member, daysAbsent: consecutiveAbsent, tier: 2 });
           } else if (consecutiveAbsent === 3 && allNotReported) {
-            tiers.tier1.push({ ...member, daysAbsent: consecutiveAbsent });
+            if (!parkIfFollowedUp({ ...member, daysAbsent: consecutiveAbsent }, 1))
+              tiers.tier1.push({ ...member, daysAbsent: consecutiveAbsent, tier: 1 });
           }
           // 3 Sundays but all reported = no tier (grace given)
         });
@@ -222,6 +263,117 @@ export default function AnalyticsPage() {
 
     fetchAnalytics();
   }, [appUser, userLoading]);
+
+  // Who can be put on a care follow-up, and which workflows they can be put on.
+  useEffect(() => {
+    if (!appUser?.tenantId) return;
+
+    getVisitorMinistryUsers(appUser.tenantId)
+      .then(setMinistry)
+      .catch((e) => console.warn("Could not load follow-up team:", e));
+
+    const loadCareWorkflows = async () => {
+      const read = async () => {
+        const snap = await getDocs(query(
+          collection(db, "workflows"),
+          where("tenantId", "==", appUser.tenantId),
+          where("trigger", "==", "care_tier"),
+          where("active", "==", true),
+        ));
+        return snap.docs.map((d) => ({
+          id: d.id,
+          name: (d.data().name as string) || "Untitled workflow",
+          stepCount: (d.data().stepCount as number) || 0,
+        }));
+      };
+
+      let list = await read();
+      // First time on this page and the standard workflows have not been created
+      // yet. Create them now so Care Tier Alerts works on its own.
+      if (list.length === 0) {
+        await ensureStandardWorkflows(appUser.tenantId);
+        list = await read();
+      }
+      setCareWorkflows(list);
+      if (list.length > 0) setAssignWorkflowId(list[0].id);
+    };
+
+    loadCareWorkflows().catch((e) => console.warn("Could not load care workflows:", e));
+  }, [appUser?.tenantId]);
+
+  // Put a named person on the hook for an absent member and attach the care
+  // follow-up workflow to them.
+  const confirmAssign = async () => {
+    if (!assignModal || !appUser) return;
+    const person = ministry.find((m) => m.uid === assignUid);
+    const workflow = careWorkflows.find((w) => w.id === assignWorkflowId);
+    if (!person) { setAssignError("Choose who is responsible for this follow-up."); return; }
+    if (!workflow) { setAssignError("Choose a follow-up workflow."); return; }
+
+    setAssigning(true);
+    setAssignError("");
+    try {
+      const result = await startCareFollowUp({
+        tenantId: appUser.tenantId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        memberId: assignModal.member.id,
+        memberName: assignModal.member.fullName,
+        memberPhone: assignModal.member.phone,
+        tier: assignModal.tier,
+        assignee: { uid: person.uid, name: person.name },
+      });
+
+      // Best effort email so the person knows it landed on them.
+      notifyAssignee({
+        assigneeUid: person.uid,
+        subjectName: assignModal.member.fullName,
+        subjectPhone: assignModal.member.phone,
+        kind: "workflow",
+        reason: `Care Tier ${assignModal.tier} follow-up`,
+        note: assignNote.trim() || undefined,
+      });
+
+      // Log the assignment against the member's care notes so the history reads
+      // properly next to the manual notes.
+      await addDoc(collection(db, "careTierNotes"), {
+        tenantId: appUser.tenantId,
+        memberId: assignModal.member.id,
+        memberName: assignModal.member.fullName,
+        tier: assignModal.tier,
+        note: assignNote.trim()
+          ? `Assigned to ${person.name} on "${workflow.name}". ${assignNote.trim()}`
+          : `Assigned to ${person.name} on "${workflow.name}".`,
+        createdBy: appUser.email ?? "",
+        createdAt: serverTimestamp(),
+      }).catch(() => {});
+
+      // Reflect it immediately without a full reload.
+      setCareTiers((prev) => {
+        const stamp = (list: CareTierMember[]) =>
+          list.map((m) => (m.id === assignModal.member.id ? { ...m, careFollowUp: result } : m));
+        return {
+          ...prev,
+          tier1: stamp(prev.tier1),
+          tier2: stamp(prev.tier2),
+          tier3: stamp(prev.tier3),
+          neverAttended: stamp(prev.neverAttended),
+        };
+      });
+      setAssignModal(null);
+      setAssignUid("");
+      setAssignNote("");
+    } catch (e) {
+      if (e instanceof NoStepsError) {
+        setAssignError(`"${e.workflowName}" has no steps yet. Open Workflows and design the steps first.`);
+      } else {
+        console.error("Could not start care follow-up:", e);
+        setAssignError("Could not start the follow-up. Please try again.");
+      }
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   if (userLoading || loading) {
     return (
@@ -316,15 +468,47 @@ export default function AnalyticsPage() {
       ) : (
         members.map((member) => {
           const noteCount = noteCountMap[member.id] || 0;
+          const followUp = member.careFollowUp;
+          const onFollowUp = followUp?.status === "active";
           return (
-            <div key={member.id} className="p-4 flex justify-between items-center hover:bg-gray-50 transition">
-              <div>
+            <div key={member.id} className="p-4 flex justify-between items-center gap-3 hover:bg-gray-50 transition">
+              <div className="min-w-0">
                 <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
                 {member.daysAbsent > 0 && (
                   <p className="text-xs text-gray-400 mt-0.5">{member.daysAbsent} consecutive Sundays absent</p>
                 )}
+                {/* Stays on this list while the workflow runs, so nobody gets
+                    quietly dropped before someone has actually reached them. */}
+                {onFollowUp && (
+                  <p className="text-xs text-emerald-700 mt-1 flex items-center gap-1 flex-wrap">
+                    <span className="font-semibold">Assigned to {followUp!.assignedToName || "team member"}</span>
+                    <span className="text-gray-300">·</span>
+                    <a
+                      href={`/dashboard/workflows/${followUp!.workflowId}`}
+                      className="underline hover:text-emerald-900"
+                    >
+                      Open workflow
+                    </a>
+                  </p>
+                )}
+                {followUp?.status === "completed" && (
+                  <p className="text-xs text-gray-500 mt-1">Follow-up completed by {followUp.assignedToName || "team"}</p>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {!onFollowUp && followUp?.status !== "completed" && (
+                  <button
+                    onClick={() => {
+                      setAssignModal({ member, tier });
+                      setAssignUid("");
+                      setAssignNote("");
+                      setAssignError("");
+                    }}
+                    className="text-xs font-bold text-white bg-emerald-600 px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition"
+                  >
+                    Assign
+                  </button>
+                )}
                 {member.phone && (
                   <a
                     href={`https://wa.me/${member.phone}`}
@@ -520,6 +704,56 @@ export default function AnalyticsPage() {
           </div>
         )}
 
+        {/* Followed up — care workflow closed, but still absent. Kept visible so
+            the team can see the outreach happened, and so it can be reopened. */}
+        {careTiers.followedUp.length > 0 && (
+          <div className="bg-white border border-emerald-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setShowFollowedUp((v) => !v)}
+              className="w-full px-5 py-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center text-left"
+            >
+              <div>
+                <h3 className="text-sm font-bold text-emerald-800">
+                  Followed Up {showFollowedUp ? "▾" : "▸"}
+                </h3>
+                <p className="text-xs text-emerald-600 mt-0.5">
+                  Care workflow completed. They return to the alerts above if they miss again after being marked present.
+                </p>
+              </div>
+              <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded-full text-emerald-700 border border-emerald-200">
+                {careTiers.followedUp.length}
+              </span>
+            </button>
+            {showFollowedUp && (
+              <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                {careTiers.followedUp.map((member) => (
+                  <div key={member.id} className="p-4 flex justify-between items-center gap-3 hover:bg-gray-50 transition">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Tier {member.tier} &middot; {member.daysAbsent} consecutive Sundays absent
+                      </p>
+                      {member.careFollowUp?.assignedToName && (
+                        <p className="text-xs text-emerald-700 mt-1">
+                          Handled by {member.careFollowUp.assignedToName}
+                        </p>
+                      )}
+                    </div>
+                    {member.careFollowUp?.workflowId && (
+                      <a
+                        href={`/dashboard/workflows/${member.careFollowUp.workflowId}`}
+                        className="shrink-0 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition"
+                      >
+                        View workflow
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Absence Exceptions — members excluded from care tier stats */}
         {careTiers.exceptions.length > 0 && (
           <div className="bg-white border border-blue-200 rounded-xl overflow-hidden">
@@ -558,6 +792,110 @@ export default function AnalyticsPage() {
           </div>
         )}
       </div>
+
+      {/* Assign and attach a care follow-up workflow */}
+      {assignModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col gap-5 p-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Assign Follow-Up</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {assignModal.member.fullName} &middot; Tier {assignModal.tier}
+                </p>
+              </div>
+              <button
+                onClick={() => setAssignModal(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Responsible Person
+                <InfoTooltip text="The person who will personally reach this member." why="Follow-ups quietly die when they belong to everyone. One name on the task means someone actually owns it, and they get an email the moment you assign it." />
+              </label>
+              {ministry.length === 0 ? (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  Nobody is on the Follow-Up Team yet. Open Team and switch on Follow-Up Team for the people who do pastoral care.
+                </p>
+              ) : (
+                <select
+                  value={assignUid}
+                  onChange={(e) => { setAssignUid(e.target.value); setAssignError(""); }}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Choose a person...</option>
+                  {ministry.map((m) => (
+                    <option key={m.uid} value={m.uid}>{m.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Follow-Up Workflow</label>
+              {careWorkflows.length === 0 ? (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  No active Care Follow-Up workflow. Open Workflows, then design the steps on the standard Care Follow-Up workflow.
+                </p>
+              ) : (
+                <>
+                  <select
+                    value={assignWorkflowId}
+                    onChange={(e) => { setAssignWorkflowId(e.target.value); setAssignError(""); }}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {careWorkflows.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}{w.stepCount ? ` (${w.stepCount} steps)` : " (no steps yet)"}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400">
+                    {assignModal.member.fullName.split(" ")[0]} stays on this alert list until they are marked present or this workflow is completed.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Note <span className="normal-case font-normal text-gray-400">(optional)</span>
+              </label>
+              <textarea
+                value={assignNote}
+                onChange={(e) => setAssignNote(e.target.value)}
+                rows={2}
+                placeholder="e.g. Last seen at the Easter service. Family may have moved."
+                className="border border-gray-200 rounded-lg p-3 text-sm text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            {assignError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{assignError}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setAssignModal(null)}
+                className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAssign}
+                disabled={assigning || !assignUid || careWorkflows.length === 0}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white text-sm font-bold py-2 rounded-lg transition"
+              >
+                {assigning ? "Starting..." : "Assign and Start"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Follow-up Notes Modal */}
       {notesModal && (
