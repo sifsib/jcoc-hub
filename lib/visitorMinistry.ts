@@ -11,7 +11,7 @@
 // getVisitorMinistryUsers() + pickLeastLoadedAssignee(). If no one is flagged,
 // auto-assign falls back to the whole team.
 
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
 export interface MinistryUser {
@@ -19,14 +19,17 @@ export interface MinistryUser {
   name: string;
   email: string;
   onFollowUpTeam?: boolean;
+  isSelf?: boolean;
 }
 
 // Every active team member, so any of them can be put on a follow-up. The
 // Follow-Up Team flag comes back with each person purely so the UI can label
 // them, not to filter anyone out.
 export async function getAssignableUsers(tenantId: string): Promise<MinistryUser[]> {
+  const me = auth.currentUser;
   const snap = await getDocs(query(collection(db, "users"), where("tenantId", "==", tenantId)));
-  return snap.docs
+
+  const list = snap.docs
     .filter((d) => (d.data().status || "active") !== "inactive")
     // Congregants with a login are not staff, so they are not assignable. The
     // owner and every other team role IS, including yourself.
@@ -35,12 +38,29 @@ export async function getAssignableUsers(tenantId: string): Promise<MinistryUser
       const x = d.data();
       return {
         uid: d.id,
-        name: x.displayName || x.email || "Unnamed",
+        // Owners often have no displayName on their user doc, which used to make
+        // them show up as a bare email address and look "missing" in the list.
+        name: x.displayName || x.name || x.email || "Unnamed",
         email: x.email || "",
         onFollowUpTeam: x.visitorMinistry === true || x.role === "follow_up",
+        isSelf: !!me && d.id === me.uid,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Belt and braces: you must always be able to put a job on yourself, even if
+  // your own user doc is missing or shaped oddly.
+  if (me && !list.some((u) => u.uid === me.uid)) {
+    list.unshift({
+      uid: me.uid,
+      name: me.displayName || me.email || "Me",
+      email: me.email || "",
+      onFollowUpTeam: false,
+      isSelf: true,
+    });
+  }
+
+  return list;
 }
 
 // The Follow-Up Team: anyone switched on with the toggle (visitorMinistry ===

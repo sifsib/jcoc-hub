@@ -690,7 +690,7 @@ export default function VisitorsPage() {
                   <option value="">{ministryConfigured ? "Auto-assign to the Follow-Up Team" : "Auto-assign (or pick later)"}</option>
                   {assignableTeam.map((t) => (
                     <option key={t.uid} value={t.uid}>
-                      {t.name}{(t.visitorMinistry || t.role === "follow_up") ? " (Follow-Up Team)" : ""}
+                      {t.name}{t.isSelf ? " (You)" : ""}{(t.visitorMinistry || t.role === "follow_up") ? " (Follow-Up Team)" : ""}
                     </option>
                   ))}
                 </select>
@@ -732,7 +732,9 @@ export default function VisitorsPage() {
                             className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-blue-500"
                           >
                             <option value="">Unassigned</option>
-                            {assignableTeam.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                            {assignableTeam.map((t) => (
+                              <option key={t.uid} value={t.uid}>{t.name}{t.isSelf ? " (You)" : ""}</option>
+                            ))}
                           </select>
                         ) : (
                           <span className={`text-xs font-medium ${v.assignedToName ? "text-gray-700" : "text-red-500"}`}>

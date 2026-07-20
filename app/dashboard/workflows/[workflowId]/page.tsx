@@ -592,7 +592,7 @@ export default function WorkflowBuilderPage() {
                   <option value="">Unassigned</option>
                   {assignableTeam.map((t) => (
                     <option key={t.uid} value={t.uid}>
-                      {t.name}{t.visitorMinistry ? " (Follow-Up Team)" : ""}
+                      {t.name}{t.isSelf ? " (You)" : ""}{t.visitorMinistry ? " (Follow-Up Team)" : ""}
                     </option>
                   ))}
                 </select>

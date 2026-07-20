@@ -305,7 +305,13 @@ export default function AnalyticsPage() {
   // follow-up workflow to them.
   const confirmAssign = async () => {
     if (!assignModal || !appUser) return;
-    const person = ministry.find((m) => m.uid === assignUid);
+    // Fall back to your own account details if you picked yourself but your user
+    // doc did not come back in the team query for any reason.
+    const person =
+      ministry.find((m) => m.uid === assignUid) ||
+      (assignUid && assignUid === appUser.uid
+        ? { uid: appUser.uid, name: appUser.displayName || appUser.email || "Me", email: appUser.email || "" }
+        : undefined);
     const workflow = careWorkflows.find((w) => w.id === assignWorkflowId);
     if (!person) { setAssignError("Choose who is responsible for this follow-up."); return; }
     if (!workflow) { setAssignError("Choose a follow-up workflow."); return; }
@@ -822,18 +828,36 @@ export default function AnalyticsPage() {
                   No active team members found. Invite your team on the Team page first.
                 </p>
               ) : (
-                <select
-                  value={assignUid}
-                  onChange={(e) => { setAssignUid(e.target.value); setAssignError(""); }}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="">Choose a person...</option>
-                  {ministry.map((m) => (
-                    <option key={m.uid} value={m.uid}>
-                      {m.name}{m.onFollowUpTeam ? " (Follow-Up Team)" : ""}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  {/* Taking it on yourself is the most common case for a pastor,
+                      so it gets a one-tap button rather than a hunt through the
+                      list. Works off your signed-in account directly. */}
+                  {appUser?.uid && (
+                    <button
+                      type="button"
+                      onClick={() => { setAssignUid(appUser.uid); setAssignError(""); }}
+                      className={`self-start text-xs font-bold px-3 py-1.5 rounded-lg border transition ${
+                        assignUid === appUser.uid
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                      }`}
+                    >
+                      {assignUid === appUser.uid ? "✓ Assigned to me" : "Assign to me"}
+                    </button>
+                  )}
+                  <select
+                    value={assignUid}
+                    onChange={(e) => { setAssignUid(e.target.value); setAssignError(""); }}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Choose a person...</option>
+                    {ministry.map((m) => (
+                      <option key={m.uid} value={m.uid}>
+                        {m.name}{m.isSelf ? " (You)" : ""}{m.onFollowUpTeam ? " (Follow-Up Team)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </>
               )}
             </div>
 
