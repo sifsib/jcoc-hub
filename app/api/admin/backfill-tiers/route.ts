@@ -12,6 +12,8 @@
 // Usage (while logged in to hub.kerekehub.co.za as the internal account):
 //   Preview (writes nothing): GET /api/admin/backfill-tiers
 //   Apply the changes:        GET /api/admin/backfill-tiers?apply=true
+//   Comp a church forever:    GET /api/admin/backfill-tiers?apply=true&comp=<id>,<id>
+//     (?comp makes the run TARGETED: only the listed IDs are written to.)
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -53,6 +55,22 @@ export async function GET(req: NextRequest) {
     .map((s) => s.trim())
     .filter(Boolean);
 
+  // Optional: "free forever" comp. Same as grandfather, but ALSO flips the
+  // church to accountType "internal" and sets billingHold, which is what
+  // actually keeps the billing-reminder and dunning jobs away from it.
+  // Use this for our own church, the demo account, and anything else that
+  // should never be billed or auto-suspended.
+  // ?comp=<tenantId>,<tenantId>
+  //
+  // Safety: when ?comp is used, the automatic "grandfather every tenant that
+  // has no tier" pass is SKIPPED, so a comp run only ever touches the exact
+  // tenant IDs listed. Stops a stray/duplicate tenant doc getting swept up.
+  const compIds = (req.nextUrl.searchParams.get("comp") || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const targetedRun = compIds.length > 0;
+
   // ---- 3. Count active members per tenant in one pass -------------------
   // members is a flat collection; each doc carries tenantId + status.
   const membersSnap = await adminDb
@@ -82,13 +100,46 @@ export async function GET(req: NextRequest) {
     // Diagnostic roster so we can see every church's current state at a glance.
     roster.push({
       tenantId: t.id,
-      church: data.churchName || "(unnamed)",
+      church: data.churchName || data.name || "(unnamed)",
       tier: data.tier ?? "(unset)",
       accountType: data.accountType ?? "(unset)",
       activeMembers,
       grandfathered: data.grandfathered ?? false,
       createdAt: data.createdAt ?? null,
     });
+
+    // Free-forever comp: full access, no billing, no dunning, no auto-suspend.
+    if (compIds.includes(t.id)) {
+      const cUpdate = {
+        tier: "paid",
+        memberLimit: null,
+        activeMemberCount: activeMembers,
+        billingPhase: "free",
+        currentRate: 0,
+        trialEndsAt: null,
+        evaluationEndsAt: null,
+        fullRateStartsAt: null,
+        grandfathered: true,
+        // These two are the difference vs a plain grandfather:
+        accountType: "internal",  // excluded from the billingReminder query
+        billingHold: true,        // excluded from dunning / auto-suspension
+        status: "active",         // clears any lingering "trial" badge
+        compedAt: new Date().toISOString(),
+      };
+      if (apply) {
+        await t.ref.update(cUpdate);
+        writes++;
+      }
+      changed.push({
+        tenantId: t.id,
+        church: data.churchName || data.name || "(unnamed)",
+        action: "comped-free-forever",
+        fromTier: data.tier ?? "(unset)",
+        fromAccountType: data.accountType ?? "(unset)",
+        activeMembers,
+      });
+      continue;
+    }
 
     // Forced grandfather: overrides whatever tier the church currently has.
     if (grandfatherIds.includes(t.id)) {
@@ -110,7 +161,7 @@ export async function GET(req: NextRequest) {
       }
       changed.push({
         tenantId: t.id,
-        church: data.churchName || "(unnamed)",
+        church: data.churchName || data.name || "(unnamed)",
         action: "forced-grandfather-to-paid",
         fromTier: data.tier ?? "(unset)",
         activeMembers,
@@ -128,7 +179,7 @@ export async function GET(req: NextRequest) {
         }
         changed.push({
           tenantId: t.id,
-          church: data.churchName || "(unnamed)",
+          church: data.churchName || data.name || "(unnamed)",
           action: "count-refresh-only",
           tier: data.tier,
           oldCount: data.activeMemberCount ?? null,
@@ -137,6 +188,16 @@ export async function GET(req: NextRequest) {
       } else {
         skipped.push({ tenantId: t.id, church: data.churchName || "(unnamed)", reason: "already tiered" });
       }
+      continue;
+    }
+
+    // Targeted run (?comp=...): never sweep up churches we did not name.
+    if (targetedRun) {
+      skipped.push({
+        tenantId: t.id,
+        church: data.churchName || data.name || "(unnamed)",
+        reason: "not listed in ?comp (targeted run)",
+      });
       continue;
     }
 
@@ -160,7 +221,7 @@ export async function GET(req: NextRequest) {
     }
     changed.push({
       tenantId: t.id,
-      church: data.churchName || "(unnamed)",
+      church: data.churchName || data.name || "(unnamed)",
       action: "grandfathered-to-paid",
       activeMembers,
     });
@@ -168,7 +229,9 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     mode: apply ? "APPLIED" : "DRY RUN (nothing written, add ?apply=true to write)",
+    runType: targetedRun ? "TARGETED (only the tenant IDs in ?comp were touched)" : "FULL SWEEP",
     totalTenants: tenantsSnap.size,
+    comped: changed.filter((c) => c.action === "comped-free-forever").length,
     grandfathered: changed.filter((c) => c.action === "grandfathered-to-paid").length,
     countRefreshed: changed.filter((c) => c.action === "count-refresh-only").length,
     writesPerformed: writes,
