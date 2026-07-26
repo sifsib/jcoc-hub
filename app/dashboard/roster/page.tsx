@@ -11,6 +11,7 @@ import {
   updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot,
 } from "firebase/firestore";
 import ExportMemberButton from "../../components/ExportMemberButton";
+import { formatSurnameFirst, compareBySurname } from "../../../lib/nameFormat";
 import NotesPanel from "../../components/NotesPanel";
 import InfoTooltip from "../../components/InfoTooltip";
 
@@ -729,7 +730,7 @@ export default function ManageMembershipPage() {
         const snap = await getDocs(q);
         const list: Member[] = [];
         snap.forEach(d => list.push({ id: d.id, ...d.data() } as Member));
-        list.sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
+        list.sort(compareBySurname);
 
         // ── One-time backfill: write firstName/lastName into any Firestore doc that
         //    only has fullName stored (legacy records). Runs silently; no-ops once
@@ -849,7 +850,7 @@ export default function ManageMembershipPage() {
     const snap = await getDocs(q);
     const list: Member[] = [];
     snap.forEach(d => list.push({ id: d.id, ...d.data() } as Member));
-    list.sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
+    list.sort(compareBySurname);
     setMembers(list);
   };
 
@@ -2785,7 +2786,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Link href={`/dashboard/roster/${m.id}`} onClick={() => sessionStorage.setItem("rosterScrollY", String(window.scrollY))} className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
-                            {m.fullName}
+                            {formatSurnameFirst(m)}
                           </Link>
                           {days !== null && days <= 10 && (
                             <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">

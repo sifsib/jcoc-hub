@@ -11,6 +11,7 @@ import { db, storage } from '../../../lib/firebase';
 import DateInput from '../../../components/ui/DateInput';
 import InfoTooltip from '../../components/InfoTooltip';
 import { useAppUser } from '../../../lib/useAppUser';
+import { formatSurnameFirst } from '../../../lib/nameFormat';
 import {
   collection,
   addDoc,
@@ -380,7 +381,8 @@ export default function FinancePage() {
         getDocs(query(collection(db, 'members'), where('tenantId', '==', appUser.tenantId))).then(snap => {
           const list = snap.docs.map(d => {
             const data = d.data();
-            const name = data.fullName || `${data.firstName || ''} ${data.lastName || ''}`.trim();
+            // Surname-first so the giver dropdown groups families together.
+            const name = formatSurnameFirst({ firstName: data.firstName, lastName: data.lastName, fullName: data.fullName });
             return { id: d.id, name };
           }).filter(m => m.name).sort((a, b) => a.name.localeCompare(b.name));
           setAllRosterMembers(list);
@@ -1306,7 +1308,7 @@ export default function FinancePage() {
                     {filteredGiving.map((r) => (
                       <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-5 py-3.5">
-                          <div className="font-semibold text-gray-900">{`${r.firstName} ${r.lastName}`.trim() || '-'}</div>
+                          <div className="font-semibold text-gray-900">{formatSurnameFirst(r) || '-'}</div>
                           {r.email && <div className="text-xs text-gray-400">{r.email}</div>}
                         </td>
                         <td className="px-5 py-3.5 text-gray-700">{r.categoryName || r.category || '-'}</td>

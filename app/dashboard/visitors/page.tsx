@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import NotesPanel from "../../components/NotesPanel";
 import InfoTooltip from "../../components/InfoTooltip";
+import { formatSurnameFirst } from "../../../lib/nameFormat";
 
 interface Visitor {
   id: string;
@@ -719,7 +720,7 @@ export default function VisitorsPage() {
                 pendingVisitors.map((v) => (
                   <div key={v.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
                     <div>
-                      <p className="font-bold text-gray-900">{v.fullName} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
+                      <p className="font-bold text-gray-900">{formatSurnameFirst(v)} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
                       <p className="text-sm text-gray-600 mt-1">{v.reason}</p>
                       {v.captureNote && <p className="text-xs text-gray-500 mt-1 italic">Note: {v.captureNote}</p>}
                       <p className="text-xs text-gray-400 mt-1">Visited: {formatDisplayDate(v.serviceDate)}{v.ageGroup ? ` · ${v.ageGroup}` : ""}</p>
@@ -813,7 +814,7 @@ export default function VisitorsPage() {
                   <p className="p-4 text-center text-gray-400 text-xs">No completed follow-ups in the last 14 days.</p>
                 ) : recentlyFollowedUp.map((v) => (
                   <div key={v.id} className="p-3">
-                    <p className="font-medium text-sm text-gray-800">{v.fullName}</p>
+                    <p className="font-medium text-sm text-gray-800">{formatSurnameFirst(v)}</p>
                     <p className="text-xs text-gray-500 mt-1 italic leading-relaxed">"{v.followUpNotes}"</p>
                     <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-wide">By {v.followedUpBy}</p>
                   </div>
@@ -829,7 +830,7 @@ export default function VisitorsPage() {
                   <p className="p-4 text-center text-gray-400 text-xs">No casual visitors in the last 14 days.</p>
                 ) : justVisitingRecent.map((v) => (
                   <div key={v.id} className="p-3">
-                    <p className="font-medium text-sm text-gray-800">{v.fullName}</p>
+                    <p className="font-medium text-sm text-gray-800">{formatSurnameFirst(v)}</p>
                     <p className="text-xs text-gray-500 mt-1">Visited: {formatDisplayDate(v.serviceDate)}</p>
                   </div>
                 ))}
@@ -887,7 +888,7 @@ export default function VisitorsPage() {
                   <div key={v.id} className="p-4 hover:bg-gray-50 transition-colors">
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                       <div className="flex-1">
-                        <p className="font-bold text-gray-900">{v.fullName} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
+                        <p className="font-bold text-gray-900">{formatSurnameFirst(v)} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
                         {v.email && <p className="text-xs text-gray-500 mt-1">{v.email}</p>}
                         <p className="text-sm text-gray-600 mt-1">{v.reason}</p>
                         <div className="flex gap-3 text-xs text-gray-500 mt-2">
@@ -919,7 +920,7 @@ export default function VisitorsPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-lg font-bold text-gray-800">Visitor: {selectedVisitor.fullName}</h3>
+                <h3 className="text-lg font-bold text-gray-800">Visitor: {formatSurnameFirst(selectedVisitor)}</h3>
                 <p className="text-gray-500 text-sm mt-0.5">{selectedVisitor.reason} · {selectedVisitor.serviceDate}</p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-lg">✕</button>

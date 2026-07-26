@@ -11,10 +11,14 @@ import {
 import InfoTooltip from "../../components/InfoTooltip";
 import { getAssignableUsers, notifyAssignee, MinistryUser } from "../../../lib/visitorMinistry";
 import { startCareFollowUp, ensureStandardWorkflows, NoStepsError, CareFollowUp } from "../../../lib/standardWorkflows";
+import { formatSurnameFirst } from "../../../lib/nameFormat";
+import ExportMemberButton from "../../components/ExportMemberButton";
 
 interface CareTierMember {
   id: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   phone: string;
   daysAbsent: number;
   absenceException?: { tag: string; note?: string } | null;
@@ -152,6 +156,8 @@ export default function AnalyticsPage() {
           membersForTiers.push({
             id: docSnap.id,
             fullName: data.fullName || "Unknown",
+            firstName: data.firstName || "",
+            lastName: data.lastName || "",
             phone: data.phone || "",
             daysAbsent: 0,
             absenceException: data.absenceException || null,
@@ -479,7 +485,7 @@ export default function AnalyticsPage() {
           return (
             <div key={member.id} className="p-4 flex justify-between items-center gap-3 hover:bg-gray-50 transition">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
+                <p className="text-sm font-bold text-gray-900">{formatSurnameFirst(member)}</p>
                 {member.daysAbsent > 0 && (
                   <p className="text-xs text-gray-400 mt-0.5">{member.daysAbsent} consecutive Sundays absent</p>
                 )}
@@ -543,6 +549,45 @@ export default function AnalyticsPage() {
       )}
     </div>
   );
+
+  // Flatten every care bucket into one printable table for the download.
+  // Each row is tagged with its category so the file reads on its own.
+  const careRow = (m: CareTierMember, category: string) => ({
+    Category: category,
+    Name: formatSurnameFirst(m),
+    Phone: m.phone || "",
+    SundaysAbsent:
+      m.daysAbsent > 0 ? String(m.daysAbsent) : m.daysAbsent === -1 ? "No record" : "",
+    Status: m.careFollowUp
+      ? m.careFollowUp.status === "completed"
+        ? "Followed up"
+        : "Assigned"
+      : m.absenceException?.tag
+      ? "On exception"
+      : "Open",
+    AssignedTo: m.careFollowUp?.assignedToName || "",
+    Exception: m.absenceException?.tag || "",
+  });
+
+  const careAlertRows = [
+    ...careTiers.tier1.map((m) => careRow(m, "Tier 1")),
+    ...careTiers.tier2.map((m) => careRow(m, "Tier 2")),
+    ...careTiers.tier3.map((m) => careRow(m, "Tier 3")),
+    ...careTiers.neverAttended.map((m) => careRow(m, "Never attended")),
+    ...careTiers.followedUp.map((m) => careRow(m, "Followed up")),
+    ...careTiers.exceptions.map((m) => careRow(m, "On exception")),
+  ];
+
+  type CareExportRow = (typeof careAlertRows)[number];
+  const careExportColumns: { key: keyof CareExportRow; label: string }[] = [
+    { key: "Category", label: "Category" },
+    { key: "Name", label: "Name" },
+    { key: "Phone", label: "Phone" },
+    { key: "SundaysAbsent", label: "Sundays Absent" },
+    { key: "Status", label: "Status" },
+    { key: "AssignedTo", label: "Assigned To" },
+    { key: "Exception", label: "Exception" },
+  ];
 
   return (
     <div className="flex flex-col gap-8">
@@ -638,12 +683,19 @@ export default function AnalyticsPage() {
 
       {/* Care tier analytics */}
       <div className="flex flex-col gap-6 mb-8">
-        <div>
-          <h2 className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
-            Care Tier Alerts
-            <InfoTooltip text="An automatic ranking of members by how long they have been missing from recorded services." why="The tiers escalate, Tier 1 is an early nudge and Tier 3 means someone has been gone a while. It turns your attendance data into a practical to-do list for who your care team should reach out to first." />
-          </h2>
-          <p className="text-gray-500 text-sm mt-1">Members flagged by days absent from recorded services.</p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="flex items-center gap-1.5 text-xl font-bold text-gray-900">
+              Care Tier Alerts
+              <InfoTooltip text="An automatic ranking of members by how long they have been missing from recorded services." why="The tiers escalate, Tier 1 is an early nudge and Tier 3 means someone has been gone a while. It turns your attendance data into a practical to-do list for who your care team should reach out to first." />
+            </h2>
+            <p className="text-gray-500 text-sm mt-1">Members flagged by days absent from recorded services.</p>
+          </div>
+          <ExportMemberButton
+            data={careAlertRows}
+            filename="care-tier-alerts"
+            columns={careExportColumns}
+          />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -735,7 +787,7 @@ export default function AnalyticsPage() {
                 {careTiers.followedUp.map((member) => (
                   <div key={member.id} className="p-4 flex justify-between items-center gap-3 hover:bg-gray-50 transition">
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
+                      <p className="text-sm font-bold text-gray-900">{formatSurnameFirst(member)}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         Tier {member.tier} &middot; {member.daysAbsent} consecutive Sundays absent
                       </p>
@@ -778,7 +830,7 @@ export default function AnalyticsPage() {
               {careTiers.exceptions.map((member) => (
                 <div key={member.id} className="p-4 flex justify-between items-center hover:bg-gray-50 transition">
                   <div>
-                    <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
+                    <p className="text-sm font-bold text-gray-900">{formatSurnameFirst(member)}</p>
                     {member.absenceException?.tag && (
                       <span className="inline-block mt-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
                         {member.absenceException.tag}
@@ -807,7 +859,7 @@ export default function AnalyticsPage() {
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Assign Follow-Up</h3>
                 <p className="text-sm text-gray-500 mt-0.5">
-                  {assignModal.member.fullName} &middot; Tier {assignModal.tier}
+                  {formatSurnameFirst(assignModal.member)} &middot; Tier {assignModal.tier}
                 </p>
               </div>
               <button
@@ -930,7 +982,7 @@ export default function AnalyticsPage() {
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Follow-up Notes</h3>
-                <p className="text-sm text-gray-500 mt-0.5">{notesModal.member.fullName}</p>
+                <p className="text-sm text-gray-500 mt-0.5">{formatSurnameFirst(notesModal.member)}</p>
               </div>
               <button
                 onClick={() => setNotesModal(null)}

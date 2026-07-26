@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { db } from "../../../../lib/firebase";
 import DateInput from "../../../../components/ui/DateInput";
 import { useAppUser } from "../../../../lib/useAppUser";
+import { formatSurnameFirst, compareBySurname } from "../../../../lib/nameFormat";
 import {
   doc,
   getDoc,
@@ -168,7 +169,7 @@ export default function GroupDetailPage() {
     ).then((snap) => {
       const sorted = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as Omit<RosterMember, "id">) }))
-        .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
+        .sort(compareBySurname);
       setRosterMembers(sorted);
     });
   }, [tenantId, showAddMember]);
@@ -463,7 +464,7 @@ export default function GroupDetailPage() {
                     return (
                       <div key={m.id} className="flex items-center justify-between py-2.5">
                         <div>
-                          <p className="text-sm font-medium text-gray-800">{m.firstName} {m.lastName}</p>
+                          <p className="text-sm font-medium text-gray-800">{formatSurnameFirst(m)}</p>
                           {(m.cellphone || m.phone) && (
                             <p className="text-xs text-gray-400">{m.cellphone || m.phone}</p>
                           )}

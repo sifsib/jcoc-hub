@@ -7,6 +7,7 @@ import DateInput from "../../../components/ui/DateInput";
 import { useAppUser } from "../../../lib/useAppUser";
 import ExportMemberButton from "../../components/ExportMemberButton";
 import InfoTooltip from "../../components/InfoTooltip";
+import { formatSurnameFirst, compareBySurname } from "../../../lib/nameFormat";
 import {
   collection,
   query,
@@ -215,7 +216,7 @@ export default function AttendancePage() {
         const membersSnap = await getDocs(qMembers);
         const memberList: Member[] = [];
         membersSnap.forEach((d) => memberList.push({ id: d.id, ...d.data() } as Member));
-        memberList.sort((a, b) => a.fullName.localeCompare(b.fullName));
+        memberList.sort(compareBySurname);
         setMembers(memberList);
 
         const qAttendance = query(
@@ -592,7 +593,7 @@ export default function AttendancePage() {
                     }`}
                   >
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900">{person.fullName}</p>
+                      <p className="font-medium text-gray-900">{formatSurnameFirst(person)}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="text-xs text-gray-500">{person.role}</span>
                         {person.cellRegion && (
