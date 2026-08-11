@@ -38,10 +38,10 @@ export default function SuspendedPage() {
             To restore access, please contact Kereke Hub support.
           </p>
           <a
-            href="mailto:support@kerekehub.co.za?subject=Suspended%20account%20support"
+            href="mailto:sifiso@kerekehub.co.za?subject=Suspended%20account%20support"
             className="font-semibold text-emerald-700 hover:text-emerald-800"
           >
-            support@kerekehub.co.za
+            sifiso@kerekehub.co.za
           </a>
         </div>
 

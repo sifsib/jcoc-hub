@@ -5,7 +5,7 @@ import crypto from "crypto";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hub.kerekehub.co.za";
 const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
-const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "noreply@kerekehub.co.za";
+const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "sifiso@kerekehub.co.za";
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || "Kereke Hub";
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for members
 

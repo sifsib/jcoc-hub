@@ -4,7 +4,7 @@
 // used for support ticket notifications and admin replies. Reads the platform
 // Brevo credentials from environment variables set on Vercel:
 //   BREVO_API_KEY       - Kereke Hub Brevo API key
-//   BREVO_SENDER_EMAIL  - verified sender, e.g. support@kerekehub.co.za
+//   BREVO_SENDER_EMAIL  - verified sender, e.g. sifiso@kerekehub.co.za
 //   BREVO_SENDER_NAME   - display name, e.g. "Kereke Hub Support"
 
 const SUPPORT_INBOX = "sifisosibuyane@gmail.com";
