@@ -61,26 +61,41 @@ export default function PublicRsvpPage() {
   useEffect(() => {
     if (!eventId) return;
 
-    getDoc(doc(db, "events", eventId)).then(async (snap) => {
-      if (!snap.exists()) {
-        setNotFound(true);
-        setLoading(false);
-        return;
-      }
+    // Same shape as the public form page: signed-out visitors cannot read
+    // /tenants under the Firestore rules, so branding goes through the public
+    // API route and can never block the page from rendering.
+    const load = async () => {
+      try {
+        const snap = await getDoc(doc(db, "events", eventId));
 
-      const eventData = snap.data() as ChurchEvent;
-      setEvent(eventData);
-
-      if (eventData.tenantId) {
-        const tenantSnap = await getDoc(doc(db, "tenants", eventData.tenantId));
-        if (tenantSnap.exists()) {
-          const t = tenantSnap.data();
-          setTenant({ name: t.name || "KerekeHub", primaryColor: t.primaryColor });
+        if (!snap.exists()) {
+          setNotFound(true);
+          return;
         }
-      }
 
-      setLoading(false);
-    });
+        const eventData = snap.data() as ChurchEvent;
+        setEvent(eventData);
+
+        if (eventData.tenantId) {
+          try {
+            const res = await fetch(`/api/tenant-brand/${eventData.tenantId}`);
+            if (res.ok) {
+              const t = await res.json();
+              setTenant({ name: t.name || "KerekeHub", primaryColor: t.primaryColor });
+            }
+          } catch (brandErr) {
+            console.error("Could not load church branding:", brandErr);
+          }
+        }
+      } catch (err) {
+        console.error("Could not load event:", err);
+        setNotFound(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
   }, [eventId]);
 
   function validate(): boolean {

@@ -195,6 +195,31 @@ export async function POST(req: NextRequest) {
         // Auth account exists but member doc wasn't linked — look up the existing user
         const existingUser = await adminAuth.getUserByEmail(email);
         authUid = existingUser.uid;
+
+        // GUARD: this email may belong to a staff account (an owner or admin
+        // who is also on the roster). Link the profiles, but never send them a
+        // congregation invite and never touch their role.
+        const existingProfileRef = adminDb.collection("users").doc(authUid);
+        const existingProfile = await existingProfileRef.get();
+        const existingRole = existingProfile.data()?.role;
+
+        if (existingProfile.exists && existingRole !== "congregation_member") {
+          if (!existingProfile.data()?.memberId) {
+            await existingProfileRef.update({ memberId });
+          }
+          await memberRef.update({
+            authUid,
+            portalStatus: "active",
+            portalLinkedAt: new Date().toISOString(),
+          });
+          return NextResponse.json({
+            ok: true,
+            linkedExistingAccount: true,
+            message:
+              "This person already signs in to Kereke Hub as a team member. Their member profile is now linked to that login, so they can use the same email and password. No invite was sent.",
+          });
+        }
+
         await memberRef.update({
           authUid,
           portalStatus: "invited",

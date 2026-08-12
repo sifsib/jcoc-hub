@@ -53,37 +53,54 @@ export default function PublicFormPage() {
   useEffect(() => {
     if (!formId) return;
 
-    getDoc(doc(db, "forms", formId)).then(async (snap) => {
-      if (!snap.exists()) {
-        setNotFound(true);
-        setLoading(false);
-        return;
-      }
+    // This page is opened by people who are NOT signed in, so every step has to
+    // survive on its own. Branding comes from a public API route rather than a
+    // direct tenant read: the Firestore rules only let signed-in staff read
+    // /tenants, and that denied read used to reject the whole chain and leave
+    // the visitor staring at a spinner that never stopped.
+    const load = async () => {
+      try {
+        const snap = await getDoc(doc(db, "forms", formId));
 
-      const formData = snap.data() as ChurchForm;
-      setForm(formData);
-
-      // Load tenant branding
-      if (formData.tenantId) {
-        const tenantSnap = await getDoc(doc(db, "tenants", formData.tenantId));
-        if (tenantSnap.exists()) {
-          const t = tenantSnap.data();
-          setTenant({
-            name: t.name || "KerekeHub",
-            primaryColor: t.primaryColor || "#059669",
-          });
+        if (!snap.exists()) {
+          setNotFound(true);
+          return;
         }
+
+        const formData = snap.data() as ChurchForm;
+        setForm(formData);
+
+        // Initialize checkbox fields to false
+        const initialValues: Record<string, any> = {};
+        (formData.fields || []).forEach((f) => {
+          if (f.type === "checkbox") initialValues[f.id] = false;
+        });
+        setValues(initialValues);
+
+        // Branding is decoration. If it fails, the form still opens.
+        if (formData.tenantId) {
+          try {
+            const res = await fetch(`/api/tenant-brand/${formData.tenantId}`);
+            if (res.ok) {
+              const t = await res.json();
+              setTenant({
+                name: t.name || "KerekeHub",
+                primaryColor: t.primaryColor || "#059669",
+              });
+            }
+          } catch (brandErr) {
+            console.error("Could not load church branding:", brandErr);
+          }
+        }
+      } catch (err) {
+        console.error("Could not load form:", err);
+        setNotFound(true);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      // Initialize checkbox fields to false
-      const initialValues: Record<string, any> = {};
-      formData.fields.forEach((f) => {
-        if (f.type === "checkbox") initialValues[f.id] = false;
-      });
-      setValues(initialValues);
-
-      setLoading(false);
-    });
+    load();
   }, [formId]);
 
   function validate(): boolean {

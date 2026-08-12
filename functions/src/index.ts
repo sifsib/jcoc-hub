@@ -173,6 +173,7 @@ export const onMemberCreated = onDocumentCreated(
       const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
 
       let authUid: string;
+      let authAccountAlreadyExisted = false;
       try {
         const newUser = await auth.createUser({
           email: memberEmail,
@@ -185,9 +186,49 @@ export const onMemberCreated = onDocumentCreated(
         if (authErr.code === "auth/email-already-exists") {
           const existingUser = await auth.getUserByEmail(memberEmail);
           authUid = existingUser.uid;
+          authAccountAlreadyExisted = true;
         } else {
           throw authErr;
         }
+      }
+
+      // GUARD: never overwrite an account that already exists.
+      // An owner or admin who adds their own name to the member roster shares
+      // an email with their staff login, so this trigger lands on their
+      // existing users doc. Writing role: "congregation_member" here used to
+      // demote them out of the whole dashboard. If the profile is already
+      // there, we only link the member record and stop.
+      const existingUserRef = db.collection("users").doc(authUid);
+      const existingUserSnap = await existingUserRef.get();
+
+      if (existingUserSnap.exists) {
+        const existingProfile = existingUserSnap.data() || {};
+        const existingRole = existingProfile.role;
+        if (!existingProfile.memberId) {
+          await existingUserRef.update({ memberId });
+        }
+        // Staff logins are live accounts. A congregation account that is still
+        // sitting on an unused invite stays marked as invited.
+        const portalStatus =
+          existingRole === "congregation_member" && existingProfile.status === "invited"
+            ? "invited"
+            : "active";
+        await db.collection("members").doc(memberId).update({
+          authUid,
+          portalStatus,
+          portalLinkedAt: new Date().toISOString(),
+        });
+        console.log(
+          `[onMemberCreated] ${memberEmail} already has a Kereke Hub account (role: ${existingRole}). ` +
+          `Linked the member profile, left the role untouched, no invite sent.`
+        );
+        return;
+      }
+
+      if (authAccountAlreadyExisted) {
+        // Auth user exists with no users doc. Rare, but treat it as a fresh
+        // portal account rather than assuming anything about the old account.
+        console.log(`[onMemberCreated] Auth account existed for ${memberEmail} with no profile doc. Creating one.`);
       }
 
       // Write users doc for the congregation member

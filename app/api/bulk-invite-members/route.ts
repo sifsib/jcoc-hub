@@ -111,6 +111,25 @@ export async function POST(req: NextRequest) {
           if (err.code === "auth/email-already-exists") {
             const existingUser = await adminAuth.getUserByEmail(email);
             authUid = existingUser.uid;
+
+            // GUARD: staff accounts share an email with their roster entry.
+            // Link the profiles and skip them, never demote or re-invite.
+            const existingProfileRef = adminDb.collection("users").doc(authUid);
+            const existingProfile = await existingProfileRef.get();
+            const existingRole = existingProfile.data()?.role;
+
+            if (existingProfile.exists && existingRole !== "congregation_member") {
+              if (!existingProfile.data()?.memberId) {
+                await existingProfileRef.update({ memberId });
+              }
+              await memberDoc.ref.update({
+                authUid,
+                portalStatus: "active",
+                portalLinkedAt: new Date().toISOString(),
+              });
+              skipped++;
+              continue;
+            }
           } else {
             failed++;
             continue;
