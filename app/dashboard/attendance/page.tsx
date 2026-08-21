@@ -32,6 +32,9 @@ interface Member {
   ministryGroup?: string;
   absenceException?: { tag: string } | null;
   createdAt?: { toDate: () => Date } | null; // Firestore Timestamp
+  householdId?: string;
+  householdRole?: string;
+  status?: string;
 }
 
 interface AttendanceRecord {
@@ -89,6 +92,22 @@ export default function AttendancePage() {
   const [isReported, setIsReported] = useState<boolean | null>(null);
   const [absenceReason, setAbsenceReason] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
+
+  // Family check-in state
+  const [familyPanelOpen, setFamilyPanelOpen] = useState(false);
+  const [familyCheckSearch, setFamilyCheckSearch] = useState("");
+  const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null);
+  const [checkedFamilyIds, setCheckedFamilyIds] = useState<Set<string>>(new Set());
+  const [familyCheckingIn, setFamilyCheckingIn] = useState(false);
+  const [pendingFamilyParam, setPendingFamilyParam] = useState<string | null>(null);
+
+  // Pick up a ?family=<householdId> link (e.g. from the roster's Family view
+  // modal) so the panel opens straight to that family once members load.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const param = new URLSearchParams(window.location.search).get("family");
+    if (param) setPendingFamilyParam(param);
+  }, []);
 
   // ─── Load tenant service sessions ──────────────────────────────────────────
 
@@ -352,6 +371,9 @@ export default function AttendancePage() {
   };
 
   const filteredMembers = members.filter(m => {
+    // Suspended members are hidden from attendance entirely — they don't
+    // affect present/absent counts while suspended.
+    if (m.status === "suspended") return false;
     // Hide members from services that pre-date their capture.
     const eligibleFrom = earliestEligibleDate(m);
     if (eligibleFrom && selectedDate && selectedDate < eligibleFrom) return false;
@@ -360,6 +382,71 @@ export default function AttendancePage() {
     if (filterType === "ministryGroup") return m.ministryGroup === filterValue;
     return true;
   });
+
+  // ─── Family grouping (for Family Check-in) ──────────────────────────────────
+
+  const familyGroups = (() => {
+    const map = new Map<string, Member[]>();
+    filteredMembers.forEach(m => {
+      if (!m.householdId) return;
+      if (!map.has(m.householdId)) map.set(m.householdId, []);
+      map.get(m.householdId)!.push(m);
+    });
+    return Array.from(map.entries())
+      .filter(([, mems]) => mems.length > 1)
+      .map(([householdId, mems]) => {
+        const primaryMem = mems.find(m => m.householdRole === "primary") || mems[0];
+        const label = primaryMem.lastName || (primaryMem.fullName || "").trim().split(/\s+/).slice(-1)[0] || "Family";
+        return { householdId, label, members: mems };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  })();
+
+  const filteredFamilyGroups = familyGroups.filter(g =>
+    g.label.toLowerCase().includes(familyCheckSearch.trim().toLowerCase())
+  );
+
+  const selectedFamily = familyGroups.find(g => g.householdId === selectedFamilyId) || null;
+
+  const selectFamily = (householdId: string) => {
+    setSelectedFamilyId(householdId);
+    const grp = familyGroups.find(g => g.householdId === householdId);
+    setCheckedFamilyIds(new Set(grp ? grp.members.map(m => m.id) : []));
+  };
+
+  const toggleFamilyMember = (id: string) => {
+    setCheckedFamilyIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const checkInFamily = async () => {
+    if (checkedFamilyIds.size === 0) return;
+    setFamilyCheckingIn(true);
+    try {
+      await Promise.all(Array.from(checkedFamilyIds).map(id => markPresent(id)));
+      setFamilyPanelOpen(false);
+      setSelectedFamilyId(null);
+      setCheckedFamilyIds(new Set());
+      setFamilyCheckSearch("");
+    } finally {
+      setFamilyCheckingIn(false);
+    }
+  };
+
+  // Auto-open the panel once for a family passed in via ?family=<id>.
+  useEffect(() => {
+    if (!pendingFamilyParam || familyGroups.length === 0) return;
+    const match = familyGroups.find(g => g.householdId === pendingFamilyParam);
+    if (match) {
+      setFamilyPanelOpen(true);
+      selectFamily(match.householdId);
+    }
+    setPendingFamilyParam(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFamilyParam, familyGroups.length]);
 
   // ─── Stats ─────────────────────────────────────────────────────────────────
 
@@ -565,12 +652,22 @@ export default function AttendancePage() {
                 <span className="text-gray-500">Pending</span>
               </div>
             </div>
-            <ExportMemberButton
-              data={attendanceExportRows}
-              filename={`Attendance_${activeSession?.name.replace(/\s+/g, "_") ?? "Service"}_${selectedDate}`}
-              columns={attendanceExportColumns}
-              disabled={filteredMembers.length === 0}
-            />
+            <div className="flex items-center gap-2">
+              {familyGroups.length > 0 && (
+                <button
+                  onClick={() => setFamilyPanelOpen(true)}
+                  className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-100 transition-colors flex items-center gap-1.5"
+                >
+                  🏠 Family Check-in
+                </button>
+              )}
+              <ExportMemberButton
+                data={attendanceExportRows}
+                filename={`Attendance_${activeSession?.name.replace(/\s+/g, "_") ?? "Service"}_${selectedDate}`}
+                columns={attendanceExportColumns}
+                disabled={filteredMembers.length === 0}
+              />
+            </div>
           </div>
 
           {/* Roster List */}
@@ -772,6 +869,88 @@ export default function AttendancePage() {
                 {modalLoading ? "Saving..." : "Save Record"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Family Check-in Modal */}
+      {familyPanelOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Family Check-in</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {selectedFamily ? "Untick anyone from this family who isn't here today." : "Find a family, then check in everyone who's here in one go."}
+                </p>
+              </div>
+              <button
+                onClick={() => { setFamilyPanelOpen(false); setSelectedFamilyId(null); setFamilyCheckSearch(""); }}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none shrink-0"
+              >
+                &times;
+              </button>
+            </div>
+
+            {!selectedFamily ? (
+              <>
+                <input
+                  value={familyCheckSearch}
+                  onChange={e => setFamilyCheckSearch(e.target.value)}
+                  placeholder="Search by family surname..."
+                  className="border p-2 rounded text-sm text-gray-700 focus:outline-blue-500"
+                  autoFocus
+                />
+                <div className="border rounded-lg max-h-64 overflow-y-auto divide-y divide-gray-50">
+                  {filteredFamilyGroups.length === 0 ? (
+                    <p className="p-4 text-sm text-gray-400 italic">No matching families found.</p>
+                  ) : filteredFamilyGroups.map(g => (
+                    <button
+                      key={g.householdId}
+                      onClick={() => selectFamily(g.householdId)}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-teal-50 transition-colors flex items-center justify-between"
+                    >
+                      <span className="font-medium">{g.label} Family</span>
+                      <span className="text-xs text-gray-400">{g.members.length} members</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col divide-y divide-gray-50 border rounded-lg">
+                  {selectedFamily.members.map(m => (
+                    <label key={m.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={checkedFamilyIds.has(m.id)}
+                        onChange={() => toggleFamilyMember(m.id)}
+                        className="h-4 w-4 rounded text-teal-600 border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700 flex-1">{formatSurnameFirst(m)}</span>
+                      {attendanceCache[m.id]?.status === "present" && (
+                        <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded">Already in</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={checkInFamily}
+                    disabled={familyCheckingIn || checkedFamilyIds.size === 0}
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-bold py-2.5 rounded-lg transition-colors text-sm"
+                  >
+                    {familyCheckingIn ? "Checking in..." : `Check In Selected (${checkedFamilyIds.size})`}
+                  </button>
+                  <button
+                    onClick={() => setSelectedFamilyId(null)}
+                    className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    Back
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import LogoutButton from "./LogoutButton";
+import PendingApprovalBadge from "../components/PendingApprovalBadge";
 
 interface NavItem {
   name: string;
@@ -18,6 +19,7 @@ interface MobileSidebarProps {
   tenantSlug?: string;
   userMemberId?: string;
   openTicketCount?: number;
+  tenantId?: string;
 }
 
 const ADMIN_NAV: NavItem[] = [
@@ -37,6 +39,7 @@ export default function MobileSidebar({
   tenantSlug,
   userMemberId,
   openTicketCount = 0,
+  tenantId,
 }: MobileSidebarProps) {
   const [open, setOpen] = useState(false);
 
@@ -101,6 +104,9 @@ export default function MobileSidebar({
                 >
                   <span className="text-base opacity-60">{item.icon}</span>
                   {item.name}
+                  {item.name === "Membership Management" && tenantId && (
+                    <PendingApprovalBadge tenantId={tenantId} />
+                  )}
                 </Link>
               </li>
             ))}

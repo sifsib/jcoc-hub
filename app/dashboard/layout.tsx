@@ -5,6 +5,7 @@ import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import LogoutButton from "./LogoutButton";
 import MobileSidebar from "./MobileSidebar";
 import OverdueBadge from "../components/OverdueBadge";
+import PendingApprovalBadge from "../components/PendingApprovalBadge";
 import MemberUsageMeter from "../components/MemberUsageMeter";
 import { isPaidTier, PAID_NAV_HREFS } from "../../lib/tier";
 
@@ -173,6 +174,9 @@ export default async function DashboardLayout({
                     {!locked && item.name === "Workflows" && (
                       <OverdueBadge tenantId={tenantId} />
                     )}
+                    {!locked && item.name === "Membership Management" && (
+                      <PendingApprovalBadge tenantId={tenantId} />
+                    )}
                   </Link>
                 </li>
               );
@@ -256,6 +260,7 @@ export default async function DashboardLayout({
               tenantSlug={tenantSlug}
               userMemberId={userMemberId}
               openTicketCount={openTicketCount}
+              tenantId={tenantId}
             />
             <div className="text-lg font-semibold text-gray-800">Dashboard</div>
           </div>

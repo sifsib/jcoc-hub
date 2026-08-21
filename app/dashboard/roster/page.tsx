@@ -40,6 +40,8 @@ interface Member {
   role: string;
   householdId?: string;
   householdRole?: string;
+  parentId?: string;
+  spouseId?: string;
   faithStatus?: { bornAgain: string; waterBaptized: string };
   consentedToPrivacyPolicy: boolean;
   branch?: string;
@@ -50,6 +52,17 @@ interface Member {
   absenceException?: AbsenceException | null;
   portalStatus?: "not_invited" | "invited" | "active";
   authUid?: string;
+  status?: string;
+  suspendedAt?: any;
+  suspendedReason?: string | null;
+  suspendedBy?: string;
+}
+
+interface Household {
+  id: string;
+  familyName?: string;
+  primaryMemberId?: string;
+  spouseMemberId?: string;
 }
 
 interface ChildInput {
@@ -584,12 +597,30 @@ export default function ManageMembershipPage() {
   const [inviteResult, setInviteResult] = useState<{ id: string; ok: boolean; msg: string } | null>(null);
   const [bulkInviting, setBulkInviting] = useState(false);
   const [bulkInviteResult, setBulkInviteResult] = useState<{ invited: number; skipped: number; failed: number } | null>(null);
-  const [view, setView] = useState<"list" | "form" | "import" | "configure" | "pending">("list");
+  const [view, setView] = useState<"list" | "form" | "import" | "configure" | "pending" | "suspended">("list");
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [showJoinLink, setShowJoinLink] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
+  const [households, setHouseholds] = useState<Household[]>([]);
+
+  // ── Suspend / reinstate membership ──
+  const [suspendModalMember, setSuspendModalMember] = useState<Member | null>(null);
+  const [suspendReason, setSuspendReason] = useState("");
+  const [suspending, setSuspending] = useState(false);
+
+  // ── Family linking ──
+  const [joinExistingFamily, setJoinExistingFamily] = useState(false);
+  const [familySearch, setFamilySearch] = useState("");
+  const [familyTargetId, setFamilyTargetId] = useState("");
+  const [familyRole, setFamilyRole] = useState<"spouse" | "child" | "parent" | "other">("child");
+  const [linkFamilyMember, setLinkFamilyMember] = useState<Member | null>(null);
+  const [linkFamilySearch, setLinkFamilySearch] = useState("");
+  const [linkFamilyTargetId, setLinkFamilyTargetId] = useState("");
+  const [linkFamilyRole, setLinkFamilyRole] = useState<"spouse" | "child" | "parent" | "other">("child");
+  const [linkingFamily, setLinkingFamily] = useState(false);
+  const [familyModalId, setFamilyModalId] = useState<string | null>(null);
   // ── Filter state ──
   const [memberSearch, setMemberSearch] = useState("");
   const [filterMinistryGroup, setFilterMinistryGroup] = useState("");
@@ -732,6 +763,13 @@ export default function ManageMembershipPage() {
         snap.forEach(d => list.push({ id: d.id, ...d.data() } as Member));
         list.sort(compareBySurname);
 
+        // Household records, used to label and display family links. Loaded
+        // once alongside members; cheap since it's one doc per family.
+        try {
+          const hhSnap = await getDocs(query(collection(db, "households"), where("tenantId", "==", appUser.tenantId)));
+          setHouseholds(hhSnap.docs.map(d => ({ id: d.id, ...d.data() } as Household)));
+        } catch (e) { console.warn("Household load failed:", e); }
+
         // ── One-time backfill: write firstName/lastName into any Firestore doc that
         //    only has fullName stored (legacy records). Runs silently; no-ops once
         //    every member has proper dedicated fields.
@@ -834,6 +872,8 @@ export default function ManageMembershipPage() {
     setConsent({ privacy: false, special: false, truth: false });
     setCustomFieldValues({});
     setFeedback(null);
+    setJoinExistingFamily(false);
+    setFamilySearch(""); setFamilyTargetId(""); setFamilyRole("child");
   };
 
   // ─── Children helpers ───────────────────────────────────────────────────────
@@ -1131,6 +1171,64 @@ export default function ManageMembershipPage() {
     } finally { setSubmitting(false); }
   };
 
+  // ─── Submit: joining an existing family (single new member, no new household) ──
+
+  const handleJoinFamily = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appUser) return;
+    if (!consent.privacy) { setFeedback({ ok: false, text: "Privacy policy consent is required." }); return; }
+    if (!familyTargetId) { setFeedback({ ok: false, text: "Please select which family they are joining." }); return; }
+    if (wouldExceedLimit(1)) { setShowUpgradeModal(true); return; }
+
+    setSubmitting(true); setFeedback(null);
+    try {
+      const target = members.find(m => m.id === familyTargetId);
+      if (!target) { setFeedback({ ok: false, text: "That family member could not be found. Please pick again." }); return; }
+      const hid = await resolveHouseholdFor(target);
+
+      const memberRef = await addDoc(collection(db, "members"), {
+        tenantId: appUser.tenantId,
+        fullName: `${primary.firstName.trim()} ${primary.lastName.trim()}`,
+        firstName: primary.firstName.trim(), lastName: primary.lastName.trim(),
+        email: primary.email.trim().toLowerCase(), phone: primary.phone ? fmtPhone(primary.phone, primary.countryCode || "27") : "",
+        dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus,
+        address: primary.address, role: primary.role, branch: primary.branch.trim(), cellRegion: primary.cellRegion.trim(), ministryGroup: primary.ministryGroup.trim(),
+        churchRole: primary.churchRole?.trim() || "",
+        membershipType: primary.membershipType, ministries: primary.ministries,
+        faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
+        householdId: hid, householdRole: familyRole,
+        ...(familyRole === "child" ? { parentId: familyTargetId } : {}),
+        isMember: true, status: "active", source: "manual",
+        customFields: customFieldValues,
+        consentedToPrivacyPolicy: consent.privacy, consentedToSpecialInfo: consent.special,
+        consentTimestamp: serverTimestamp(), consentPolicyVersion: "v1.0",
+        createdAt: serverTimestamp(), capturedBy: appUser.email,
+      });
+
+      if (familyRole === "spouse") {
+        await updateDoc(doc(db, "households", hid), { spouseMemberId: memberRef.id });
+      }
+
+      triggerMemberWorkflows(
+        memberRef.id,
+        `${primary.firstName.trim()} ${primary.lastName.trim()}`,
+        primary.phone ? fmtPhone(primary.phone, primary.countryCode || "27") : "",
+      );
+
+      bumpLocalCount(1);
+      await refreshList();
+      setFeedback({ ok: true, text: "Member added and linked to the family." });
+      reset(); setView("list");
+    } catch (err: any) {
+      console.error("Join family save error:", err);
+      if (isLimitError(err)) {
+        setShowUpgradeModal(true);
+      } else {
+        setFeedback({ ok: false, text: "Save failed. Please try again." });
+      }
+    } finally { setSubmitting(false); }
+  };
+
   // ─── Configure lists ────────────────────────────────────────────────────────
 
   const openConfigure = () => {
@@ -1317,6 +1415,100 @@ export default function ManageMembershipPage() {
       await deleteDoc(doc(db, "members", id));
       setMembers(p => p.filter(m => m.id !== id));
     } catch { alert("Could not remove. Try again."); }
+  };
+
+  // ─── Suspend / reinstate membership ─────────────────────────────────────────
+  // A suspended member keeps every field on their record (so nothing is lost)
+  // but is filtered off the Active Register and out of attendance capture, and
+  // no longer counts toward the free-tier member limit — the same "status"
+  // field the member-count Cloud Function already keys off of.
+
+  const openSuspend = (m: Member) => {
+    setSuspendModalMember(m);
+    setSuspendReason("");
+  };
+
+  const confirmSuspend = async () => {
+    if (!suspendModalMember || !appUser) return;
+    setSuspending(true);
+    try {
+      await updateDoc(doc(db, "members", suspendModalMember.id), {
+        status: "suspended",
+        suspendedAt: serverTimestamp(),
+        suspendedReason: suspendReason.trim() || null,
+        suspendedBy: appUser.email,
+      });
+      setMembers(p => p.map(m => m.id === suspendModalMember.id
+        ? { ...m, status: "suspended", suspendedReason: suspendReason.trim() || null }
+        : m));
+      setSuspendModalMember(null);
+      setSuspendReason("");
+    } catch (e) {
+      console.error("Suspend error:", e);
+      alert("Could not suspend this member. Please try again.");
+    } finally {
+      setSuspending(false);
+    }
+  };
+
+  const reinstateMember = async (id: string) => {
+    if (!confirm("Reinstate this member? They will reappear on the active register and attendance.")) return;
+    try {
+      await updateDoc(doc(db, "members", id), { status: "active", reinstatedAt: serverTimestamp() });
+      setMembers(p => p.map(m => m.id === id ? { ...m, status: "active" } : m));
+    } catch (e) {
+      console.error("Reinstate error:", e);
+      alert("Could not reinstate this member. Please try again.");
+    }
+  };
+
+  // ─── Family linking ──────────────────────────────────────────────────────────
+  // Resolves (or creates, for a legacy member who predates the household model)
+  // the household a given existing member belongs to. Shared by "join an
+  // existing family" on the add-member form and "Link to Family" on a row.
+  const resolveHouseholdFor = async (target: Member): Promise<string> => {
+    if (target.householdId) return target.householdId;
+    if (!appUser) return "";
+    const familyName = target.lastName || (target.fullName || "").trim().split(/\s+/).slice(-1)[0] || "";
+    const newHh = await addDoc(collection(db, "households"), {
+      tenantId: appUser.tenantId,
+      familyName,
+      primaryMemberId: target.id,
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, "members", target.id), { householdId: newHh.id, householdRole: target.householdRole || "primary" });
+    setMembers(p => p.map(m => m.id === target.id ? { ...m, householdId: newHh.id, householdRole: m.householdRole || "primary" } : m));
+    setHouseholds(p => [...p, { id: newHh.id, familyName, primaryMemberId: target.id }]);
+    return newHh.id;
+  };
+
+  const confirmLinkFamily = async () => {
+    if (!linkFamilyMember || !linkFamilyTargetId || !appUser) return;
+    setLinkingFamily(true);
+    try {
+      const target = members.find(m => m.id === linkFamilyTargetId);
+      if (!target) return;
+      const hid = await resolveHouseholdFor(target);
+      await updateDoc(doc(db, "members", linkFamilyMember.id), {
+        householdId: hid,
+        householdRole: linkFamilyRole,
+        ...(linkFamilyRole === "child" ? { parentId: linkFamilyTargetId } : {}),
+      });
+      if (linkFamilyRole === "spouse") {
+        await updateDoc(doc(db, "households", hid), { spouseMemberId: linkFamilyMember.id });
+      }
+      setMembers(p => p.map(m => m.id === linkFamilyMember.id
+        ? { ...m, householdId: hid, householdRole: linkFamilyRole, ...(linkFamilyRole === "child" ? { parentId: linkFamilyTargetId } : {}) }
+        : m));
+      setLinkFamilyMember(null);
+      setLinkFamilySearch("");
+      setLinkFamilyTargetId("");
+    } catch (e) {
+      console.error("Link to family error:", e);
+      alert("Could not link this member to the family. Please try again.");
+    } finally {
+      setLinkingFamily(false);
+    }
   };
 
   // ─── Import (CSV/XLSX) parse ─────────────────────────────────────────────────
@@ -1586,8 +1778,13 @@ export default function ManageMembershipPage() {
 
   // ─── Loading ────────────────────────────────────────────────────────────────
 
+  // ── Derived: household lookup, active vs. suspended ───────────────────────
+  const householdMap = new Map<string, Household>(households.map(h => [h.id, h]));
+  const activeMembersOnly = members.filter(m => m.status !== "suspended");
+  const suspendedMembers = members.filter(m => m.status === "suspended");
+
   // ── Derived: filtered members ─────────────────────────────────────────────
-  const filteredMembers = members.filter((m) => {
+  const filteredMembers = activeMembersOnly.filter((m) => {
     if (memberSearch.trim()) {
       const q = memberSearch.trim().toLowerCase();
       const haystack = [
@@ -1642,7 +1839,63 @@ export default function ManageMembershipPage() {
             : "A household record is created automatically. No signature required for manual capture."}
         </p>
 
-        <form onSubmit={isEditing ? handleUpdate : handleSubmit} className="flex flex-col gap-6">
+        {!isEditing && (
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-6 flex flex-col gap-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={joinExistingFamily}
+                onChange={e => { setJoinExistingFamily(e.target.checked); setFamilySearch(""); setFamilyTargetId(""); }}
+                className="mt-1 h-4 w-4 rounded text-teal-600 border-gray-300"
+              />
+              <span className="text-sm text-teal-900">
+                <strong>This person is joining a family already in the register</strong> — e.g. a child whose parent joined earlier. Skips the spouse/children sections below and links straight into that family instead of starting a new household.
+              </span>
+            </label>
+            {joinExistingFamily && (
+              <div className="flex flex-col gap-2 pl-7">
+                <F label="Search for the family member they're joining" req>
+                  <input
+                    value={familySearch}
+                    onChange={e => { setFamilySearch(e.target.value); setFamilyTargetId(""); }}
+                    placeholder="Type a name..."
+                    className={inp}
+                  />
+                </F>
+                {familySearch.trim() && !familyTargetId && (
+                  <div className="border rounded-lg bg-white max-h-48 overflow-y-auto divide-y divide-gray-50">
+                    {members.filter(m => m.status !== "suspended" && (m.fullName || `${m.firstName || ""} ${m.lastName || ""}`).toLowerCase().includes(familySearch.trim().toLowerCase())).slice(0, 20).map(m => (
+                      <button
+                        type="button"
+                        key={m.id}
+                        onClick={() => { setFamilyTargetId(m.id); setFamilySearch(m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim()); }}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-teal-50 transition-colors"
+                      >
+                        {m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim()}
+                        {m.phone && <span className="text-xs text-gray-400 ml-2">+{m.phone}</span>}
+                      </button>
+                    ))}
+                    {members.filter(m => m.status !== "suspended" && (m.fullName || `${m.firstName || ""} ${m.lastName || ""}`).toLowerCase().includes(familySearch.trim().toLowerCase())).length === 0 && (
+                      <p className="px-3 py-2 text-xs text-gray-400 italic">No matching member found.</p>
+                    )}
+                  </div>
+                )}
+                {familyTargetId && (
+                  <F label="Their relationship to this new member" req>
+                    <select value={familyRole} onChange={e => setFamilyRole(e.target.value as any)} className={sel} required>
+                      <option value="child">This new member is their Child</option>
+                      <option value="spouse">This new member is their Spouse</option>
+                      <option value="parent">This new member is their Parent</option>
+                      <option value="other">Other relative</option>
+                    </select>
+                  </F>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={isEditing ? handleUpdate : (joinExistingFamily ? handleJoinFamily : handleSubmit)} className="flex flex-col gap-6">
 
           {/* ── SECTION 1: Member Details ── */}
           <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
@@ -1693,7 +1946,7 @@ export default function ManageMembershipPage() {
           ); })()}
 
           {/* ── SECTION 3: Spouse (conditional on married, new registrations only) ── */}
-          {!isEditing && isMarried && (
+          {!isEditing && !joinExistingFamily && isMarried && (
             <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
               <SecHead n={next()} title="Spouse Details" />
               <F label="Is your spouse a member of this church?" req>
@@ -1745,7 +1998,7 @@ export default function ManageMembershipPage() {
           )}
 
           {/* ── SECTION 4: Children (new registrations only) ── */}
-          {!isEditing && <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          {!isEditing && !joinExistingFamily && <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
             <SecHead n={next()} title="Children" sub="Add each child. Tick 'is a member' only if they should appear on the register." />
             <button type="button" onClick={addChild}
               className="self-start text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium px-4 py-2 rounded-lg border border-blue-200 transition-colors">
@@ -1780,7 +2033,7 @@ export default function ManageMembershipPage() {
           </div>}
 
           {/* ── SECTION 5: Parents (new registrations only) ── */}
-          {!isEditing && <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
+          {!isEditing && !joinExistingFamily && <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
             <SecHead n={next()} title="Parents' Details" sub="For record purposes only — no membership question." />
             <div className="grid grid-cols-2 gap-6">
               {(["mother", "father"] as const).map(p => (
@@ -1795,7 +2048,7 @@ export default function ManageMembershipPage() {
           </div>}
 
           {/* ── SECTION 6: Parents-in-law (new registrations only, only if married) ── */}
-          {!isEditing && isMarried && (
+          {!isEditing && !joinExistingFamily && isMarried && (
             <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-5">
               <SecHead n={next()} title="Parents-in-law" sub="For record purposes only — no membership question." />
               <div className="grid grid-cols-2 gap-6">
@@ -2474,6 +2727,54 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // SUSPENDED MEMBERS VIEW
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (view === "suspended") {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Suspended Members</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              These members are hidden from the active register and attendance, and no longer count toward your member limit. Nothing is deleted — reinstate at any time.
+            </p>
+          </div>
+          <button onClick={() => setView("list")} className="text-sm text-blue-600 hover:text-blue-800 font-medium shrink-0">
+            Back to Register
+          </button>
+        </div>
+
+        {suspendedMembers.length === 0 ? (
+          <div className="bg-white border rounded-xl p-10 text-center text-gray-400 text-sm">
+            No suspended members. Suspend someone from the register instead of removing them if you expect they may come back.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {suspendedMembers.map((m) => (
+              <div key={m.id} className="bg-white border rounded-xl p-5 shadow-sm flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="font-semibold text-gray-800">{formatSurnameFirst(m)}</p>
+                  <div className="flex gap-2 mt-1 flex-wrap text-xs text-gray-400">
+                    {m.phone && <span>+{m.phone}</span>}
+                    {m.suspendedReason && <span className="italic">"{m.suspendedReason}"</span>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => reinstateMember(m.id)}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shrink-0"
+                >
+                  Reinstate
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // LIST VIEW (default)
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2552,6 +2853,15 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
             Pending Approvals
             {pendingRequests.length > 0 && (
               <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{pendingRequests.length}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setView("suspended")}
+            className="px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1.5"
+          >
+            Suspended
+            {suspendedMembers.length > 0 && (
+              <span className="bg-slate-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{suspendedMembers.length}</span>
             )}
           </button>
           <button
@@ -2798,6 +3108,16 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                           {m.householdRole && m.householdRole !== "primary" && (
                             <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded capitalize">{m.householdRole}</span>
                           )}
+                          {m.householdId && (
+                            <button
+                              type="button"
+                              onClick={() => setFamilyModalId(m.householdId!)}
+                              title="View the whole family"
+                              className="text-[10px] bg-teal-50 text-teal-700 border border-teal-100 px-1.5 py-0.5 rounded hover:bg-teal-100 transition-colors"
+                            >
+                              🏠 {householdMap.get(m.householdId)?.familyName ? `${householdMap.get(m.householdId)!.familyName} Family` : "Family"}
+                            </button>
+                          )}
                           {m.source === "website_import" && (
                             <span className="text-[10px] bg-indigo-50 text-indigo-600 border border-indigo-100 px-1.5 py-0.5 rounded">Website</span>
                           )}
@@ -2854,6 +3174,13 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                               </span>
                             )}
                             <button onClick={() => openEdit(m)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                            <button
+                              onClick={() => { setLinkFamilyMember(m); setLinkFamilySearch(""); setLinkFamilyTargetId(""); setLinkFamilyRole("child"); }}
+                              className="text-teal-600 hover:text-teal-800 text-xs font-medium"
+                            >
+                              Link to Family
+                            </button>
+                            <button onClick={() => openSuspend(m)} className="text-amber-600 hover:text-amber-800 text-xs font-medium">Suspend</button>
                             <button onClick={() => handleDelete(m.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
                           </div>
                         )}
@@ -2906,6 +3233,167 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
           </div>
         </div>
       )}
+
+      {/* Suspend Member Modal */}
+      {suspendModalMember && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Suspend Membership</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {formatSurnameFirst(suspendModalMember)} will come off the active register and attendance, and will not count toward your member limit. Their record is kept, not deleted, so you can reinstate them any time from the Suspended tab.
+                </p>
+              </div>
+              <button onClick={() => setSuspendModalMember(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none shrink-0">&times;</button>
+            </div>
+            <F label="Reason (optional)">
+              <textarea
+                value={suspendReason}
+                onChange={e => setSuspendReason(e.target.value)}
+                placeholder="e.g. Unreachable since March, moved churches..."
+                rows={3}
+                className={inp}
+              />
+            </F>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmSuspend}
+                disabled={suspending}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white font-bold py-2.5 rounded-lg transition-colors text-sm"
+              >
+                {suspending ? "Suspending..." : "Suspend Membership"}
+              </button>
+              <button
+                onClick={() => setSuspendModalMember(null)}
+                className="px-5 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link to Family Modal */}
+      {linkFamilyMember && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Link to Family</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Connect {formatSurnameFirst(linkFamilyMember)} to another member already in the register, for cases where they were added separately but belong to the same family.
+                </p>
+              </div>
+              <button onClick={() => setLinkFamilyMember(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none shrink-0">&times;</button>
+            </div>
+            <F label="Search for the family member to link with" req>
+              <input
+                value={linkFamilySearch}
+                onChange={e => { setLinkFamilySearch(e.target.value); setLinkFamilyTargetId(""); }}
+                placeholder="Type a name..."
+                className={inp}
+              />
+            </F>
+            {linkFamilySearch.trim() && !linkFamilyTargetId && (
+              <div className="border rounded-lg bg-white max-h-48 overflow-y-auto divide-y divide-gray-50">
+                {members.filter(m => m.id !== linkFamilyMember.id && m.status !== "suspended" && (m.fullName || `${m.firstName || ""} ${m.lastName || ""}`).toLowerCase().includes(linkFamilySearch.trim().toLowerCase())).slice(0, 20).map(m => (
+                  <button
+                    type="button"
+                    key={m.id}
+                    onClick={() => { setLinkFamilyTargetId(m.id); setLinkFamilySearch(m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim()); }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-teal-50 transition-colors"
+                  >
+                    {m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim()}
+                    {m.phone && <span className="text-xs text-gray-400 ml-2">+{m.phone}</span>}
+                  </button>
+                ))}
+                {members.filter(m => m.id !== linkFamilyMember.id && m.status !== "suspended" && (m.fullName || `${m.firstName || ""} ${m.lastName || ""}`).toLowerCase().includes(linkFamilySearch.trim().toLowerCase())).length === 0 && (
+                  <p className="px-3 py-2 text-xs text-gray-400 italic">No matching member found.</p>
+                )}
+              </div>
+            )}
+            {linkFamilyTargetId && (
+              <F label={`${formatSurnameFirst(linkFamilyMember)} is the target's...`} req>
+                <select value={linkFamilyRole} onChange={e => setLinkFamilyRole(e.target.value as any)} className={sel} required>
+                  <option value="child">Child</option>
+                  <option value="spouse">Spouse</option>
+                  <option value="parent">Parent</option>
+                  <option value="other">Other relative</option>
+                </select>
+              </F>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={confirmLinkFamily}
+                disabled={linkingFamily || !linkFamilyTargetId}
+                className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-bold py-2.5 rounded-lg transition-colors text-sm"
+              >
+                {linkingFamily ? "Linking..." : "Link to Family"}
+              </button>
+              <button
+                onClick={() => setLinkFamilyMember(null)}
+                className="px-5 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Family View Modal */}
+      {familyModalId && (() => {
+        const hh = householdMap.get(familyModalId as string);
+        const famMembers = members.filter(m => m.householdId === familyModalId);
+        const order: Record<string, number> = { primary: 0, spouse: 1, child: 2 };
+        famMembers.sort((a, b) => (order[a.householdRole || ""] ?? 3) - (order[b.householdRole || ""] ?? 3));
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🏠</span>
+                  <h3 className="text-lg font-bold text-gray-800">{hh?.familyName ? `${hh.familyName} Family` : "Family"}</h3>
+                </div>
+                <button onClick={() => setFamilyModalId(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none shrink-0">&times;</button>
+              </div>
+              <div className="flex flex-col divide-y divide-gray-50 border rounded-lg">
+                {famMembers.length === 0 ? (
+                  <p className="p-4 text-sm text-gray-400 italic">No members found for this family.</p>
+                ) : famMembers.map(m => (
+                  <div key={m.id} className="flex items-center justify-between px-4 py-2.5 gap-2">
+                    <div>
+                      <Link href={`/dashboard/roster/${m.id}`} onClick={() => setFamilyModalId(null)} className="text-sm font-medium text-emerald-600 hover:underline">
+                        {formatSurnameFirst(m)}
+                      </Link>
+                      <p className="text-[10px] text-gray-400 capitalize">{m.householdRole || "member"}</p>
+                    </div>
+                    {m.status === "suspended" && (
+                      <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded shrink-0">Suspended</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <Link
+                  href={`/dashboard/attendance?family=${familyModalId}`}
+                  className="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg transition-colors text-sm"
+                >
+                  Family Check-in
+                </Link>
+                <button
+                  onClick={() => setFamilyModalId(null)}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
