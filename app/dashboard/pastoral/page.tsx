@@ -83,6 +83,7 @@ export default function PastoralCarePage() {
   // Logs state
   const [logs, setLogs] = useState<CareLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState('');
   const [historySearch, setHistorySearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<CareType | 'all'>('all');
 
@@ -104,6 +105,7 @@ export default function PastoralCarePage() {
   const loadLogs = async () => {
     if (!appUser?.tenantId) return;
     setLogsLoading(true);
+    setLogsError('');
     try {
       const snap = await getDocs(
         query(
@@ -115,6 +117,16 @@ export default function PastoralCarePage() {
       setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as CareLog)));
     } catch (err) {
       console.error('Failed to load care logs:', err);
+      // A permission-denied here usually means this account isn't an owner or
+      // admin (pastoral notes are restricted); anything else is most likely a
+      // transient Firestore/index issue, so we say so rather than showing a
+      // silent, empty-looking list.
+      const code = (err as { code?: string })?.code;
+      setLogsError(
+        code === 'permission-denied'
+          ? "You don't have access to pastoral care records. This tab is limited to owner and admin roles."
+          : 'Could not load care records right now. Please refresh the page, and let support know if this keeps happening.'
+      );
     } finally {
       setLogsLoading(false);
     }
@@ -242,12 +254,17 @@ export default function PastoralCarePage() {
       {/* ── Active Cases ── */}
       {tab === 'active' && (
         <div>
+          {logsError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
+              {logsError}
+            </p>
+          )}
           {logsLoading ? (
             <div className="flex items-center gap-2 p-8">
               <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
               <p className="text-sm text-gray-500">Loading...</p>
             </div>
-          ) : activeLogs.length === 0 ? (
+          ) : logsError ? null : activeLogs.length === 0 ? (
             <div className="bg-white border border-gray-200 rounded-xl p-14 text-center">
               <p className="text-4xl mb-3">✅</p>
               <p className="text-sm font-semibold text-gray-700">No open cases</p>
@@ -414,6 +431,11 @@ export default function PastoralCarePage() {
       {/* ── History ── */}
       {tab === 'history' && (
         <div className="space-y-4">
+          {logsError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+              {logsError}
+            </p>
+          )}
           <div className="flex flex-wrap gap-3">
             <input
               value={historySearch}
@@ -433,7 +455,7 @@ export default function PastoralCarePage() {
             </select>
           </div>
 
-          {historyLogs.length === 0 ? (
+          {logsError ? null : historyLogs.length === 0 ? (
             <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">
               <p className="text-sm text-gray-400">No records match your filter.</p>
             </div>
