@@ -1,0 +1,105 @@
+# CLAUDE.md
+
+Read this first, every session. Then read `docs/06_OPEN_QUESTIONS.md` and the most recent file in `handovers/`.
+
+---
+
+## What this project is
+
+A customised build of **Kereke Hub** for **Joburg Church of Christ (JCOC)**, johannesburg.church, part of the Southern African Churches of Christ family.
+
+Kereke Hub is a multi-tenant church management platform built by Sifiso Sibuyane. It assumes one tenant equals one church. JCOC is a three-tier network: head office, regions, and campuses within regions. Sites are in Johannesburg, Tshwane, Cape Town, Durban and Port Elizabeth. They need region-level isolation plus a head office layer above it. That gap is the main build. Read ADR-001 before touching the org model, and note the unresolved question in it about whether the structure is three tiers or four.
+
+This is a **hard fork** of Kereke Hub, decided 2026-08-31. Separate repository, separate Firebase project, JCOC's own domain, white-labelled with a "Designed by Kereke Hub" attribution. The base repo is available as the `upstream` git remote, and the fork point is tagged `fork-point`.
+
+---
+
+## Stack
+
+Next.js 16 App Router, React 19, TypeScript 5, Tailwind 4. Firebase for Auth, Firestore, Storage, and Cloud Functions v2. Hosted on Firebase App Hosting. Brevo for email, BulkSMS for SMS, a separate Baileys service on Railway for WhatsApp.
+
+Multi-tenancy is a `tenantId` field on every document, enforced entirely in `firestore.rules`. There is no per-tenant database. `tenantId` equals the owner's Firebase Auth UID.
+
+---
+
+## The rules that matter
+
+### 1. Never widen a Firestore rule without a negative test
+The rules file is the only thing standing between one campus and another campus's personal information. The Client's primary contact is a registered POPIA officer. Any change to `firestore.rules` needs a matching test in `tests/rules/` that asserts the read **fails** from the wrong tenant, not just that it succeeds from the right one.
+
+### 2. Ask before assuming a data shape
+The base codebase has grown organically. There are two Firebase admin helpers with near-identical names, two conflicting WhatsApp send contracts, and a `branch` concept that is a string field rather than an entity. If something looks like it might be one of these, check `docs/05_ARCHITECTURE_DECISIONS.md` before building on it.
+
+### 3. Stop and check rather than guess at requirements
+A previous session on the base repo burned time building against a briefed architecture that did not exist in the connected folder. The right move then was to stop and ask, and it is the right move here. If the brief and the code disagree, the code wins and Sifiso gets asked.
+
+### 4. Every session ends with a handover
+Write `handovers/YYYY-MM-DD-<topic>.md` following `docs/HANDOVER_TEMPLATE.md`. Include what you did not verify, not just what you did. The base repo's `HANDOVER.md` is a good model, particularly the "gotchas" section.
+
+### 5. South African context
+Currency is ZAR. Dates display as `en-ZA`. Default timezone `Africa/Johannesburg`, but campuses outside South Africa need their own, so do not hardcode it. Phone numbers normalise to `27XXXXXXXXX`. POPIA, not GDPR.
+
+### 6. Build the product features so they can be ported back
+
+This is a fork, so it diverges. Roughly 69 of the 86 scoped days are features other churches would pay for: the organisation layer, life phases and roll-over, event registration with proof of payment, children's check-in, and the segment builder. AFM Gauteng has already asked for the first one.
+
+Build those five as self-contained modules with clean seams. Own route folders, new collections rather than fields smeared across `members`, rules in a delimited block, pure logic separated from framework wrappers, and anything JCOC-specific read from `lib/whiteLabel.ts` rather than hardcoded. Then log the work in `docs/07_PORTING_LOG.md` when the branch merges.
+
+If a feature ends up smeared across forty files it will be rebuilt from scratch rather than ported, and the fork will have cost double. The discipline is nearly free while building and expensive to retrofit.
+
+### 7. Never hardcode a product name or brand string
+
+JCOC is white-labelled. Product name, logo paths, colours, sender names, support contact and the attribution string all come from `lib/whiteLabel.ts`. If you are about to type "Kereke Hub" into a component, stop.
+
+### 8. No scope creep without writing it down
+If something new is requested mid-build, add it to `docs/06_OPEN_QUESTIONS.md` under "New requests" with an estimate. Do not silently absorb it.
+
+---
+
+## Architecture decision you must not undo
+
+The tenant boundary sits at the **region**, not the campus and not head office. Regions are separate tenants under a shared `organizations` document. Campuses are entities inside a region tenant.
+
+The reasoning is in `docs/05_ARCHITECTURE_DECISIONS.md`, ADR-001. Campus filtering inside a region tenant is correct and expected. Cross-region reads without an explicit network role are not. If you are unsure which side of the line you are on, stop and re-read the ADR.
+
+---
+
+## Build order
+
+Phases are in `docs/03_BUILD_PLAN.md`. Do not start a phase before its gate is met.
+
+1. Discovery and setup
+2. Network foundation
+3. Membership and life phases
+4. Event registration
+5. Children's ministry and segmentation
+6. Migration, pilot, rollout
+
+Two quick wins run ahead of everything: the birthday and anniversary pull, and member self-editable field settings. Both were promised to the Client on the discovery call.
+
+---
+
+## Conventions
+
+- Client components carry `"use client"`. Most dashboard pages are client-side with `onSnapshot` listeners.
+- Tenant and role come from `useAppUser()` in `lib/useAppUser.ts`. Do not re-implement.
+- Tier gating comes from `lib/tier.ts` and `useTenantTier()`. The Client is on a custom plan, so check how tier applies before locking anything behind `isPaidTier`.
+- Firestore field naming is camelCase. Dates that are compared as strings use `YYYY-MM-DD`.
+- Cloud Functions go in `functions/src/`, exported from `functions/src/index.ts`. Keep pure logic in a separate file from the function wrapper so it can be tested without pulling in `firebase-functions`. `summaryFormat.ts` in the base repo is the pattern to copy.
+- Run `npx tsc --noEmit` in both root and `functions/` before declaring anything done.
+
+---
+
+## What is deliberately switched off for this Client
+
+Finance suite, worship planning, and for now the first-time visitors module. Do not build against them and do not spend time on them.
+
+JCOC is on a bespoke plan with everything else enabled, resolved at organisation level, so do not gate anything behind `isPaidTier` (ADR-009). Note JCOC is on a bespoke plan with everything else enabled, resolved at organisation level, so do not gate anything behind `isPaidTier` (ADR-009).
+
+---
+
+## Who is who
+
+- **Sifiso Sibuyane** — Kereke Hub founder, product owner, makes the calls.
+- **Anita Pearson** — JCOC regional administrator, operational owner, the person whose daily work this has to improve. Registered POPIA officer.
+- **Oludolapo Ogundipe ("Baba D")** — JCOC leadership. Joint approver with Anita.
