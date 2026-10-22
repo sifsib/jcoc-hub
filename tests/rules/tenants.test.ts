@@ -156,6 +156,24 @@ describe("tenant profile edits still work", () => {
     );
   });
 
+  it("allows an owner to save banking details, whose nested accountType is a bank account type", async () => {
+    // Branding writes bankingDetails.accountType ("Cheque/Current"). The rule
+    // only inspects top-level keys, so this must not trip the accountType guard.
+    await assertSucceeds(
+      updateDoc(doc(dbAs(env, "ownerA"), "tenants", TENANT_A), {
+        bankingDetails: { bankName: "Test Bank", accountType: "Cheque/Current" },
+      })
+    );
+  });
+
+  it("allows an admin to update class types", async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbAs(env, "adminA"), "tenants", TENANT_A), {
+        classTypes: [{ id: "membership", name: "Membership" }],
+      })
+    );
+  });
+
   it("denies a congregation member editing the tenant profile", async () => {
     await assertFails(updateDoc(doc(dbAs(env, "memberA"), "tenants", TENANT_A), { name: "Hijacked" }));
   });
