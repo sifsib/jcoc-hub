@@ -13,15 +13,23 @@ if (!admin.apps.length) {
     process.env.FB_ADMIN_PRIVATE_KEY || process.env.FB_ADMIN_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY
   )?.replace(/\\n/g, "\n");
 
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error(
-      "Firebase Admin env vars missing. Need FB_ADMIN_PROJECT_ID, FB_ADMIN_CLIENT_EMAIL, FB_ADMIN_PRIVATE_KEY"
-    );
-  }
+  // Local emulators (npm run dev:emulator): no service account needed, the
+  // SDK routes to the emulator hosts from the environment on its own.
+  const usingEmulators = !!(process.env.FIRESTORE_EMULATOR_HOST && process.env.FIREBASE_AUTH_EMULATOR_HOST);
 
-  admin.initializeApp({
-    credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
-  });
+  if (usingEmulators) {
+    admin.initializeApp({ projectId: projectId || "demo-jcoc" });
+  } else {
+    if (!projectId || !clientEmail || !privateKey) {
+      throw new Error(
+        "Firebase Admin env vars missing. Need FB_ADMIN_PROJECT_ID, FB_ADMIN_CLIENT_EMAIL, FB_ADMIN_PRIVATE_KEY"
+      );
+    }
+
+    admin.initializeApp({
+      credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+    });
+  }
 }
 
 export const adminAuth = admin.auth();

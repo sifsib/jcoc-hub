@@ -42,6 +42,7 @@ export default function CelebrationsPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [range, setRange] = useState<DateWindow>(() => defaultWeeklyWindow(todayIn(DEFAULT_TIMEZONE), EMAIL_WEEKDAY));
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const allowed = !!appUser && ALLOWED_ROLES.includes(appUser.role);
 
@@ -106,12 +107,34 @@ export default function CelebrationsPage() {
   ];
 
   async function handleCopy() {
+    const text = celebrationsAsText(list);
+    setCopyError(null);
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(celebrationsAsText(list));
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      // The Clipboard API needs HTTPS and permission, which some browsers
+      // and phones refuse. Fall back to the older copy command.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        ok = document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
+      document.body.removeChild(ta);
+    }
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch {
-      setErrorMsg("Your browser blocked copying. Select the preview text and copy it instead.");
+    } else {
+      setCopyError("Your browser blocked copying. Select the text below and copy it instead.");
     }
   }
 
@@ -231,7 +254,7 @@ export default function CelebrationsPage() {
 
           {missingAnniversaries > 0 && (
             <p className="mt-4 text-xs text-slate-400">
-              {missingAnniversaries} linked spouse {missingAnniversaries === 1 ? "record has" : "records have"} no wedding anniversary yet. Add it from the member&apos;s record in Membership Management.
+              {missingAnniversaries} linked spouse {missingAnniversaries === 1 ? "record has" : "records have"}{" "}no wedding anniversary yet. Add it from the member&apos;s record in Membership Management.
             </p>
           )}
 
@@ -257,6 +280,7 @@ export default function CelebrationsPage() {
                 </button>
               </div>
             </div>
+            {copyError && <p className="mt-2 text-sm text-red-600">{copyError}</p>}
             <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-4 font-sans text-sm text-slate-700">
               {rangeError ? "" : celebrationsAsText(list)}
             </pre>

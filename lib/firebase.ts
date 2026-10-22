@@ -3,8 +3,8 @@
 // All vars are NEXT_PUBLIC_* so they are safe to expose to the browser.
 
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -21,4 +21,15 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Local development against the Firebase emulators (npm run dev:emulator).
+// Off unless explicitly switched on, so production never takes this path.
+// The global flag stops hot reloads connecting twice, which Firestore rejects.
+const g = globalThis as { __firebaseEmulatorsConnected?: boolean };
+if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "1" && !g.__firebaseEmulatorsConnected) {
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  g.__firebaseEmulatorsConnected = true;
+}
+
 export default app;
