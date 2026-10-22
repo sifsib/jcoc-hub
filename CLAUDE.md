@@ -8,7 +8,9 @@ Read this first, every session. Then read `docs/06_OPEN_QUESTIONS.md` and the mo
 
 A customised build of **Kereke Hub** for **Joburg Church of Christ (JCOC)**, johannesburg.church, part of the Southern African Churches of Christ family.
 
-Kereke Hub is a multi-tenant church management platform built by Sifiso Sibuyane. It assumes one tenant equals one church. JCOC is a three-tier network: head office, regions, and campuses within regions. Sites are in Johannesburg, Tshwane, Cape Town, Durban and Port Elizabeth. They need region-level isolation plus a head office layer above it. That gap is the main build. Read ADR-001 before touching the org model, and note the unresolved question in it about whether the structure is three tiers or four.
+Kereke Hub is a multi-tenant church management platform built by Sifiso Sibuyane. It assumes one tenant equals one church. JCOC is a network: Joburg Church of Christ is split into **regions** (which the client also calls campuses: Soweto, Northwest, Central East), each region into **sectors**, each sector into **family groups**. Tshwane, Cape Town, Durban, PE and Mthatha are **sister churches** with their own logins. Anita and Baba D oversee all of it. They need region-level isolation plus network visibility above it. That gap is the main build.
+
+Read ADR-001 **and ADR-001 revision 2** before touching the org model. Revision 2 records this structure and is **proposed, not yet accepted**. Do not build the org model until Sifiso signs it off.
 
 This is a **hard fork** of Kereke Hub, decided 2026-08-31. Separate repository, separate Firebase project, JCOC's own domain, white-labelled with a "Designed by Kereke Hub" attribution. The base repo is available as the `upstream` git remote, and the fork point is tagged `fork-point`.
 
@@ -58,9 +60,11 @@ If something new is requested mid-build, add it to `docs/06_OPEN_QUESTIONS.md` u
 
 ## Architecture decision you must not undo
 
-The tenant boundary sits at the **region**, not the campus and not head office. Regions are separate tenants under a shared `organizations` document. Campuses are entities inside a region tenant.
+The tenant boundary sits at the **region**, not the sector and not head office. Regions are separate tenants under a shared `organizations` document. Under ADR-001 campuses are entities inside a region tenant; the proposed revision 2 replaces that with sectors and family groups, and adds a church level above regions.
 
-The reasoning is in `docs/05_ARCHITECTURE_DECISIONS.md`, ADR-001. Campus filtering inside a region tenant is correct and expected. Cross-region reads without an explicit network role are not. If you are unsure which side of the line you are on, stop and re-read the ADR.
+The reasoning is in `docs/05_ARCHITECTURE_DECISIONS.md`, ADR-001. Filtering inside a region tenant is correct and expected. Cross-region reads without an explicit network role are not. If you are unsure which side of the line you are on, stop and re-read the ADR.
+
+**Terminology trap:** the client uses "region" and "campus" for the same thing. The level inside a region is a "sector". Also: Anita and Baba D were told on a call they would be "super admins". That means a network role, **never** the platform `super_admin` role, which is Kereke Hub staff only.
 
 ---
 
@@ -93,7 +97,9 @@ Two quick wins run ahead of everything: the birthday and anniversary pull, and m
 
 ## What is deliberately switched off for this Client
 
-Finance suite, worship planning, and for now the first-time visitors module. Do not build against them and do not spend time on them.
+Finance suite and worship planning. Do not build against them and do not spend time on them.
+
+The base first-time visitors pipeline stays off, but a narrower **visitor register** (returning visitors and their children, kept apart from members) was agreed in the follow-up meeting. See `docs/02_SCOPE.md` B10.
 
 JCOC is on a bespoke plan with everything else enabled, resolved at organisation level, so do not gate anything behind `isPaidTier` (ADR-009).
 
@@ -102,5 +108,8 @@ JCOC is on a bespoke plan with everything else enabled, resolved at organisation
 ## Who is who
 
 - **Sifiso Sibuyane** — Kereke Hub founder, product owner, makes the calls.
-- **Anita Pearson** — JCOC regional administrator, operational owner, the person whose daily work this has to improve. Registered POPIA officer.
-- **Oludolapo Ogundipe ("Baba D")** — JCOC leadership. Joint approver with Anita.
+- **Anita Pearson** — JCOC regional administrator (administers Northwest region), operational owner, the person whose daily work this has to improve. Registered POPIA officer. Needs network-wide visibility.
+- **Oludolapo Ogundipe ("Baba D")** — JCOC leadership. Joint approver with Anita. Administers Soweto and Central East regions. Owns the life phase list and the monthly statistics report. Needs network-wide visibility.
+- **Erick Li Sik** — JCOC, joined from the follow-up meeting. Focused on support continuity, clean separation of members, visitors and children, and email to segments (they use Mailchimp today). Raised the key-person risk directly. Not confirmed as an approver.
+
+Client communication goes from sifiso@kerekehub.co.za.

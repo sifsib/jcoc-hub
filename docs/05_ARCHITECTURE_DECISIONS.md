@@ -11,6 +11,8 @@ Short records, one per decision. Add to this file rather than rewriting it. If a
 **Status:** Accepted, revised 2026-08-31. Supersedes the original two-tier version.
 **Confidence:** High on the structure. Medium on where exactly the tenant line sits, see "To confirm".
 
+> **Revision proposed 2026-10-22.** The follow-up meeting answered the "To confirm" question below: Tshwane, Cape Town, Durban, PE and Mthatha are **sister churches**, not regions of one church. See **ADR-001 revision 2** at the end of this file. Until Sifiso signs that off, this record stands.
+
 **Context.** JCOC's own site puts it plainly: one church, meeting in many locations across the city. Beyond Johannesburg the network extends to Tshwane, Cape Town, Durban, and Port Elizabeth.
 
 Sifiso has confirmed the hierarchy is three levels, not two: **head office, then region, then campus.** That is a material change from the original assumption and it changes the model.
@@ -78,6 +80,10 @@ It also fits how Anita described her own work. She talks about "my region" as th
 **Reasoning.** Anita has done this by hand for years and knows the exceptions the rules will not catch. A silent bulk update across a 380-plus person region that gets one rule slightly wrong is not recoverable by hand, and it would destroy confidence on day one. The preview is not a nicety, it is the feature.
 
 **Worth one sentence of confirmation.** Calendar year was chosen even though Anita's stated reasoning was school-stage-driven. South African school years start in January so the two mostly coincide, but they are not the same concept and the phase rules may quietly assume one or the other. Confirm when the taxonomy arrives.
+
+**Confirmed in the follow-up meeting.** Anita chose the start of the year over birthdays. The rule is the age a person **turns during the year**, applied in January: a six-year-old turning seven in March is a scholar from January, and a child moves to teen ministry in the year they turn 14, not 13. There are no grade bands: children are either **preschooler** or **scholar**. Parent phases cascade automatically from their children's ages. Children hold several phases at once too (Anita: kid zone, scholar and pre-teen together).
+
+Note the call itself was mixed: Sifiso first described birthday-triggered moves, then agreed to the start of the year. The build follows the start of the year.
 
 ---
 
@@ -147,6 +153,8 @@ It also fits how Anita described her own work. She talks about "my region" as th
 
 **Reasoning.** No hardware dependency, which removes a whole category of go-live risk. The trade-off is that a guardian who loses their phone needs a supervisor override path, so build one, and log it loudly when it is used.
 
+**Confirmed in the follow-up meeting.** The parent brings the child to the age-group class and signs them in there, on the teacher's device (Anita mentioned an iPad). The same adult who signed in must sign out. **Visitors' children** use the same flow: the teacher captures the child's name and age and the parent's name, phone and email the first time, and finds them again on later visits through the visitor register. Check-in must never create or change a member record.
+
 **Note.** This module has **not been started**. It was discussed on the discovery call as though it were in development and close to release. It is not. See the risk register in `docs/03_BUILD_PLAN.md`.
 
 ---
@@ -163,6 +171,73 @@ It also fits how Anita described her own work. She talks about "my region" as th
 
 ---
 
+## ADR-001 revision 2. Network, church, region, sector, family group. The tenant boundary stays at the region.
+
+**Status:** **PROPOSED, 2026-10-22. Awaiting Sifiso's sign-off.** Do not build against this until it is marked Accepted. When accepted, mark the original ADR-001 "Superseded by ADR-001 revision 2".
+**Source:** Follow-up meeting with Anita Pearson, Baba D and Erick Li Sik (transcript `transcript3.docx`, date not recorded in the transcript). Baba D shared his structure on screen.
+**Confidence:** High on the hierarchy and the tenant boundary. Medium on the church level, because we do not yet know whether sister churches have regions of their own.
+
+**What the meeting settled.**
+
+- **Open question A is answered: they are sister churches.** Tshwane, Cape Town, Durban and PE (and Mthatha, named in the pricing discussion) are sister churches with their own logins, not regions of one church. Tshwane "falls under" Johannesburg and Johannesburg "still administers" it, but it keeps separate login details.
+- **Joburg Church of Christ is one church split into regions.** Baba D: "Now we're split into three regions… that will be your campus." The client uses **region** and **campus** for the same thing. Regions named on the call: Soweto, Northwest, and Central East (see the open question on the exact list).
+- **Inside a region are sectors, and inside a sector are family groups.** Soweto region has a north sector; Northwest has west and other sectors. A family group (also called a Bible discussion group) is what the base product calls a cell group.
+- **A member belongs at every level at once.** Baba D: pulled for the whole church, for Soweto region, for north sector, or for a family group, the same member appears in each.
+- **Membership is administered per region.** Anita: Baba D adds members for Soweto, Anita for Northwest, Baba D also for Central East.
+- **Anita and Baba D oversee everything.** They must see every church and region and email all of them, while each keeps its own sign-in.
+- **Billing is per region and per sister church** (R79 each, as quoted on the call), which lines up with a region tenant.
+
+**So the original model is wrong in two places.** The level inside a region is a **sector**, not a campus. And there is a **church level** between head office and region, because the three Joburg regions roll up to "Joburg Church of Christ" separately from the sister churches. That is the four-tier case the original ADR warned about.
+
+**Proposed decision.**
+
+```
+organizations/{orgId}            JCOC network. Commercial relationship (ADR-009), network roles.
+  churches/{churchId}            Joburg CoC, Tshwane, Cape Town, Durban, PE, Mthatha. Carries orgId.
+    tenants/{tenantId}           One per REGION. Carries orgId, churchId, orgRole: "region".
+                                 A sister church with no regions is a single region tenant.
+      sectors/{sectorId}         tenantId, name. New entity.
+        familyGroups/{groupId}   tenantId, sectorId, name, leader. New entity.
+members/{memberId}               tenantId, sectorId, familyGroupId (ids, not names).
+```
+
+- `churches` is its own collection, not nested `organizations`. Four fixed levels are all this client needs, and a flat collection keeps rules reads cheap. A recursive org tree is the more general answer; revisit if a second client needs more than four levels.
+- **Tenant stays at the region,** as in the original ADR. Admin rights, billing and the client's own sense of "my region" all sit there.
+- **Sector and family group replace the loose strings.** `members.branch` becomes `sectorId`. `members.cellRegion` becomes `familyGroupId`. The base `tenants.cellGroupBranch` map (cell → branch) is already the family group → sector relationship, so the migration reads it rather than guessing.
+- **Labels come from config.** "Region", "Sector" and "Family group" are JCOC's words. Other churches say campus, branch or cell, so the labels live in `lib/whiteLabel.ts` (or per-tenant settings) to keep the module portable.
+
+**Roles.**
+
+| Role | Scope | Replaces |
+|---|---|---|
+| `network_owner` | Every church and region in the org, full read including personal information, network broadcast | nothing. New. Anita and Baba D |
+| `network_viewer` | Every church and region, read-only | nothing. New |
+| `church_admin` | Every region tenant of one church | nothing. New. Needed if Joburg administers Tshwane through a role rather than as network owners |
+| `owner` / `admin` | One region tenant | unchanged |
+| `sector_leader` | One sector inside a region, **enforced in rules** | `branch_admin`, which is UI-only today |
+| `family_group_leader` | One family group | `cell_leader` |
+
+**Never map a JCOC person to the platform `super_admin` role.** On the call they were told they would be "super admins". In the code that means `network_owner`. `super_admin` is Kereke Hub staff only and is what the 2026-10-22 rules fix locks down.
+
+**Consequences.**
+
+- **A user can need roles in more than one tenant.** Baba D administers Soweto and Central East, which are two region tenants. Today every user has exactly one `tenantId`, and `firestore.rules` resolves access from it. Either Baba D works through `network_owner` alone, or users gain a tenant-access list (`users.tenantAccess: { [tenantId]: role }`) with an active-tenant switch. The second is a significant rules change and needs its own negative tests. Recommend deciding this before Phase 1 starts.
+- **Network roles read personal information across churches.** If sister churches are separate legal entities, each is its own POPIA responsible party, and head office reading their members' personal information needs a lawful basis and an agreement covering it. That is a governance question for Anita as information officer, not a technical one. Build the network roles to her answer.
+- **Rollups aggregate at three levels:** region (tenant), church (sum of its region tenants), network (sum of churches). The scheduled rollup writes per tenant; church and network totals are computed from those.
+- **Scoping inside a region becomes enforceable.** Because sector and family group become ids on the member, rules can check `sectorId` against the caller's assignment. The base product never enforced `branch_admin` in rules; this is the chance to fix that rather than copy it.
+- **Visitors and their children are outside the member hierarchy.** A visitor has no sector or family group (Erick's point). See the visitor register in `docs/02_SCOPE.md`.
+- **Estimate impact.** Phase 1 grows by the `churches` level, the sector and family group entities (instead of one campus entity), sector enforcement in rules, and possibly multi-tenant users. Rough estimate: +3 to +5 days, depending on the multi-tenant user decision. Not yet reflected in `docs/03_BUILD_PLAN.md` totals.
+
+**Alternatives considered.**
+
+- *Tenant per church* (Joburg as one tenant, region as a field). Makes the whole-church pull trivial, but puts region separation back on filters, contradicts per-region admin rights and per-region billing, and makes a missed filter expose one region's members to another. Rejected.
+- *Tenant per sector.* Too fine. Sectors share administrators and members move between them. Rejected.
+- *Nested `organizations` (parentOrgId).* More general, more complex rules and queries. Deferred until a client needs it.
+
+**Still to confirm before this is accepted.** See open questions A1 to A5 in `docs/06_OPEN_QUESTIONS.md`.
+
+---
+
 ## Known base-repo quirks to work around, not build on
 
 **Two WhatsApp send contracts.** The deployed Baileys service expects `POST /message/send` with `{ phoneNumber, message }` plus `X-Service-Key` and `X-Tenant-Id`. The Next.js route `app/api/whatsapp/send-message/route.ts` posts `{ sessionName, phone, message }` with only `X-Service-Key`, targeting an older wppconnect shape. The Baileys contract is the live one.
@@ -171,6 +246,6 @@ It also fits how Anita described her own work. She talks about "my region" as th
 
 **Duplicate Firebase admin helpers.** `lib/firebase-admin.ts` and `lib/firebaseAdmin.ts` both exist, and again under `app/lib/`. Pick one per file; do not add a third.
 
-**`branch` is a string, not an entity.** Under ADR-001 this becomes the campus entity. Migrate it, do not leave both alive.
+**`branch` is a string, not an entity.** Under ADR-001 this becomes the campus entity; under the proposed revision 2 it becomes `sectorId`, and `cellRegion` becomes `familyGroupId`. Migrate it, do not leave both alive.
 
 **Daily summary marks before it sends.** A failed send is logged and never retried that day. Deliberate, to avoid double-sends, but worth knowing if anyone reports a missing summary.

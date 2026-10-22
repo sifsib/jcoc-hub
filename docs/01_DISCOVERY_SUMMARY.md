@@ -5,6 +5,8 @@
 **Base product demonstrated:** Kereke Hub, live demo account with dummy data.
 
 > **Updated 2026-08-31.** The client is **Joburg Church of Christ (JCOC)**, johannesburg.church, part of the Southern African Churches of Christ family. Approvers are Anita Pearson and Oludolapo Ogundipe ("Baba D"), both.
+>
+> **Updated 2026-10-22.** A follow-up meeting answered the structure question in section 1: the other cities are **sister churches**, and Joburg itself is split into regions, sectors and family groups. Section 7 summarises that meeting. Where it conflicts with sections 1 to 6, section 7 wins.
 
 ---
 
@@ -120,3 +122,85 @@ Anita asked directly whether there is a secure check-in and check-out for childr
 | 8 | Multi-campus network architecture, scoping session to follow | Anita | This document |
 | 9 | Life phase list fully customisable, multi-select | Anita | Partially exists, needs rework |
 | 10 | Annual life phase roll-over | Anita | Not built |
+
+### Corrections from a re-read of the first transcript (2026-10-22)
+
+- **All three attendance methods were rejected, not two.** Anita heard self check-in by QR, cell leaders marking their own groups, and welcomers with tablets, then said "I somehow don't think that's going to work for us." Cell-leader capture, listed in B8 as an option to put to her, has already been heard once.
+- **Anita liked the controlled join link.** "I actually like that link that you can send to people… but you controlling who is getting the link." So "admin adds members, full stop" overstates it: admin entry and an admin-approved form are both acceptable. The follow-up meeting confirmed both options.
+- **Multi-select life phases were described as already working.** On the call Anita was told "Yes, you are able to take more than one." The system stores one value. Add this to the expectations to correct alongside Safety Nest.
+- **The phrase "head office" was Sifiso's, not Anita's.** She asked for sign-in per region and per church, plus "one signing detail for all of the campuses together with all the information in", meaning full data, not only totals.
+
+---
+
+## 7. Follow-up meeting
+
+**Source:** Fireflies transcript "Kereke Hub JOCC Follow-Up Meeting" (`transcript3.docx`). The date is not recorded in the transcript.
+**Present:** Sifiso Sibuyane, Anita Pearson, Baba D, and **Erick Li Sik**, who had not met Sifiso before.
+**Context:** Sifiso joined late, from Mozambique without a laptop, after the client sent him the link. Before he joined, Erick raised whether the business depends on one person.
+
+### 7.1 Structure, answering open question A
+
+Baba D shared the structure on screen:
+
+- **Joburg Church of Christ** is one church, split into **regions**, which they also call **campuses**. Named: Soweto, Northwest, Central East. Baba D said three regions.
+- Each region is split into **sectors** (for example Soweto's north sector; Northwest's west sector and others).
+- Each sector holds **family groups**, also called Bible discussion groups. This is what Kereke Hub calls a cell group.
+- A member sits at every level at once: church, region, sector, family group. Lists are pulled at any level.
+- **Tshwane, Cape Town, Durban, PE and Mthatha are sister churches** with their own logins. Tshwane "falls under" Joburg, which still administers it.
+- **Anita and Baba D must see everything** across all churches and email any of them. Each church and region keeps its own sign-in, and access narrows the lower down the hierarchy a user sits.
+- Members are administered per region: Baba D for Soweto and Central East, Anita for Northwest.
+
+This drives **ADR-001 revision 2 (proposed)** in `docs/05_ARCHITECTURE_DECISIONS.md`.
+
+### 7.2 Life phases and roll-over
+
+- A person holds several life phases, and so do children (kid zone, scholar and pre-teen together). Lists are pulled on combinations, such as mature married with children.
+- Baba D showed the life phase list on screen and agreed to send the spreadsheet. Still outstanding.
+- **Roll-over at the start of the year**, by the age turned during that year. A child joins the teen ministry in the year they turn 14. Children are preschooler or scholar; there are no grade bands. Parents move automatically with their children's ages.
+- On the call, birthday-triggered automation was described first, then the start of the year was agreed. The start of the year is what gets built.
+
+### 7.3 Children's check-in
+
+- The parent brings the child to their age-group class and signs them in on the teacher's device. The same adult must sign out.
+- Visitors' children check in the same way, with name, age, parent name, phone and email captured.
+- Check-in must not let anyone add or change member data.
+
+### 7.4 Visitors (new request)
+
+Erick asked for visitors to be kept in their own register, separate from members, so a returning visitor and their children can be checked in without filling in the form again, and so the church can follow up with them. Sifiso agreed and said he would add it to scope. This brings the visitors module back, in a narrower form. Logged in `docs/06_OPEN_QUESTIONS.md`.
+
+### 7.5 Communications
+
+- They send regular email through **Mailchimp** today. Sifiso said Kereke Hub would plug in their Mailchimp API key. Only Brevo is built. Logged as a new request.
+- They want to email segments such as "campus students" or one region's members directly from the system.
+- **WhatsApp:** Sifiso said it is "a couple of months out", pending Meta. Do not demonstrate or promise it.
+
+### 7.6 Monthly report (new request, deferred)
+
+Baba D compiles a monthly report by hand: baptisms, restorations, transfers, move-ins and move-outs per region, feeding a final sheet. He asked whether the system could produce it, then deferred it himself: "our priority is actually to get a database system up and running." Definitions to come in a one-to-one with Sifiso.
+
+### 7.7 Commercial and support
+
+- **Pricing as quoted on the call:** a once-off build fee of R3,000; a R159 monthly subscription; R79 per month for each region and each sister church, regardless of member numbers. The transcript is garbled on the monthly figure. Sister churches outside South Africa (Mozambique, Zimbabwe, Angola were mentioned) would be "in the same ballpark", subject to local data protection law.
+- **Support:** Erick asked directly what happens when Sifiso is unavailable. Sifiso said that once the system is live, a team of three handles support and the support line.
+- **Test access:** Baba D was told to register a free church on the public Kereke Hub site to try the base product.
+
+### 7.8 Risks raised by this meeting
+
+- **Prototype promise.** Sifiso committed to a working prototype "by the end of the week, latest Monday", based on one sector, with contracting to follow. The network layer alone is scoped at about three weeks. This repeats the Safety Nest pattern from the first call and should be reset in writing before the date passes.
+- **Pricing against scope.** The quoted build fee and monthly fees need checking against the ~86-day scope before contracting, together with the licence clause.
+- **Key-person dependency.** The client noticed it before Sifiso joined. The support arrangement described on the call needs to be real and written into the agreement.
+- **"Super admin".** Anita and Baba D were told they would be super admins. In the system this must be a network role, never the platform `super_admin` role.
+- **Sender identity.** Erick noticed the meeting invite came from a JUMO email address. Client communication should come from sifiso@kerekehub.co.za.
+
+### 7.9 Commitments made in the follow-up meeting
+
+| # | Commitment | Made to | Status |
+|---|---|---|---|
+| 11 | Working prototype "by end of week, latest Monday", based on one sector | All | **Not started.** See risk above |
+| 12 | Visitor register with returning-visitor check-in, kept apart from members | Erick | Not built. Logged as a new request |
+| 13 | Mailchimp integration via their API key | Erick | Not built. Logged as a new request |
+| 14 | Sector and family group structure, pullable at every level | Anita | Not built. ADR-001 revision 2 (proposed) |
+| 15 | Network-wide visibility and email for Anita and Baba D | Anita | Not built. Phase 1 |
+| 16 | Monthly statistics report | Baba D | Deferred by Baba D. Definitions pending |
+| 17 | Support from a team of three once live | Erick | To be written into the agreement |

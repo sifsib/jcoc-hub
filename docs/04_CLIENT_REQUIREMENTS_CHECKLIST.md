@@ -11,14 +11,17 @@ Grouped by when it blocks us. The Phase 0 items are hard blockers, everything be
 ## Blocks Phase 0. Needed before any build starts.
 
 ### Organisation and structure
-- [ ] Full list of regions and the campuses inside each, with correct names
-- [ ] **Are Cape Town, Durban, PE and Tshwane regions of one national church, or peer churches each with regions underneath?** This is the one that changes the data model, and it is a ten-minute answer
-- [ ] Approximate member count per region, and network total
+- [x] **Are Cape Town, Durban, PE and Tshwane regions of one national church, or peer churches?** Answered in the follow-up meeting: sister churches, each with its own login. Joburg is split into regions (also called campuses), sectors and family groups
+- [ ] Full list of Joburg regions with correct names. Soweto, Northwest and Central East were named; confirm whether Central East is one region or two
+- [ ] Each region's sectors, and the family groups in each sector
+- [ ] Whether the sister churches (Tshwane, Cape Town, Durban, PE, Mthatha) have regions and sectors of their own
+- [ ] Approximate member count per region and per sister church, and network total
 - [ ] Which region is the pilot
+- [ ] The life phase spreadsheet Baba D showed on screen
 
 ### Decisions we cannot make for them
 - [ ] **How you mark your register.** You said you would advise. We build to whatever that is, but the care tier and analytics features stay empty until it exists
-- [ ] **First-time visitors.** In or out for now
+- [x] **First-time visitors.** In, as a visitor register that remembers returning visitors and their children, kept apart from members (follow-up meeting, Erick)
 - [ ] **Finance module.** Confirming it stays switched off
 - [ ] **Online payments.** Confirming they want proof of payment upload only, and not a payment gateway
 
@@ -86,8 +89,8 @@ Grouped by when it blocks us. The Phase 0 items are hard blockers, everything be
 
 ### People
 - [ ] Named users per campus with their roles, mapped to: owner, admin, member manager, member viewer, cell leader, branch admin, follow-up, finance, viewer
-- [ ] Named head office users and their network-level roles
-- [ ] Named head office people who may view region-level personal information, and at what depth. You said multiple people; we need the list and the level
+- [ ] Named head office users and their network-level roles. So far: Anita and Baba D, with full visibility
+- [ ] Named head office people who may view region-level personal information, and at what depth. Anita and Baba D confirmed; anyone else still needed
 
 ### Compliance
 - [ ] Their POPIA information officer's details
@@ -108,7 +111,7 @@ Grouped by when it blocks us. The Phase 0 items are hard blockers, everything be
 - [ ] Whether JCOC users should see Kereke Hub at all in the support ticket flow, or whether support appears to come from JCOC
 
 ### Commercial
-- [ ] Billing arrangement for the region subcontracts under the head office agreement
+- [ ] Billing arrangement for the region subcontracts under the head office agreement. Quoted on the call: R79 a month per region and per sister church; confirm in writing
 - [ ] Agreement to a written change control process, so requests that arrive mid-build get estimated rather than absorbed
 - [ ] **Licence agreement signed before Phase 1 starts.** The system is licensed to JCOC, not transferred. A white-labelled build on their own domain will feel like their software and the ownership question is much easier to settle before they see it working
 

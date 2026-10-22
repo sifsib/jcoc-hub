@@ -107,11 +107,21 @@ The honest counter-argument, for the record: if this network grows to fifty or a
 - Network broadcast: compose once, select campuses, fan out through the existing Brevo and BulkSMS paths, with a per-campus delivery report.
 - Invite and user management at network level.
 
+**Proposed changes from the follow-up meeting (pending sign-off of ADR-001 revision 2).**
+- Add a `churches` level between `organizations` and region tenants: Joburg CoC with its regions, plus the sister churches (Tshwane, Cape Town, Durban, PE, Mthatha).
+- Replace the single `campuses` entity with **`sectors`** and **`familyGroups`** inside each region tenant. Migrate `branch` to `sectorId` and `cellRegion` to `familyGroupId`, using the existing `cellGroupBranch` map.
+- Enforce sector and family group scoping **in rules**, replacing UI-only `branch_admin` and `cell_leader` filtering with `sector_leader` and `family_group_leader`.
+- Network roles for Anita and Baba D with full visibility and network-wide email. Never the platform `super_admin` role.
+- Possibly users with access to more than one region tenant (open question A4).
+- Rollups at region, church and network level.
+- Estimate impact: +3 to +5 days on Phase 1, depending on A4. Not yet in the build plan totals.
+
 ### B2. Life phases
 
 **Scope.**
 - Replace the single `maritalStatus` string with a `lifePhases` array field, multi-select, backed by a fully configurable taxonomy in church settings.
-- Separate child phase taxonomy, since children's bands are school-linked rather than status-linked.
+- Separate child phase taxonomy. Confirmed in the follow-up meeting: children are **preschooler** or **scholar** (no grade bands), and they hold several phases at once, such as kid zone, scholar and pre-teen.
+- Selection on combinations, such as mature married with children, is the main way they use phases.
 - Migration from existing `maritalStatus` values into the new array without data loss.
 - Filter and segment on life phase across roster, communications, and analytics.
 
@@ -122,7 +132,7 @@ Note the taxonomy itself must come from the Client. What we build is the machine
 The interesting piece of the build.
 
 **Scope.**
-- Per-phase progression rules, configurable: which phase advances to which, and on what basis (school grade, age band, or manual).
+- Per-phase progression rules, configurable: which phase advances to which, and on what basis (age band or manual). Confirmed: runs at the **start of the calendar year**, using the age a person **turns during that year**, so a child joins the teen ministry in the year they turn 14. No grade-based rules are needed (ADR-003).
 - Parent phase derivation, computed from the ages of children linked through `households`. This is why the existing household model matters; without family linking there is no cascade.
 - A dry-run preview: show every proposed change as a diff before anything is written. Anita has done this manually for years and will not trust a silent bulk update, nor should she.
 - Apply, with a full audit log and an undo window.
@@ -149,6 +159,8 @@ The existing birthday-triggered age band logic gives us a partial foundation, bu
 
 **Not started.** This was represented on the discovery call as in development with a one-week horizon. It was a discussion, not a build. Full estimate stands, and the expectation set with Anita needs correcting.
 
+- Check-in happens **at the classroom**, by the parent, on the teacher's device. The same adult must sign the child out (confirmed in the follow-up meeting).
+- **Visitors' children** check in through the visitor register (B10): first visit captures the child's name and age and the parent's name, phone and email; later visits find them again. No member record is ever created or changed.
 - Child check-in tied to a guardian, with a **screen-based** collection code sent to the guardian's phone. No label printing (ADR-008), which removes a hardware dependency but means a supervisor override path is needed for lost phones.
 - Check-out requiring the matching code, and an audit record of who collected whom and when.
 - Rooms or classes with capacity, and a session register.
@@ -161,7 +173,8 @@ This is a safeguarding feature, so the audit trail is not optional and the failu
 ### B6. Communications segmentation
 
 **Scope.**
-- Segment builder combining campus, ministry group, life phase, volunteer role, group membership, and age band.
+- Segment builder combining church, region, sector, family group, ministry group, life phase, volunteer role, group membership, and age band.
+- Email provider: they use **Mailchimp** today and were told it could be plugged in; only Brevo is built. See the new request in `docs/06_OPEN_QUESTIONS.md`.
 - Saved segments, reusable across email and SMS.
 - Recipient count preview before send.
 - Birthday and anniversary pulls for a chosen date window, exportable, feeding the weekly Friday email.
@@ -175,7 +188,7 @@ This is a safeguarding feature, so the audit trail is not optional and the failu
 
 ### B8. Attendance capture, to be determined
 
-Still unscoped, but now client-owned: JCOC will advise how they mark their register, and we build to that. We know the two proposed methods were rejected and we do not know why. Options to put in front of them include cell-leader capture on mobile with offline support, a bulk paper-to-digital entry screen designed for speed, headcount-only capture where individual tracking isn't realistic, or something we haven't thought of. This needs a working session, not a guess.
+Still unscoped, but now client-owned: JCOC will advise how they mark their register, and we build to that. We know all three methods shown were rejected (QR self check-in, cell leaders marking their groups, and welcomers with tablets), and we do not know why. Options to put in front of them include cell-leader capture on mobile with offline support, a bulk paper-to-digital entry screen designed for speed, headcount-only capture where individual tracking isn't realistic, or something we haven't thought of. This needs a working session, not a guess.
 
 ### B9. White-label configuration
 
@@ -196,12 +209,30 @@ Done as configuration rather than find-and-replace, so the fork stays portable a
 
 **Estimated 4 days.**
 
+### B10. Visitor register (new request, follow-up meeting)
+
+Requested by Erick Li Sik and agreed by Sifiso on the call. Not in the original 86 days.
+
+**Scope.**
+- A visitor record that persists, kept apart from members: name, contact details, children, visit history. No sector or family group, because a visitor has not been placed yet.
+- Returning visitors found by name or phone and checked in without filling in the form again, at services and for children's check-in (B5).
+- Visit history visible to the follow-up team, so they can see who came once, twice, or regularly.
+- **Never converts to a member automatically.** Becoming a member goes through the normal admin process.
+- Built on the base `visitors` collection and follow-up workflows, which today treat each visit as one-off.
+
+**Proposed estimate: 3 days.** Lands with Phase 4, since children's check-in depends on it.
+
+### B11. Monthly statistics report (new request, deferred)
+
+Baba D compiles a monthly report by hand: baptisms, restorations, transfers, move-ins and move-outs per region, rolled into one network sheet. He deferred it himself. **Not in scope** until the definitions arrive (open question Q) and it is estimated and agreed. Provisional estimate 4 to 6 days, mostly in defining and recording the events the report counts; the Reports Center in upstream Kereke Hub may be a starting point.
+
 ---
 
 ## Part C. Explicitly out of scope
 
 - Finance suite. Switched off for this tenant.
-- First-time visitors module. Available but not configured until they decide.
+- First-time visitors module **as it stands in the base product** (one-off follow-up pipeline). The narrower visitor register in B10 is now in scope.
+- Monthly statistics report, until B11 is agreed.
 - Worship planning. Not requested.
 - Online payment processing. They want proof of payment upload, not a payment gateway. Worth confirming that stays true.
 - Ticketing in the commercial sense.
