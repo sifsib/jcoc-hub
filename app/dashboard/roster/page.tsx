@@ -35,6 +35,7 @@ interface Member {
   dob?: string;
   gender?: string;
   maritalStatus?: string;
+  anniversaryDate?: string;
   membershipType?: string;
   ministries?: string[];
   role: string;
@@ -167,11 +168,15 @@ const COUNTRY_CODES = [
 const emptyPerson = () => ({
   firstName: "", lastName: "", dob: "", gender: "", email: "", phone: "",
   countryCode: "27",
-  maritalStatus: "", branch: "", cellRegion: "", ministryGroup: "", churchRole: "",
+  maritalStatus: "", anniversaryDate: "", branch: "", cellRegion: "", ministryGroup: "", churchRole: "",
   address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
   bornAgain: "", waterBaptized: "", membershipType: "", ministries: [] as string[],
   role: "Member",
 });
+// Wedding anniversary only applies while married; clear it otherwise so a
+// changed marital status never leaves a stale date in the birthday pulls.
+const anniversaryFor = (p: { maritalStatus: string; anniversaryDate?: string }) =>
+  p.maritalStatus === "Married" ? (p.anniversaryDate || "") : "";
 const emptyParent = (): ParentInput => ({ name: "", surname: "", dob: "" });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1093,7 +1098,7 @@ export default function ManageMembershipPage() {
         fullName: `${primary.firstName.trim()} ${primary.lastName.trim()}`,
         firstName: primary.firstName.trim(), lastName: primary.lastName.trim(),
         email: primary.email.trim().toLowerCase(), phone: fmtPhone(primary.phone, primary.countryCode || "27"),
-        dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus,
+        dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus, anniversaryDate: anniversaryFor(primary),
         address: primary.address, role: primary.role, branch: primary.branch.trim(), cellRegion: primary.cellRegion.trim(), ministryGroup: primary.ministryGroup.trim(),
         churchRole: primary.churchRole?.trim() || "",
         membershipType: primary.membershipType, ministries: primary.ministries,
@@ -1122,7 +1127,7 @@ export default function ManageMembershipPage() {
           fullName: `${spouse.firstName.trim()} ${spouse.lastName.trim()}`,
           firstName: spouse.firstName.trim(), lastName: spouse.lastName.trim(),
           email: spouse.email.trim().toLowerCase(), phone: fmtPhone(spouse.phone, spouse.countryCode || "27"),
-          dob: spouse.dob, gender: spouse.gender, maritalStatus: "Married",
+          dob: spouse.dob, gender: spouse.gender, maritalStatus: "Married", anniversaryDate: anniversaryFor(primary),
           address: spouse.address, role: spouse.role, branch: spouse.branch.trim(), cellRegion: spouse.cellRegion.trim(), ministryGroup: spouse.ministryGroup.trim(),
           churchRole: spouse.churchRole?.trim() || "",
           membershipType: spouse.membershipType, ministries: spouse.ministries,
@@ -1191,7 +1196,7 @@ export default function ManageMembershipPage() {
         fullName: `${primary.firstName.trim()} ${primary.lastName.trim()}`,
         firstName: primary.firstName.trim(), lastName: primary.lastName.trim(),
         email: primary.email.trim().toLowerCase(), phone: primary.phone ? fmtPhone(primary.phone, primary.countryCode || "27") : "",
-        dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus,
+        dob: primary.dob, gender: primary.gender, maritalStatus: primary.maritalStatus, anniversaryDate: anniversaryFor(primary),
         address: primary.address, role: primary.role, branch: primary.branch.trim(), cellRegion: primary.cellRegion.trim(), ministryGroup: primary.ministryGroup.trim(),
         churchRole: primary.churchRole?.trim() || "",
         membershipType: primary.membershipType, ministries: primary.ministries,
@@ -1303,6 +1308,7 @@ export default function ManageMembershipPage() {
       phone: m.phone || "",
       countryCode: (m as any).countryCode || "27",
       maritalStatus: m.maritalStatus || "",
+      anniversaryDate: m.anniversaryDate || "",
       branch: m.branch || "",
       cellRegion: m.cellRegion || "",
       ministryGroup: m.ministryGroup || "",
@@ -1382,6 +1388,7 @@ export default function ManageMembershipPage() {
         dob: primary.dob,
         gender: primary.gender,
         maritalStatus: primary.maritalStatus,
+        anniversaryDate: anniversaryFor(primary),
         address: primary.address,
         role: primary.role,
         branch: primary.branch.trim(),
@@ -1395,6 +1402,18 @@ export default function ManageMembershipPage() {
         updatedAt: serverTimestamp(),
         updatedBy: appUser.email,
       });
+      // A couple shares one wedding date. Mirror it onto a linked spouse who
+      // is still married, so the anniversary pull lists the couple once.
+      const editedSpouseId = members.find(m => m.id === editingMemberId)?.spouseId;
+      const linkedSpouse = editedSpouseId ? members.find(m => m.id === editedSpouseId) : undefined;
+      if (linkedSpouse && primary.maritalStatus === "Married" && linkedSpouse.maritalStatus === "Married"
+          && (linkedSpouse.anniversaryDate || "") !== anniversaryFor(primary)) {
+        await updateDoc(doc(db, "members", linkedSpouse.id), {
+          anniversaryDate: anniversaryFor(primary),
+          updatedAt: serverTimestamp(),
+          updatedBy: appUser.email,
+        });
+      }
       await refreshList();
       setFeedback({ ok: true, text: "Member record updated successfully." });
       setEditingMemberId(null);
@@ -1910,6 +1929,11 @@ export default function ManageMembershipPage() {
                 <option>Widowed</option>
               </select>
             </F>
+            {primary.maritalStatus === "Married" && (
+              <F label="Wedding Anniversary">
+                <DateInput value={primary.anniversaryDate} onChange={val => setP("anniversaryDate", val)} className={inp} />
+              </F>
+            )}
           </div>
 
           {/* ── SECTION 2: Faith & Membership (primary) ── */}

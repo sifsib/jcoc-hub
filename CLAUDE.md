@@ -91,6 +91,7 @@ Two quick wins run ahead of everything: the birthday and anniversary pull, and m
 - Firestore field naming is camelCase. Dates that are compared as strings use `YYYY-MM-DD`.
 - Cloud Functions go in `functions/src/`, exported from `functions/src/index.ts`. Keep pure logic in a separate file from the function wrapper so it can be tested without pulling in `firebase-functions`. `summaryFormat.ts` in the base repo is the pattern to copy.
 - Run `npx tsc --noEmit` in both root and `functions/` before declaring anything done.
+- Unit tests for pure logic in `lib/` live in `tests/unit/`, also standalone: `npm install` then `npm test`.
 - Rules tests live in `tests/rules/`, a standalone package like `functions/`. Run `npm install` then `npm test` there. Needs Java 21 for the Firestore emulator. It uses a `demo-` project id, so it never touches a real Firebase project.
 
 ---

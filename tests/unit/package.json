@@ -1,0 +1,12 @@
+{
+  "name": "jcoc-hub-unit-tests",
+  "private": true,
+  "description": "Unit tests for pure logic in lib/. No Firebase, no emulator.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.0"
+  }
+}

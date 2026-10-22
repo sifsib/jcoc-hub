@@ -116,8 +116,8 @@ Anita asked directly whether there is a secure check-in and check-out for childr
 | 2 | Proof of payment upload on event registration | Anita | Not built |
 | 3 | Region or campus selector on event registration form | Anita | Not built |
 | 4 | Extended event registration fields (t-shirt, dietary, transport, indemnity) | Anita | Not built |
-| 5 | "Pull birthdays for next seven days" action | Anita | Not built |
-| 6 | Anniversary capture and pull | Anita | Not built |
+| 5 | "Pull birthdays for next seven days" action | Anita | Built on `feature/qw-birthday-anniversary-pull` (Friday-to-Thursday by default). Not deployed |
+| 6 | Anniversary capture and pull | Anita | Built on `feature/qw-birthday-anniversary-pull`. Not deployed |
 | 7 | Children's check-in and check-out, "Safety Nest" | Anita | **Not started.** Represented on the call as in development and out within a week. It was a discussion, not a build |
 | 8 | Multi-campus network architecture, scoping session to follow | Anita | This document |
 | 9 | Life phase list fully customisable, multi-select | Anita | Partially exists, needs rework |
