@@ -107,7 +107,7 @@ The honest counter-argument, for the record: if this network grows to fifty or a
 - Network broadcast: compose once, select campuses, fan out through the existing Brevo and BulkSMS paths, with a per-campus delivery report.
 - Invite and user management at network level.
 
-**Proposed changes from the follow-up meeting (pending sign-off of ADR-001 revision 2).**
+**Changes from the follow-up meeting (ADR-001 revision 2, accepted 2026-10-22).** These replace the `campuses` bullet above.
 - Add a `churches` level between `organizations` and region tenants: Joburg CoC with its regions, plus the sister churches (Tshwane, Cape Town, Durban, PE, Mthatha).
 - Replace the single `campuses` entity with **`sectors`** and **`familyGroups`** inside each region tenant. Migrate `branch` to `sectorId` and `cellRegion` to `familyGroupId`, using the existing `cellGroupBranch` map.
 - Enforce sector and family group scoping **in rules**, replacing UI-only `branch_admin` and `cell_leader` filtering with `sector_leader` and `family_group_leader`.

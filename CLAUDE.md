@@ -10,7 +10,7 @@ A customised build of **Kereke Hub** for **Joburg Church of Christ (JCOC)**, joh
 
 Kereke Hub is a multi-tenant church management platform built by Sifiso Sibuyane. It assumes one tenant equals one church. JCOC is a network: Joburg Church of Christ is split into **regions** (which the client also calls campuses: Soweto, Northwest, Central East), each region into **sectors**, each sector into **family groups**. Tshwane, Cape Town, Durban, PE and Mthatha are **sister churches** with their own logins. Anita and Baba D oversee all of it. They need region-level isolation plus network visibility above it. That gap is the main build.
 
-Read ADR-001 **and ADR-001 revision 2** before touching the org model. Revision 2 records this structure and is **proposed, not yet accepted**. Do not build the org model until Sifiso signs it off.
+Read **ADR-001 revision 2** before touching the org model. It was accepted on 2026-10-22 and supersedes ADR-001. Open question A4 (users who administer more than one region) must be decided before Phase 1 starts.
 
 This is a **hard fork** of Kereke Hub, decided 2026-08-31. Separate repository, separate Firebase project, JCOC's own domain, white-labelled with a "Designed by Kereke Hub" attribution. The base repo is available as the `upstream` git remote, and the fork point is tagged `fork-point`.
 
@@ -60,9 +60,9 @@ If something new is requested mid-build, add it to `docs/06_OPEN_QUESTIONS.md` u
 
 ## Architecture decision you must not undo
 
-The tenant boundary sits at the **region**, not the sector and not head office. Regions are separate tenants under a shared `organizations` document. Under ADR-001 campuses are entities inside a region tenant; the proposed revision 2 replaces that with sectors and family groups, and adds a church level above regions.
+The tenant boundary sits at the **region**, not the sector and not head office. Regions are separate tenants under a shared `organizations` document. Sectors and family groups are entities inside a region tenant, and a church level sits above regions (ADR-001 revision 2).
 
-The reasoning is in `docs/05_ARCHITECTURE_DECISIONS.md`, ADR-001. Filtering inside a region tenant is correct and expected. Cross-region reads without an explicit network role are not. If you are unsure which side of the line you are on, stop and re-read the ADR.
+The reasoning is in `docs/05_ARCHITECTURE_DECISIONS.md`, ADR-001 and revision 2. Filtering inside a region tenant is correct and expected. Cross-region reads without an explicit network role are not. If you are unsure which side of the line you are on, stop and re-read the ADR.
 
 **Terminology trap:** the client uses "region" and "campus" for the same thing. The level inside a region is a "sector". Also: Anita and Baba D were told on a call they would be "super admins". That means a network role, **never** the platform `super_admin` role, which is Kereke Hub staff only.
 

@@ -8,10 +8,10 @@ Short records, one per decision. Add to this file rather than rewriting it. If a
 
 ## ADR-001. Three tiers: organisation, region, campus. The tenant boundary sits at the region.
 
-**Status:** Accepted, revised 2026-08-31. Supersedes the original two-tier version.
+**Status:** **Superseded by ADR-001 revision 2 (2026-10-22).** Previously accepted, revised 2026-08-31, superseding the original two-tier version. Kept for the reasoning trail; the tenant-at-region reasoning below still holds.
 **Confidence:** High on the structure. Medium on where exactly the tenant line sits, see "To confirm".
 
-> **Revision proposed 2026-10-22.** The follow-up meeting answered the "To confirm" question below: Tshwane, Cape Town, Durban, PE and Mthatha are **sister churches**, not regions of one church. See **ADR-001 revision 2** at the end of this file. Until Sifiso signs that off, this record stands.
+> **Superseded 2026-10-22.** The follow-up meeting answered the "To confirm" question below: Tshwane, Cape Town, Durban, PE and Mthatha are **sister churches**, not regions of one church. **ADR-001 revision 2**, at the end of this file, is the current decision.
 
 **Context.** JCOC's own site puts it plainly: one church, meeting in many locations across the city. Beyond Johannesburg the network extends to Tshwane, Cape Town, Durban, and Port Elizabeth.
 
@@ -173,7 +173,7 @@ Note the call itself was mixed: Sifiso first described birthday-triggered moves,
 
 ## ADR-001 revision 2. Network, church, region, sector, family group. The tenant boundary stays at the region.
 
-**Status:** **PROPOSED, 2026-10-22. Awaiting Sifiso's sign-off.** Do not build against this until it is marked Accepted. When accepted, mark the original ADR-001 "Superseded by ADR-001 revision 2".
+**Status:** **Accepted 2026-10-22, signed off by Sifiso.** Supersedes ADR-001. Follow-ups A1 to A5 refine it but do not reopen the tenant boundary. A4 (multi-tenant users) must be decided before Phase 1 starts.
 **Source:** Follow-up meeting with Anita Pearson, Baba D and Erick Li Sik (transcript `transcript3.docx`, date not recorded in the transcript). Baba D shared his structure on screen.
 **Confidence:** High on the hierarchy and the tenant boundary. Medium on the church level, because we do not yet know whether sister churches have regions of their own.
 
@@ -189,7 +189,7 @@ Note the call itself was mixed: Sifiso first described birthday-triggered moves,
 
 **So the original model is wrong in two places.** The level inside a region is a **sector**, not a campus. And there is a **church level** between head office and region, because the three Joburg regions roll up to "Joburg Church of Christ" separately from the sister churches. That is the four-tier case the original ADR warned about.
 
-**Proposed decision.**
+**Decision.**
 
 ```
 organizations/{orgId}            JCOC network. Commercial relationship (ADR-009), network roles.
@@ -246,6 +246,6 @@ members/{memberId}               tenantId, sectorId, familyGroupId (ids, not nam
 
 **Duplicate Firebase admin helpers.** `lib/firebase-admin.ts` and `lib/firebaseAdmin.ts` both exist, and again under `app/lib/`. Pick one per file; do not add a third.
 
-**`branch` is a string, not an entity.** Under ADR-001 this becomes the campus entity; under the proposed revision 2 it becomes `sectorId`, and `cellRegion` becomes `familyGroupId`. Migrate it, do not leave both alive.
+**`branch` is a string, not an entity.** Under ADR-001 this becomes the campus entity; under ADR-001 revision 2 it becomes `sectorId`, and `cellRegion` becomes `familyGroupId`. Migrate it, do not leave both alive.
 
 **Daily summary marks before it sends.** A failed send is logged and never retried that day. Deliberate, to avoid double-sends, but worth knowing if anyone reports a missing summary.

@@ -150,7 +150,7 @@ Baba D shared the structure on screen:
 - **Anita and Baba D must see everything** across all churches and email any of them. Each church and region keeps its own sign-in, and access narrows the lower down the hierarchy a user sits.
 - Members are administered per region: Baba D for Soweto and Central East, Anita for Northwest.
 
-This drives **ADR-001 revision 2 (proposed)** in `docs/05_ARCHITECTURE_DECISIONS.md`.
+This drives **ADR-001 revision 2 (accepted 2026-10-22)** in `docs/05_ARCHITECTURE_DECISIONS.md`.
 
 ### 7.2 Life phases and roll-over
 
@@ -200,7 +200,7 @@ Baba D compiles a monthly report by hand: baptisms, restorations, transfers, mov
 | 11 | Working prototype "by end of week, latest Monday", based on one sector | All | **Not started.** See risk above |
 | 12 | Visitor register with returning-visitor check-in, kept apart from members | Erick | Not built. Logged as a new request |
 | 13 | Mailchimp integration via their API key | Erick | Not built. Logged as a new request |
-| 14 | Sector and family group structure, pullable at every level | Anita | Not built. ADR-001 revision 2 (proposed) |
+| 14 | Sector and family group structure, pullable at every level | Anita | Not built. ADR-001 revision 2 (accepted) |
 | 15 | Network-wide visibility and email for Anita and Baba D | Anita | Not built. Phase 1 |
 | 16 | Monthly statistics report | Baba D | Deferred by Baba D. Definitions pending |
 | 17 | Support from a team of three once live | Erick | To be written into the agreement |
