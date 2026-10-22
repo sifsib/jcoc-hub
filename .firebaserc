@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "kereke-hub"
+    "default": "jcoc-hub",
+    "jcoc": "jcoc-hub"
   }
 }
