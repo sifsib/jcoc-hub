@@ -60,33 +60,36 @@ Separately, the meeting transcript supplied this session is the same 59-minute d
 
 ## What Sifiso needs to do to make this live
 
-1. Install Node 20 (`.nvmrc`) and Java 21.
-2. Run the rules tests:
+1. Node 20.20.2 and Temurin JDK 21.0.13 are unpacked in `~/tools` (no admin rights, checksums verified). They are not on your PATH. To use them in a terminal:
    ```bash
-   cd tests/rules && npm install && npm test
+   export PATH="$HOME/tools/node-v20.20.2-darwin-arm64/bin:$HOME/tools/jdk-21.0.13+9/Contents/Home/bin:$PATH"
+   export JAVA_HOME="$HOME/tools/jdk-21.0.13+9/Contents/Home"
    ```
-   Commit the generated `tests/rules/package-lock.json`.
-3. Run the type checks from CLAUDE.md, root and `functions/`.
-4. Create the JCOC Firebase project with the id `jcoc-hub` (SETUP.md Step 3). Until it exists, `firebase deploy` from this repo will fail, which is the safe failure.
-5. **Upstream Kereke Hub, separately and urgently:** cherry-pick the `firestore.rules` change into kereke-hub and deploy it to the live project. Then check the live `tenants` collection for any `accountType: "internal"` tenant you did not create yourself, and any `users` doc with `role: "super_admin"` that is not yours. The second check matters because the owner path allowed self-promotion.
+   Then `cd tests/rules && npm test`.
+2. Create the JCOC Firebase project with the id `jcoc-hub` (SETUP.md Step 3). Until it exists, `firebase deploy` from this repo will fail, which is the safe failure.
+3. **Upstream Kereke Hub, separately and urgently:** cherry-pick the `firestore.rules` change into kereke-hub and deploy it to the live project. Then check the live `tenants` collection for any `accountType: "internal"` tenant you did not create yourself, and any `users` doc with `role: "super_admin"` that is not yours. The second check matters because the owner path allowed self-promotion.
 
 ## Verification done
 
+- **Rules tests: 60 of 60 pass** in the Firestore emulator (firebase-tools 14, Java 21, Node 20.20.2).
+- **The tests catch the holes.** Run against the pre-fix rules (`08c68bc:firestore.rules`), 44 of 60 fail. That includes the `accountType: "internal"` tenant create, an owner promoting themselves to `super_admin`, and an owner moving their own account into another tenant. So both holes are confirmed by test, not just by reading the rules.
+- First run had 4 failures, all a test bug: the `currentRate` and `status` cases wrote the tenant's existing value, which the rule allows by design. Fixed by using changed values. A comment and an explicit test now document the behaviour.
+- `npx tsc --noEmit` is clean in the root, in `functions/`, and in `tests/rules/`.
 - All edited JSON files parse.
 - Checked every client-side write to `tenants/{id}` (branding, profile, roster lists, super-admin signups). None writes a newly protected field. Only the super-admin signups page writes billing fields, and super admins pass.
 - Checked the team page's writes to `users`: `role`, `assignedBranch`, `assignedCellRegion`, `visitorMinistry`. None changes `tenantId` or grants `super_admin`.
 
 ## What I did NOT verify
 
-- **The tests have never been run.** This machine has no Node, npm, Java or Firebase CLI. They are written against the documented `@firebase/rules-unit-testing` v4 API and have not been executed. Expect at least one fix on first run.
-- The `@firebase/rules-unit-testing` ^4 / `firebase` ^11 / `firebase-tools` ^14 versions are not confirmed compatible with each other.
-- `npx tsc --noEmit` was not run, root or functions. The only root change that affects compilation is the `tests` exclude.
-- The rules file was not compiled. A syntax error would surface on the first test run or deploy.
-- No app screen was clicked through against the new rules.
+- No app screen was clicked through against the new rules. The positive tests stand in for Branding, Church Profile, Configure Lists and Team, but only the fields I found by reading the code are covered.
+- `npm run build` (the full Next.js build) was not run. Only the type check was.
+- Nothing was deployed. The `jcoc-hub` Firebase project does not exist yet.
+- The fix has not been applied to upstream Kereke Hub, where both holes are still live.
+- Only `firestore.rules` was tested. `storage.rules` was not reviewed.
 
 ## Open items for next session
 
-1. Run the tests and fix anything the first run surfaces.
+1. Read the second client meeting (Fireflies "Kereke Hub JOCC follow-up meeting"). The Fireflies link is blocked on the work machine's browser policy, so it needs exporting as a file. It may answer open question A.
 2. Port the rules fix to upstream Kereke Hub and run the live-data checks above.
 3. Remaining inherited security issues, not touched here:
    - Users can still set their own `visitorMinistry`, `assignedBranch`, `assignedCellRegion` and `memberId`. The self-update path only protects `role`, `roles` and `tenantId`.

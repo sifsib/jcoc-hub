@@ -55,14 +55,18 @@ describe("tenant billing and status fields are server-only", () => {
   // dunning, super-admin routes). An owner or admin setting them directly
   // could unlock paid features, skip billing, lift a suspension, or mark
   // their church as an internal account.
+  //
+  // Every value must DIFFER from TENANT_DOC in setup.ts. The rule checks
+  // changed keys, so writing a field's current value is allowed by design and
+  // a test using it would prove nothing.
   const protectedChanges: Record<string, unknown> = {
     accountType: "internal",
     tier: "paid",
     memberLimit: null,
     activeMemberCount: 0,
     billingPhase: "active",
-    currentRate: 0,
-    status: "active",
+    currentRate: 999,
+    status: "trial",
     suspendedReason: null,
     pastDueSince: null,
     billingHold: true,
@@ -91,6 +95,25 @@ describe("tenant billing and status fields are server-only", () => {
         name: "Renamed",
         tier: "paid",
       })
+    );
+  });
+
+  it("denies an owner lifting their own suspension", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "tenants", TENANT_A), {
+        status: "suspended",
+        suspendedReason: "billing_auto",
+      });
+    });
+    await assertFails(
+      updateDoc(doc(dbAs(env, "ownerA"), "tenants", TENANT_A), { status: "active", suspendedReason: null })
+    );
+  });
+
+  it("allows writing a protected field with its unchanged value", async () => {
+    // Documents the deliberate diff() behaviour so nobody "fixes" it by accident.
+    await assertSucceeds(
+      updateDoc(doc(dbAs(env, "ownerA"), "tenants", TENANT_A), { name: "Renamed", tier: "free" })
     );
   });
 
