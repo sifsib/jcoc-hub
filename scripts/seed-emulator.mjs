@@ -7,6 +7,7 @@
 // Test logins (emulator only, never use anywhere else):
 //   Owner:         owner@demo-jcoc.test        / emulator-only-pass-1
 //   Branch admin:  branch.north@demo-jcoc.test / emulator-only-pass-2   (sees branch "North" only)
+//   Member app:    thabo@demo-jcoc.test        / emulator-only-pass-3   (http://localhost:3000/member/demo-region/profile)
 //
 // Birthdays and anniversaries are generated relative to today, so the
 // Birthdays & Anniversaries page always has something in "This week".
@@ -50,6 +51,7 @@ async function upsertUser(uid, email, password, displayName) {
 
 await upsertUser(TENANT_ID, "owner@demo-jcoc.test", "emulator-only-pass-1", "Demo Owner");
 await upsertUser("branch-north", "branch.north@demo-jcoc.test", "emulator-only-pass-2", "North Branch Admin");
+await upsertUser("member-thabo", "thabo@demo-jcoc.test", "emulator-only-pass-3", "Thabo Dlamini");
 
 const ts = new Date().toISOString();
 await db.doc(`users/${TENANT_ID}`).set({
@@ -60,13 +62,18 @@ await db.doc("users/branch-north").set({
   email: "branch.north@demo-jcoc.test", displayName: "North Branch Admin", role: "branch_admin",
   tenantId: TENANT_ID, assignedBranch: "North", status: "active", createdAt: ts,
 });
+// A congregation member with a member-app login, linked to Thabo's record.
+await db.doc("users/member-thabo").set({
+  email: "thabo@demo-jcoc.test", displayName: "Thabo Dlamini", role: "congregation_member",
+  tenantId: TENANT_ID, memberId: "m-thabo", status: "active", createdAt: ts,
+});
 
 // ── Tenant ───────────────────────────────────────────────────────────────────
 await db.doc(`tenants/${TENANT_ID}`).set({
   name: "Demo Region (emulator)",
   accountType: "internal", status: "active", tier: "paid", memberLimit: null,
   activeMemberCount: 0, billingPhase: "active", currentRate: 0,
-  primaryColor: "#059669", timezone: "Africa/Johannesburg",
+  primaryColor: "#059669", timezone: "Africa/Johannesburg", slug: "demo-region",
   branches: ["North", "South"], cellRegions: ["Cell 1", "Cell 2"],
   cellGroupBranch: { "Cell 1": "North", "Cell 2": "South" },
   createdAt: ts, updatedAt: ts,
@@ -85,7 +92,8 @@ const base = {
 const members = [
   // A linked couple: birthday on Saturday, anniversary on Sunday.
   { id: "m-thabo", firstName: "Thabo", lastName: "Dlamini", dob: on(1, 1986), gender: "Male", maritalStatus: "Married",
-    anniversaryDate: on(2, 2014), spouseId: "m-lerato", branch: "North", cellRegion: "Cell 1", phone: "27820000001" },
+    anniversaryDate: on(2, 2014), spouseId: "m-lerato", branch: "North", cellRegion: "Cell 1", phone: "27820000001",
+    email: "thabo@demo-jcoc.test", authUid: "member-thabo", portalStatus: "active" },
   { id: "m-lerato", firstName: "Lerato", lastName: "Dlamini", dob: on(40, 1988), gender: "Female", maritalStatus: "Married",
     anniversaryDate: on(2, 2014), spouseId: "m-thabo", branch: "North", cellRegion: "Cell 1", phone: "27820000002" },
   // Birthday on Friday itself, old DD/MM/YYYY import format, South branch.
@@ -109,6 +117,18 @@ const members = [
 for (const { id, ...m } of members) {
   await db.doc(`members/${id}`).set({ ...base, ...m, fullName: `${m.firstName} ${m.lastName}` });
 }
+
+// Self-service settings are left unset, so the default fields (phone, email,
+// address) apply. One request is already waiting, from Lerato.
+const batch = db.batch();
+(await db.collection("member_change_requests").where("tenantId", "==", TENANT_ID).get()).forEach((d) => batch.delete(d.ref));
+await batch.commit();
+await db.collection("member_change_requests").doc("seed-lerato").set({
+  tenantId: TENANT_ID, memberId: "m-lerato", requestedByUid: "seed", memberName: "Lerato Dlamini",
+  status: "pending", createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  changes: { phone: { from: "27820000002", to: "27835550002" } },
+});
+await db.doc(`tenants/${TENANT_ID}/settings/memberSelfService`).delete();
 
 console.log(`Seeded tenant ${TENANT_ID} with ${members.length} members. Email window starts ${on(0, new Date(friday).getUTCFullYear())}.`);
 process.exit(0);

@@ -46,6 +46,7 @@ One row per merged piece of work. Add the row when the branch merges, while it i
 | Date | Feature | Branch or commit | Portable | Files and collections touched | Notes for the port back |
 |---|---|---|---|---|---|
 | 2026-10-22 | Birthday and anniversary pull (quick win, not one of the five) | `feature/qw-birthday-anniversary-pull` | yes | `lib/celebrations.ts`, `app/dashboard/celebrations/page.tsx`, `tests/unit/`, small additive edits to `app/dashboard/roster/page.tsx` and `app/dashboard/layout.tsx`; field `members.anniversaryDate` | Lifts as is. The Friday default is a page constant; make it a setting if another church sends its email on a different day. Not merged yet, so this row is early |
+| 2026-10-23 | Member self-service edits with approval (quick win, not one of the five) | `feature/qw-member-self-edit` | yes | `lib/memberSelfService.ts`, `app/dashboard/member-updates/`, `app/member/[slug]/profile/page.tsx` (rewritten), rules block `MEMBER SELF-SERVICE` plus the `tenants/{id}/settings` block, index on `member_change_requests`, `tests/rules/memberSelfService.test.ts`, `tests/unit/memberSelfService.test.ts` | **Port the rules first and urgently**: upstream still lets members write their own member record and has no settings rule. The feature itself lifts cleanly. Not merged yet, so this row is early |
 
 **Portable column:** `yes`, `no`, or `partial`. If `partial`, say in the notes exactly what would need untangling, because that sentence is the entire value of this row.
 

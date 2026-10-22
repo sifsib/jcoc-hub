@@ -227,12 +227,11 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadMembers();
-      // Congregation member can read and update their own doc only
+      // Congregation member can read their own doc. They can NOT write it:
+      // changes go through member_change_requests and admin approval
+      // (ADR-007). The old direct self-update let a member change their own
+      // status, branch or church role. Covered by tests/rules/memberSelfService.test.ts.
       allow read: if isSignedIn() && isOwnMemberDoc(resource);
-      allow update: if isSignedIn()
-                    && isOwnMemberDoc(resource)
-                    && request.resource.data.tenantId == resource.data.tenantId
-                    && request.resource.data.authUid == resource.data.authUid;
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageMembers()
@@ -854,6 +853,71 @@ service cloud.firestore {
                             && callerIsPaid();
       allow delete: if isSignedIn() && isSuperAdmin();
     }
+
+    // ============================================
+    // TENANT SETTINGS DOCUMENTS
+    // Only the listed documents are reachable from the browser. formConfig is
+    // the Church Settings form layout (it had no rule before, so every client
+    // read and write of it was denied). Other settings documents, such as
+    // whatsapp, stay server-only.
+    // ============================================
+    match /tenants/{tenantId}/settings/{docId} {
+      allow read: if isSignedIn()
+                  && docId in ['formConfig', 'memberSelfService']
+                  && (isSuperAdmin() || tenantId == userTenantId());
+      allow write: if isSignedIn()
+                   && docId in ['formConfig', 'memberSelfService']
+                   && (isSuperAdmin() || (tenantId == userTenantId() && canEditChurchProfile()))
+                   && (docId != 'memberSelfService'
+                       || request.resource.data.get('editableFields', []).hasOnly(['phone', 'email', 'address']));
+    }
+
+    // ============================================
+    // MEMBER SELF-SERVICE (ADR-007) — start
+    // Members request changes to a church-chosen subset of their own contact
+    // details; an admin approves or rejects. Requests are never deleted, so
+    // they are the audit trail. Keep the field list in step with
+    // lib/memberSelfService.ts. Tests: tests/rules/memberSelfService.test.ts.
+    // ============================================
+    function selfServiceFields(tid) {
+      let settings = /databases/$(database)/documents/tenants/$(tid)/settings/memberSelfService;
+      return exists(settings)
+          ? get(settings).data.get('editableFields', [])
+          : ['phone', 'email', 'address'];
+    }
+    function callerOwnsMember(memberId, tid) {
+      let m = get(/databases/$(database)/documents/members/$(memberId)).data;
+      return m.get('authUid', '') == request.auth.uid && m.tenantId == tid;
+    }
+    match /member_change_requests/{id} {
+      allow create: if isSignedIn()
+                    && request.resource.data.keys().hasOnly(
+                         ['tenantId', 'memberId', 'requestedByUid', 'memberName', 'status', 'changes', 'createdAt'])
+                    && request.resource.data.requestedByUid == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.changes is map
+                    && request.resource.data.changes.size() > 0
+                    && request.resource.data.changes.keys().hasOnly(['phone', 'email', 'address'])
+                    && request.resource.data.changes.keys().hasOnly(selfServiceFields(request.resource.data.tenantId))
+                    && callerOwnsMember(request.resource.data.memberId, request.resource.data.tenantId);
+      allow read: if isSignedIn()
+                  && (resource.data.requestedByUid == request.auth.uid
+                      || (tenantAllowed(resource) && canManageMembers()));
+      // Review only: pending to approved or rejected, once, recording the
+      // real reviewer. The requested changes themselves can never be edited.
+      allow update: if isSignedIn()
+                    && tenantAllowed(resource)
+                    && canManageMembers()
+                    && resource.data.status == 'pending'
+                    && request.resource.data.status in ['approved', 'rejected']
+                    && request.resource.data.reviewedByUid == request.auth.uid
+                    && request.resource.data.reviewedAt == request.time
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'reviewedByUid', 'reviewedByName', 'reviewedAt', 'rejectReason']);
+      allow delete: if false;
+    }
+    // MEMBER SELF-SERVICE — end
 
     // ============================================
     // MEMBER REQUESTS (public self-join form submissions)

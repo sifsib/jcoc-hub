@@ -141,6 +141,8 @@ Note the call itself was mixed: Sifiso first described birthday-triggered moves,
 
 **Consequences.** More work than direct edits. Needs a review queue in the dashboard plus a "pending" indicator on the member app so the member knows their change was received. Budget one extra day over the direct-edit version.
 
+**Implemented 2026-10-23** on `feature/qw-member-self-edit`. Self-editable fields are a fixed catalogue (phone, email, address), all on by default, chosen per church in `tenants/{id}/settings/memberSelfService`. Requests live in `member_change_requests`, are never deleted, and record the real reviewer. The old rule that let members write their own member record directly was removed. See `handovers/2026-10-23-member-self-edit.md`.
+
 ---
 
 ## ADR-008. Children's check-in uses a screen-based collection code

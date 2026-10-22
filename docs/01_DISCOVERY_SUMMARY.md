@@ -112,7 +112,7 @@ Anita asked directly whether there is a secure check-in and check-out for childr
 
 | # | Commitment | Made to | Status |
 |---|---|---|---|
-| 1 | Settings toggle controlling which fields members may edit | Anita | Not built |
+| 1 | Settings toggle controlling which fields members may edit | Anita | Built on `feature/qw-member-self-edit`, with the approval queue (ADR-007). Not deployed |
 | 2 | Proof of payment upload on event registration | Anita | Not built |
 | 3 | Region or campus selector on event registration form | Anita | Not built |
 | 4 | Extended event registration fields (t-shirt, dietary, transport, indemnity) | Anita | Not built |
