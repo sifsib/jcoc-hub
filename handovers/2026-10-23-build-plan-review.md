@@ -86,6 +86,8 @@ Recommendation: option 1 now. Keep the tenant lookup in one place so option 2 ca
 
 **Decided by Sifiso, 2026-10-23: option 1, with a region filter in the network view.** Recorded in ADR-001 revision 2 ("A4 decision") and moved to Answered in `06_OPEN_QUESTIONS.md`.
 
+**Revised the same day:** some leaders do look after more than one region, so option 2 is added for leaders. When a leader is created they get one or more regions, a role in each, and a region switcher. The network role stays for Anita and Baba D. Recorded as "A4 decision, revised" in ADR-001 revision 2, and logged as a new request in `06` (about 3 days, Phase 2). No code written.
+
 ### Merge order
 
 The branches are already stacked, so merge them in this order, each one a fast-forward: p0 rules → birthday pull → member self-edit → docs.

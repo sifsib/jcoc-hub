@@ -175,7 +175,7 @@ Note the call itself was mixed: Sifiso first described birthday-triggered moves,
 
 ## ADR-001 revision 2. Network, church, region, sector, family group. The tenant boundary stays at the region.
 
-**Status:** **Accepted 2026-10-22, signed off by Sifiso.** Supersedes ADR-001. Follow-ups A1 to A5 refine it but do not reopen the tenant boundary. A4 (multi-tenant users) decided 2026-10-23: network role, see "A4 decision" below.
+**Status:** **Accepted 2026-10-22, signed off by Sifiso.** Supersedes ADR-001. Follow-ups A1 to A5 refine it but do not reopen the tenant boundary. A4 (multi-tenant users) decided 2026-10-23: network role for Anita and Baba D, plus multi-region access for other leaders. See "A4 decision" and "A4 decision, revised" below.
 **Source:** Follow-up meeting with Anita Pearson, Baba D and Erick Li Sik (transcript `transcript3.docx`, date not recorded in the transcript). Baba D shared his structure on screen.
 **Confidence:** High on the hierarchy and the tenant boundary. Medium on the church level, because we do not yet know whether sister churches have regions of their own.
 
@@ -230,6 +230,19 @@ members/{memberId}               tenantId, sectorId, familyGroupId (ids, not nam
 - `network_owner` gains **write** on members (add and edit) in any region tenant of its org, not only read. That is wider than the table above, so the rules need negative tests: no write into another org's tenants, `network_viewer` stays read-only, a region `owner`/`admin` still cannot write outside their tenant.
 - The network view gets a **region filter** (and church filter) so Baba D can narrow to one region. It is a convenience on screen, not a security boundary; his access is network-wide either way.
 - Keep tenant resolution in one helper in the rules and in `useAppUser()`, so a tenant-access list can be added later if a region-level admin ever needs more than one region.
+
+**A4 decision, revised (2026-10-23, Sifiso): add multi-region access for leaders.** Some JCOC leaders look after more than one region, so the tenant-access list is needed now. The network role decision above still stands for Anita and Baba D. The "users keep exactly one `tenantId`" bullet is replaced by this:
+- When a leader is created or edited, the person creating them picks **one or more regions**, and a role in each: `users.tenantAccess: { [tenantId]: role }`. A leader can hold different roles in different regions (for example admin in one, sector leader in another).
+- The leader works in **one region at a time**, chosen with a region switcher. `users.tenantId` becomes the active region. Rules allow a switch only to a region listed in `tenantAccess`, and every read and write checks the role held in the active region.
+- **Who may grant access:** a network owner may grant any region in the org. A region owner or admin may only grant their own region. Nobody can add a region to their own `tenantAccess`.
+- **Negative tests, before any build:**
+  - a leader cannot switch to, read or write a region not in their list;
+  - a leader's role in region A gives nothing in region B;
+  - a region admin cannot grant access to another region;
+  - a user cannot edit their own `tenantAccess`;
+  - removing a region from the list removes access immediately.
+- Single-region users keep working unchanged: one entry in `tenantAccess`, and no switcher shown.
+- The base product assumes one `tenantId` per user throughout, so this touches `useAppUser()`, the team and invite screens, `/api/invite-user`, and the rules' caller-tenant helper. Build it as part of Phase 2's role work, in its own delimited rules block.
 - **Network roles read personal information across churches.** If sister churches are separate legal entities, each is its own POPIA responsible party, and head office reading their members' personal information needs a lawful basis and an agreement covering it. That is a governance question for Anita as information officer, not a technical one. Build the network roles to her answer.
 - **Rollups aggregate at three levels:** region (tenant), church (sum of its region tenants), network (sum of churches). The scheduled rollup writes per tenant; church and network totals are computed from those.
 - **Scoping inside a region becomes enforceable.** Because sector and family group become ids on the member, rules can check `sectorId` against the caller's assignment. The base product never enforced `branch_admin` in rules; this is the chance to fix that rather than copy it.
