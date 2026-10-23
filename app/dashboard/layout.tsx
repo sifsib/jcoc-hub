@@ -89,6 +89,7 @@ export default async function DashboardLayout({
     { name: "Church Overview", href: "/dashboard/analytics", icon: "📊", roles: ["owner", "admin", "viewer", "finance", "member_manager", "member_viewer"] },
     { name: "Church Profile", href: "/dashboard/profile", icon: "⛪", roles: ["owner", "admin"] },
     { name: "Church Structure", href: "/dashboard/structure", icon: "🗂️", roles: ["owner", "admin"] },
+    { name: "Life Phases", href: "/dashboard/life-phases", icon: "🌱", roles: ["owner", "admin"] },
     { name: "Membership Management", href: "/dashboard/roster", icon: "👥", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
     { name: "Member Updates", href: "/dashboard/member-updates", icon: "✏️", roles: ["owner", "admin", "member_manager", "branch_admin"] },
     { name: "Birthdays & Anniversaries", href: "/dashboard/celebrations", icon: "🎂", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },

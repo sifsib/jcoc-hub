@@ -17,6 +17,8 @@ import InfoTooltip from "../../components/InfoTooltip";
 import { useChurchStructure } from "../../../lib/useChurchStructure";
 import { familyGroupsIn, pickerOptions, placementLabel, type FamilyGroup, type Sector } from "../../../lib/churchStructure";
 import { STRUCTURE_LABELS } from "../../../lib/whiteLabel";
+import { LIFE_PHASES, MARRIAGE_TYPES, phaseLabel } from "../../../lib/lifePhases";
+import LifePhasePanel from "./LifePhasePanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,13 @@ interface Member {
   familyGroupId?: string;
   ministryGroup?: string;
   churchRole?: string;
+  // Life phases (ADR-011): lifePhases and lifePhasesAuto are written by the server.
+  lifePhases?: string[];
+  lifePhasesAuto?: string[];
+  lifePhasesAdded?: string[];
+  lifePhasesRemoved?: string[];
+  gradeAdjust?: number;
+  marriageType?: string;
   source?: string;
   absenceException?: AbsenceException | null;
   portalStatus?: "not_invited" | "invited" | "active";
@@ -166,6 +175,7 @@ const emptyPerson = () => ({
   address: { line1: "", line2: "", suburb: "", town: "", postalCode: "" },
   bornAgain: "", waterBaptized: "", membershipType: "", ministries: [] as string[],
   role: "Member",
+  marriageType: "", gradeAdjust: 0, lifePhasesAdded: [] as string[], lifePhasesRemoved: [] as string[],
 });
 // Wedding anniversary only applies while married; clear it otherwise so a
 // changed marital status never leaves a stale date in the birthday pulls.
@@ -628,6 +638,8 @@ export default function ManageMembershipPage() {
   const [filterMinistryGroup, setFilterMinistryGroup] = useState("");
   const [filterMaritalStatus, setFilterMaritalStatus] = useState("");
   const [filterSector, setFilterSector] = useState("");
+  const [filterPhases, setFilterPhases] = useState<string[]>([]);
+  const [filterPhaseMode, setFilterPhaseMode] = useState<"all" | "any">("all");
   const [filterFamilyGroup, setFilterFamilyGroup] = useState("");
   const [filterBornAgain, setFilterBornAgain] = useState("");
   const [filterWaterBaptized, setFilterWaterBaptized] = useState("");
@@ -1292,6 +1304,10 @@ export default function ManageMembershipPage() {
       membershipType: m.membershipType || "",
       ministries: m.ministries || [],
       role: m.role || "Member",
+      marriageType: m.marriageType || "",
+      gradeAdjust: typeof m.gradeAdjust === "number" ? m.gradeAdjust : 0,
+      lifePhasesAdded: m.lifePhasesAdded || [],
+      lifePhasesRemoved: m.lifePhasesRemoved || [],
     });
     setCustomFieldValues((m as any).customFields || {});
     setEditingMemberException((m as any).absenceException || null);
@@ -1377,6 +1393,10 @@ export default function ManageMembershipPage() {
         ministries: primary.ministries,
         faithStatus: { bornAgain: primary.bornAgain, waterBaptized: primary.waterBaptized },
         customFields: customFieldValues,
+        marriageType: primary.maritalStatus === "Married" ? primary.marriageType : "",
+        gradeAdjust: primary.gradeAdjust,
+        lifePhasesAdded: primary.lifePhasesAdded,
+        lifePhasesRemoved: primary.lifePhasesRemoved,
         updatedAt: serverTimestamp(),
         updatedBy: appUser.uid,
       });
@@ -1799,13 +1819,17 @@ export default function ManageMembershipPage() {
     if (filterMinistryGroup && m.ministryGroup !== filterMinistryGroup) return false;
     if (filterMaritalStatus && m.maritalStatus !== filterMaritalStatus) return false;
     if (filterSector && m.sectorId !== filterSector) return false;
+    if (filterPhases.length) {
+      const held = new Set(m.lifePhases ?? []);
+      if (filterPhaseMode === "all" ? !filterPhases.every(p => held.has(p)) : !filterPhases.some(p => held.has(p))) return false;
+    }
     if (filterFamilyGroup && m.familyGroupId !== filterFamilyGroup) return false;
     if (filterBornAgain && m.faithStatus?.bornAgain !== filterBornAgain) return false;
     if (filterWaterBaptized && m.faithStatus?.waterBaptized !== filterWaterBaptized) return false;
     if (filterMembershipType && m.membershipType !== filterMembershipType) return false;
     return true;
   });
-  const activeFilters = [filterMinistryGroup, filterMaritalStatus, filterSector, filterFamilyGroup, filterBornAgain, filterWaterBaptized, filterMembershipType].filter(Boolean).length;
+  const activeFilters = [filterMinistryGroup, filterMaritalStatus, filterSector, filterFamilyGroup, filterPhases.length ? "phases" : "", filterBornAgain, filterWaterBaptized, filterMembershipType].filter(Boolean).length;
 
   if (userLoading || loading) {
     return (
@@ -1913,6 +1937,12 @@ export default function ManageMembershipPage() {
                 <option>Divorced</option>
                 <option>Widowed</option>
               </select>
+              {primary.maritalStatus === "Married" && (
+                <select value={primary.marriageType} onChange={e => setP("marriageType", e.target.value)} className={`${sel} mt-2`} aria-label="Type of marriage">
+                  <option value="">Type of marriage (optional)</option>
+                  {MARRIAGE_TYPES.map(t => <option key={t} value={t}>{t === "customary" ? "Customary (traditional)" : t[0].toUpperCase() + t.slice(1)}</option>)}
+                </select>
+              )}
             </F>
             {primary.maritalStatus === "Married" && (
               <F label="Wedding Anniversary">
@@ -2096,6 +2126,17 @@ export default function ManageMembershipPage() {
               <span className="text-sm text-gray-700">I confirm that all information provided is true and accurate.</span>
             </label>
           </div>}
+
+          {isEditing && (
+            <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-3">
+              <SecHead n={next()} title="Life Phases" sub="Worked out automatically; adjust only where the rules get it wrong" />
+              <LifePhasePanel
+                data={primary}
+                set={(k, v) => setP(k, v)}
+                stored={members.find(m => m.id === editingMemberId) ?? {}}
+              />
+            </div>
+          )}
 
           {feedback && (
             <div className={`p-3 rounded-lg text-sm font-medium border ${feedback.ok ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
@@ -2888,7 +2929,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               onClick={() => {
                 setFilterMinistryGroup(""); setFilterMaritalStatus("");
                 setFilterSector(""); setFilterFamilyGroup(""); setFilterBornAgain("");
-                setFilterWaterBaptized(""); setFilterMembershipType("");
+                setFilterWaterBaptized(""); setFilterMembershipType(""); setFilterPhases([]);
               }}
               className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
             >
@@ -2962,6 +3003,30 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
               </select>
             </div>
 
+            {/* Life phases: pick several, then "has all" or "has any" (ADR-011) */}
+            <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-3">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                Life phases
+                <select value={filterPhaseMode} onChange={(e) => setFilterPhaseMode(e.target.value as "all" | "any")}
+                  className="border border-gray-200 rounded px-1.5 py-0.5 text-[11px] normal-case font-medium text-gray-600 bg-white" aria-label="Match all or any life phase">
+                  <option value="all">has all of</option>
+                  <option value="any">has any of</option>
+                </select>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {LIFE_PHASES.map((p) => {
+                  const on = filterPhases.includes(p.id);
+                  return (
+                    <button key={p.id} type="button"
+                      onClick={() => setFilterPhases(prev => on ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                      className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${on ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Born Again */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Born Again?</label>
@@ -3013,7 +3078,7 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
         </div>
         {filteredMembers.length === 0 ? (
           <div className="p-10 text-center text-gray-400 text-sm">
-            {members.length === 0 ? (<>No members yet. Use <strong>+ Add Member</strong> to register your first member, or <strong>Import Members</strong> to import from your website.</>) : (<>No members match {memberSearch ? "your search" : "the current filters"}. <button onClick={() => { setMemberSearch(""); setFilterMinistryGroup(""); setFilterMaritalStatus(""); setFilterFamilyGroup(""); setFilterBornAgain(""); setFilterWaterBaptized(""); setFilterMembershipType(""); }} className="text-blue-600 underline font-medium">Clear {memberSearch ? "search" : "filters"}</button></>)}
+            {members.length === 0 ? (<>No members yet. Use <strong>+ Add Member</strong> to register your first member, or <strong>Import Members</strong> to import from your website.</>) : (<>No members match {memberSearch ? "your search" : "the current filters"}. <button onClick={() => { setMemberSearch(""); setFilterMinistryGroup(""); setFilterMaritalStatus(""); setFilterFamilyGroup(""); setFilterBornAgain(""); setFilterWaterBaptized(""); setFilterMembershipType(""); setFilterPhases([]); }} className="text-blue-600 underline font-medium">Clear {memberSearch ? "search" : "filters"}</button></>)}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -3045,6 +3110,9 @@ console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pr
                         </div>
                         {structure.sectors.length > 0 && (
                           <p className="text-xs text-gray-400 mt-0.5">{placementLabel(m, structure.sectorById, structure.familyGroupById)}</p>
+                        )}
+                        {(m.lifePhases ?? []).length > 0 && (
+                          <p className="text-[11px] text-emerald-700 mt-0.5">{(m.lifePhases ?? []).map(phaseLabel).join(" · ")}</p>
                         )}
                         <div className="flex gap-1.5 mt-1 flex-wrap">
                           {m.householdRole && m.householdRole !== "primary" && (

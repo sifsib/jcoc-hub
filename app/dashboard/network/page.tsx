@@ -14,6 +14,7 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { exportToCSV } from "../../../lib/csvExport";
 import { pickerOptions, type FamilyGroup, type Sector } from "../../../lib/churchStructure";
 import { STRUCTURE_LABELS as L } from "../../../lib/whiteLabel";
+import { LIFE_PHASES, phaseLabel } from "../../../lib/lifePhases";
 
 interface Region {
   id: string;
@@ -32,6 +33,7 @@ interface Row {
   phone: string;
   email: string;
   status: string;
+  lifePhases: string[];
 }
 
 const select = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none";
@@ -55,6 +57,8 @@ export default function NetworkPage() {
   const [groupId, setGroupId] = useState("");
   const [search, setSearch] = useState("");
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [phases, setPhases] = useState<string[]>([]);
+  const [phaseMode, setPhaseMode] = useState<"all" | "any">("all");
 
   useEffect(() => {
     if (!isNetwork) return;
@@ -101,6 +105,7 @@ export default function NetworkPage() {
               phone: x.phone || "",
               email: x.email || "",
               status: x.status || "active",
+              lifePhases: Array.isArray(x.lifePhases) ? x.lifePhases : [],
             });
           });
         }
@@ -134,9 +139,10 @@ export default function NetworkPage() {
       if (sectorId && r.sectorId !== sectorId) return false;
       if (groupId && r.familyGroupId !== groupId) return false;
       if (term && !`${r.name} ${r.email} ${r.phone}`.toLowerCase().includes(term)) return false;
+      if (phases.length && (phaseMode === "all" ? !phases.every((p) => r.lifePhases.includes(p)) : !phases.some((p) => r.lifePhases.includes(p)))) return false;
       return true;
     });
-  }, [rows, includeInactive, churchId, regionId, sectorId, groupId, search, regionById]);
+  }, [rows, includeInactive, churchId, regionId, sectorId, groupId, search, regionById, phases, phaseMode]);
 
   const countByRegion = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -156,6 +162,7 @@ export default function NetworkPage() {
         familyGroup: nameOf(groupById, r.familyGroupId),
         phone: r.phone,
         email: r.email,
+        lifePhases: r.lifePhases.map(phaseLabel).join("; "),
         status: r.status,
       })),
       "network-members",
@@ -167,6 +174,7 @@ export default function NetworkPage() {
         { key: "familyGroup", label: L.familyGroup.one },
         { key: "phone", label: "Phone" },
         { key: "email", label: "Email" },
+        { key: "lifePhases", label: "Life phases" },
         { key: "status", label: "Status" },
       ],
     );
@@ -230,6 +238,28 @@ export default function NetworkPage() {
           <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} />
           Include inactive and suspended
         </label>
+        <div className="w-full">
+          <p className="flex items-center gap-2 text-xs font-medium text-slate-600">
+            Life phases
+            <select value={phaseMode} onChange={(e) => setPhaseMode(e.target.value as "all" | "any")}
+              className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" aria-label="Match all or any life phase">
+              <option value="all">has all of</option>
+              <option value="any">has any of</option>
+            </select>
+            {phases.length > 0 && <button onClick={() => setPhases([])} className="text-[11px] text-slate-500 underline">clear</button>}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {LIFE_PHASES.map((p) => {
+              const on = phases.includes(p.id);
+              return (
+                <button key={p.id} type="button" onClick={() => setPhases((prev) => (on ? prev.filter((x) => x !== p.id) : [...prev, p.id]))}
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${on ? "border-emerald-300 bg-emerald-100 text-emerald-800" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
@@ -259,6 +289,7 @@ export default function NetworkPage() {
                 <th className="px-4 py-3">{L.familyGroup.one}</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Life phases</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -270,6 +301,7 @@ export default function NetworkPage() {
                   <td className="px-4 py-2">{nameOf(groupById, r.familyGroupId) || <span className="text-slate-300">-</span>}</td>
                   <td className="px-4 py-2">{r.phone}</td>
                   <td className="px-4 py-2">{r.email}</td>
+                  <td className="px-4 py-2 text-xs text-emerald-700">{r.lifePhases.map(phaseLabel).join(" · ")}</td>
                 </tr>
               ))}
             </tbody>
