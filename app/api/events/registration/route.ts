@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const event = (await adminDb.doc(`events/${d.eventId}`).get()).data() ?? {};
   const s = settingsOf(event);
   return NextResponse.json({
-    eventTitle: event.title ?? d.eventTitle ?? "", eventDate: event.date ?? "", location: event.location ?? "",
+    eventId: d.eventId, eventTitle: event.title ?? d.eventTitle ?? "", eventDate: event.date ?? "", location: event.location ?? "",
     name: `${d.firstName} ${d.lastName}`, status: d.status, reference: d.reference, amountCents: d.amountCents,
     paymentInstructions: s.paymentInstructions,
     rejectReason: d.status === "payment_rejected" ? d.rejectReason ?? "" : "",

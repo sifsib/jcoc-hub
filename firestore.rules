@@ -1047,6 +1047,10 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (tenantAllowed(resource)
                   && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer'))));
+      // An event's named verifiers read it, to review its registrations (ADR-013).
+      allow read: if isSignedIn()
+                  && sameTenant(resource)
+                  && request.auth.uid in resource.data.get('verifierUids', []);
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'))

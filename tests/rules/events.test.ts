@@ -119,3 +119,18 @@ describe("form submissions are checked against a real, open form", () => {
     await assertFails(setDoc(doc(unauth(), "form_submissions", "f6"), submission({ data: big })));
   });
 });
+
+describe("verifiers can see the events they verify", () => {
+  it("lets a verifier read their event and list their events, and nothing else", async () => {
+    await assertSucceeds(getDoc(doc(dbAs(env, "followUpA"), "events", "evA")));
+    await assertSucceeds(getDocs(query(
+      collection(dbAs(env, "followUpA"), "events"),
+      where("tenantId", "==", TENANT_A), where("verifierUids", "array-contains", "followUpA"),
+    )));
+    await assertFails(getDocs(query(collection(dbAs(env, "followUpA"), "events"), where("tenantId", "==", TENANT_A))));
+  });
+
+  it("does not let a verifier change the event", async () => {
+    await assertFails(updateDoc(doc(dbAs(env, "followUpA"), "events", "evA"), { verifierUids: ["followUpA", "memberA"] }));
+  });
+});
