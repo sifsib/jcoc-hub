@@ -47,6 +47,13 @@ describe("registrations", () => {
     await assertFails(getDoc(doc(dbAs(env, "followUpA"), "registrations", "regA2")));
   });
 
+  it("lets a verifier list their event's registrations, but not another event's or the whole region's", async () => {
+    const regs = collection(dbAs(env, "followUpA"), "registrations");
+    await assertSucceeds(getDocs(query(regs, where("tenantId", "==", TENANT_A), where("eventId", "==", "evA"))));
+    await assertFails(getDocs(query(regs, where("tenantId", "==", TENANT_A), where("eventId", "==", "evA2"))));
+    await assertFails(getDocs(query(regs, where("tenantId", "==", TENANT_A))));
+  });
+
   it("denies other regions, members, leaders, teachers and the public", async () => {
     await assertFails(getDoc(doc(dbAs(env, "ownerB"), "registrations", "regA")));
     await assertFails(getDoc(doc(dbAs(env, "memberA"), "registrations", "regA")));

@@ -9,10 +9,11 @@ import {
   doc, getDoc, getDocs, collection, query, where,
   orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
 } from "firebase/firestore";
+import RegistrationSettings from "./RegistrationSettings";
 
 type EventType = "service" | "conference" | "outreach" | "youth" | "womens" | "mens" | "prayer" | "social" | "other";
 type RsvpStatus = "attending" | "declined" | "maybe";
-type Tab = "details" | "rsvps" | "checkin" | "settings";
+type Tab = "details" | "rsvps" | "checkin" | "registration" | "settings";
 
 interface EventSession { id: string; name: string; startTime: string; endTime: string; }
 interface EventDay { id: string; date: string; sessions: EventSession[]; }
@@ -285,7 +286,7 @@ export default function EventDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {(["details", "rsvps", "checkin", "settings"] as Tab[]).map(t => (
+        {(["details", "rsvps", "checkin", "registration", "settings"] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${tab === t ? "border-emerald-500 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
             {t === "checkin" ? "Check-in" : t}
@@ -582,6 +583,11 @@ export default function EventDetailPage() {
       )}
 
       {/* SETTINGS TAB */}
+      {/* REGISTRATION TAB (ADR-013) */}
+      {tab === "registration" && tenantId && (
+        <RegistrationSettings eventId={eventId} tenantId={tenantId} event={event as unknown as Parameters<typeof RegistrationSettings>[0]["event"]} />
+      )}
+
       {tab === "settings" && (
         <div className="max-w-xl">
           <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
