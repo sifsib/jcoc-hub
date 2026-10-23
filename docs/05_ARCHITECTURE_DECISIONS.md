@@ -385,7 +385,7 @@ See `handovers/2026-10-23-phase-2-church-structure.md`.
 
 ## ADR-011. Phase 3 life phases: rules engine, overrides and the 1 January review
 
-**Status:** **Proposed 2026-10-23. Awaiting Sifiso's approval. No code until approved.**
+**Status:** **Accepted 2026-10-23 by Sifiso, with all the recommended decisions below.** Decisions that need Anita (for example who may collect a child) are built as recommended and flagged for her confirmation.
 **Builds on:** ADR-002 (phases are an array), ADR-003 (yearly, previewed, never silent), ADR-010 (`member_audit`, stamped writes). Spec: `docs/jcoc-build-plan.md` v2, Phase 3.
 **Branch:** `feature/p3-life-phases`, cut from `feature/p2-church-structure`.
 **Revises ADR-003 in one place:** children up to the year they turn 13 now have a school grade (JCOC's sheet, confirmed 23 October), where ADR-003 said "no grade bands". Everything else in ADR-003 stands.
@@ -484,7 +484,7 @@ Unit tests on `lib/lifePhases.ts`: 31 December against 1 January; children born 
 
 ## ADR-012. Phase 4 visitor register and children's check-in
 
-**Status:** **Proposed 2026-10-23. Awaiting Sifiso's approval. No code until approved.**
+**Status:** **Accepted 2026-10-23 by Sifiso, with all the recommended decisions below.** Decisions that need Anita (for example who may collect a child) are built as recommended and flagged for her confirmation.
 **Builds on:** ADR-008 (screen-based collection code, audit trail), ADR-011 (children's bands), `docs/02_SCOPE.md` B5 and B10. Plan v2 Phase 4.
 **Branch:** `feature/p4-visitors-kids`, cut from `feature/p3-life-phases`.
 
@@ -547,7 +547,7 @@ A new optional `medicalNotes` field on member children (and `allergies` on visit
 
 ## ADR-013. Phase 5 event registration with proof of payment
 
-**Status:** **Proposed 2026-10-23. Awaiting Sifiso's approval. No code until approved.**
+**Status:** **Accepted 2026-10-23 by Sifiso, with all the recommended decisions below.** Decisions that need Anita (for example who may collect a child) are built as recommended and flagged for her confirmation.
 **Builds on:** ADR-004 (registration never touches members), ADR-005 (uploads through a server route), ADR-006 (per-event verifiers, hold and re-upload). Plan v2 Phase 5; `docs/02_SCOPE.md` B4.
 **Branch:** `feature/p5-event-registration`, cut from `feature/p4-visitors-kids`.
 
