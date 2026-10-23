@@ -22,6 +22,10 @@ export const AUDITED_MEMBER_FIELDS = [
   "familyGroupId",
   "branch",
   "cellRegion",
+  "lifePhasesAdded",
+  "lifePhasesRemoved",
+  "gradeAdjust",
+  "marriageType",
 ] as const;
 
 export type AuditedField = (typeof AUDITED_MEMBER_FIELDS)[number];

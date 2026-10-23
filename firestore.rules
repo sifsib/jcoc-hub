@@ -264,6 +264,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // The 1 January life phase review (ADR-011). Prepared and applied by the
+    // server only; read by the region's owner and admins and network owners.
+    match /lifePhaseReviews/{id} {
+      allow read: if isSignedIn()
+                  && ((resource.data.tenantId == userTenantId() && (hasRole('owner') || hasRole('admin')))
+                      || networkCanWrite(resource.data.tenantId));
+      allow write: if false;
+    }
+
     // Member change history, written only by the onMemberUpdated Cloud
     // Function. Region owners and admins read their region; network owners
     // read their org.
@@ -292,7 +301,7 @@ service cloud.firestore {
         'trialEndsAt', 'evaluationEndsAt', 'fullRateStartsAt',
         'slug', 'ownerEmail', 'signupSource', 'signupDate', 'createdAt',
         'lastLoginAt', 'lastLoginEmail', 'orgId', 'orgRole',
-        'churchId', 'archived', 'archivedAt', 'archivedBy'
+        'churchId', 'archived', 'archivedAt', 'archivedBy', 'lifePhaseYear'
       ]);
     }
 
@@ -420,7 +429,23 @@ service cloud.firestore {
     function auditedMemberFields() {
       return ['status', 'isMember', 'membershipType', 'churchRole', 'role',
               'maritalStatus', 'lifePhases', 'sectorId', 'familyGroupId',
-              'branch', 'cellRegion'];
+              'branch', 'cellRegion',
+              'lifePhasesAdded', 'lifePhasesRemoved', 'gradeAdjust', 'marriageType'];
+    }
+    // Life phases (ADR-011): the phases are worked out by the server. A
+    // browser may set only the inputs an admin controls, within limits.
+    function serverOnlyMemberFields() {
+      return ['lifePhases', 'lifePhasesAuto', 'lifePhasesYear'];
+    }
+    function memberInputsValid(d) {
+      return (!('gradeAdjust' in d) || (d.gradeAdjust is int && d.gradeAdjust >= -3 && d.gradeAdjust <= 3))
+          && (!('marriageType' in d) || d.marriageType in ['', 'civil', 'customary', 'religious'])
+          && (!('lifePhasesAdded' in d) || (d.lifePhasesAdded is list && d.lifePhasesAdded.size() <= 25))
+          && (!('lifePhasesRemoved' in d) || (d.lifePhasesRemoved is list && d.lifePhasesRemoved.size() <= 25));
+    }
+    function memberUpdateFieldsOk() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyMemberFields())
+          && memberInputsValid(request.resource.data);
     }
     function stampedIfAudited() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(auditedMemberFields())
@@ -453,16 +478,20 @@ service cloud.firestore {
       allow create: if isSignedIn()
                     && ((tenantAllowedWrite(request.resource.data) && canManageMembers())
                         || networkCanWrite(request.resource.data.tenantId))
+                    && !request.resource.data.keys().hasAny(serverOnlyMemberFields())
+                    && memberInputsValid(request.resource.data)
                     && withinMemberLimit(request.resource.data);
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageMembers()
-                    && stampedIfAudited();
+                    && stampedIfAudited()
+                    && memberUpdateFieldsOk();
       allow update: if isSignedIn()
                     && networkCanWrite(resource.data.tenantId)
                     && request.resource.data.tenantId == resource.data.tenantId
-                    && stampedIfAudited();
+                    && stampedIfAudited()
+                    && memberUpdateFieldsOk();
       // Follow-up team: may touch the care follow-up stamp ONLY, so completing a
       // care workflow moves the member off the Care Tier Alerts list. No other
       // member field can be changed through this rule.

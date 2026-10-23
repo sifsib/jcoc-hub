@@ -22,6 +22,10 @@ export const AUDITED_MEMBER_FIELDS = [
   "familyGroupId",
   "branch",
   "cellRegion",
+  "lifePhasesAdded",
+  "lifePhasesRemoved",
+  "gradeAdjust",
+  "marriageType",
 ] as const;
 
 /** Whether a member write touches an audited field, and so must be stamped. */
