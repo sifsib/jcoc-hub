@@ -150,10 +150,15 @@ export function decideAccessChange(
   }
 
   const held = effectiveAccess(target)[req.tenantId];
+  // Someone holding a role level with or above the caller's is out of reach.
+  // Non-region roles (a congregation member being promoted, a base-product
+  // role) are below every region role.
+  const heldOutOfReach =
+    !!held && !isNetworkOwner && isRegionRole(held.role) && !grantableRoles(caller).includes(held.role);
 
   if (req.action === "revoke") {
     if (!held) return { ok: false, reason: "That person does not hold this region." };
-    if (!grantableRoles(caller).includes(held.role as RegionRole) && !isNetworkOwner) {
+    if (heldOutOfReach) {
       return { ok: false, reason: "You cannot remove someone whose role is level with or above yours." };
     }
     return { ok: true };
@@ -163,7 +168,7 @@ export function decideAccessChange(
   if (!grantableRoles(caller).includes(req.role)) {
     return { ok: false, reason: "You cannot give a role level with or above your own." };
   }
-  if (held && !isNetworkOwner && !grantableRoles(caller).includes(held.role as RegionRole)) {
+  if (heldOutOfReach) {
     return { ok: false, reason: "You cannot change someone whose role is level with or above yours." };
   }
   if (req.role === "sector_leader" && !req.sectorId) {

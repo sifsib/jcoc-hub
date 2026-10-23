@@ -8,6 +8,7 @@ import OverdueBadge from "../components/OverdueBadge";
 import PendingApprovalBadge from "../components/PendingApprovalBadge";
 import MemberUsageMeter from "../components/MemberUsageMeter";
 import { isPaidTier, PAID_NAV_HREFS } from "../../lib/tier";
+import RegionSwitcher, { type SwitcherRegion } from "./RegionSwitcher";
 
 export default async function DashboardLayout({
   children,
@@ -36,6 +37,13 @@ export default async function DashboardLayout({
     if (userDoc.exists) {
       userDocData = userDoc.data();
 
+      // A region removed from the user's access list is not theirs any more,
+      // matching userTenantId() in firestore.rules (ADR-010).
+      const access = userDocData?.tenantAccess;
+      if (access && userDocData?.tenantId && !(userDocData.tenantId in access) && !userDocData.networkRole) {
+        userDocData = { ...userDocData, tenantId: "", role: "user" };
+      }
+
       const tenantId = userDocData?.tenantId;
       if (tenantId) {
         const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
@@ -51,6 +59,7 @@ export default async function DashboardLayout({
   }
 
   const userRole = userDocData?.role || "user";
+  const networkRole: string = userDocData?.networkRole || "";
   const userName = userDocData?.displayName || userDocData?.name || "Member";
   const tenantId = userDocData?.tenantId || "";
 
@@ -76,13 +85,15 @@ export default async function DashboardLayout({
   const tenantIsPaid = isPaidTier(tenantTier);
 
   const allNavigation = [
+    { name: "Network", href: "/dashboard/network", icon: "🌍", roles: [], network: true },
     { name: "Church Overview", href: "/dashboard/analytics", icon: "📊", roles: ["owner", "admin", "viewer", "finance", "member_manager", "member_viewer"] },
     { name: "Church Profile", href: "/dashboard/profile", icon: "⛪", roles: ["owner", "admin"] },
-    { name: "Membership Management", href: "/dashboard/roster", icon: "👥", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin"] },
+    { name: "Church Structure", href: "/dashboard/structure", icon: "🗂️", roles: ["owner", "admin"] },
+    { name: "Membership Management", href: "/dashboard/roster", icon: "👥", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
     { name: "Member Updates", href: "/dashboard/member-updates", icon: "✏️", roles: ["owner", "admin", "member_manager", "branch_admin"] },
-    { name: "Birthdays & Anniversaries", href: "/dashboard/celebrations", icon: "🎂", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin"] },
-    { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝", roles: ["owner", "admin", "member_manager", "cell_leader", "branch_admin"] },
-    { name: "Attendance Report", href: "/dashboard/attendance/report", icon: "📊", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin"] },
+    { name: "Birthdays & Anniversaries", href: "/dashboard/celebrations", icon: "🎂", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
+    { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝", roles: ["owner", "admin", "member_manager", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
+    { name: "Attendance Report", href: "/dashboard/attendance/report", icon: "📊", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
     { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋", roles: ["owner", "admin", "member_manager", "member_viewer", "follow_up", "branch_admin"] },
     { name: "Financials", href: "/dashboard/finance", icon: "💰", roles: ["owner", "admin", "finance", "branch_admin"] },
     { name: "Pastoral Care", href: "/dashboard/pastoral", icon: "🫶", roles: ["owner", "admin"] },
@@ -95,15 +106,43 @@ export default async function DashboardLayout({
     { name: "Volunteers", href: "/dashboard/volunteers", icon: "🙌", roles: ["owner", "admin", "member_manager", "cell_leader"] },
     { name: "Worship Planning", href: "/dashboard/worship", icon: "🎵", roles: ["owner", "admin", "member_manager"] },
     { name: "Workflows", href: "/dashboard/workflows", icon: "⚡", roles: ["owner", "admin", "member_manager"] },
-    { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑", roles: ["owner"] },
+    { name: "Team Members", href: "/dashboard/team", icon: "🧑‍🤝‍🧑", roles: ["owner", "admin"] },
     { name: "Church Settings", href: "/dashboard/church-settings", icon: "⚙️", roles: ["owner", "admin"] },
     { name: "Branding", href: "/dashboard/branding", icon: "🎨", roles: ["owner", "admin"] },
     { name: "Billing", href: "/dashboard/billing", icon: "🧾", roles: ["owner"] },
     { name: "Sign-in History", href: "/dashboard/sign-in-history", icon: "🔐", roles: ["owner", "admin"] },
-    { name: "Support", href: "/dashboard/support", icon: "🎧", roles: ["owner", "admin", "member_manager", "finance", "viewer", "cell_leader", "branch_admin"] },
+    { name: "Support", href: "/dashboard/support", icon: "🎧", roles: ["owner", "admin", "member_manager", "finance", "viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
   ];
 
-  const navigation = allNavigation.filter(item => item.roles.includes(userRole));
+  // Network items follow the network role, whatever role is held in the
+  // active region.
+  const navigation = allNavigation
+    .filter(item => ("network" in item ? !!networkRole : item.roles.includes(userRole)))
+    .map(({ name, href, icon, roles }) => ({ name, href, icon, roles }));
+
+  // Regions for the switcher: every region held, and for network roles every
+  // active region of their network (ADR-010).
+  let switcherRegions: SwitcherRegion[] = [];
+  try {
+    const orgId: string = userDocData?.orgId || "";
+    const regionDocs = networkRole && orgId
+      ? (await adminDb.collection("tenants").where("orgId", "==", orgId).get()).docs
+          .filter((d) => !d.data().archived || d.id === tenantId)
+      : await Promise.all(
+          Object.keys(userDocData?.tenantAccess ?? {}).map((id) => adminDb.collection("tenants").doc(id).get()),
+        );
+    const churchIds = [...new Set(regionDocs.map((d) => d.data()?.churchId).filter(Boolean))] as string[];
+    const churchNames = new Map(
+      (await Promise.all(churchIds.map((id) => adminDb.collection("churches").doc(id).get())))
+        .map((c) => [c.id, (c.data()?.name as string) || ""]),
+    );
+    switcherRegions = regionDocs
+      .filter((d) => d.exists)
+      .map((d) => ({ id: d.id, name: d.data()?.name || "Unnamed", churchName: churchNames.get(d.data()?.churchId) || "" }))
+      .sort((a, b) => a.churchName.localeCompare(b.churchName) || a.name.localeCompare(b.name));
+  } catch (err) {
+    console.error("Region list failed:", err);
+  }
 
   // Super-admin only: standalone admin sections + a live open-ticket count for
   // the badge on the Tickets link.
@@ -267,6 +306,13 @@ export default async function DashboardLayout({
             <div className="text-lg font-semibold text-gray-800">Dashboard</div>
           </div>
 
+          <div className="flex items-center gap-4">
+            <RegionSwitcher
+              activeTenantId={tenantId}
+              regions={switcherRegions}
+              tenantAccess={userDocData?.tenantAccess ?? null}
+              networkRole={networkRole}
+            />
           <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
             {/* Member App shortcut. Visible on mobile only, always in the header. */}
             {/* No target="_blank" on mobile: keeps PWA context and avoids exiting the app */}
@@ -293,6 +339,7 @@ export default async function DashboardLayout({
             >
               {userName.substring(0, 2)}
             </div>
+          </div>
           </div>
         </header>
 

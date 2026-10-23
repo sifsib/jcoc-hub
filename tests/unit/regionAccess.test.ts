@@ -93,6 +93,11 @@ describe("decideAccessChange", () => {
     expect(decideAccessChange(sowetoAdmin, leader, { action: "revoke", tenantId: "soweto" }, ORG).ok).toBe(false);
   });
 
+  it("lets a region admin promote a congregation member of their region", () => {
+    const member: UserAccess = { uid: "m", tenantId: "soweto", role: "congregation_member" };
+    expect(decideAccessChange(sowetoAdmin, member, grant("soweto", "sector_leader", { sectorId: "s1" }), ORG).ok).toBe(true);
+  });
+
   it("denies a viewer or sector leader changing access", () => {
     const viewer: UserAccess = { ...sowetoAdmin, uid: "v", role: "viewer", tenantAccess: { soweto: { role: "viewer" } } };
     expect(decideAccessChange(viewer, newcomer, grant("soweto", "viewer"), ORG).ok).toBe(false);

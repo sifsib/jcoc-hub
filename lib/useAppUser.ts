@@ -17,6 +17,14 @@ export interface AppUser {
   role: string;
   assignedCellRegion: string;
   assignedBranch: string;
+  // Phase 2 (ADR-010). sectorId / familyGroupId are the scope held in the
+  // active region, for sector and family group leaders.
+  sectorId: string;
+  familyGroupId: string;
+  orgId: string;
+  networkRole: string;
+  tenantIds: string[];
+  tenantAccess: Record<string, { role: string; sectorId?: string; familyGroupId?: string }> | null;
 }
 
 interface UseAppUserReturn {
@@ -65,17 +73,27 @@ export function useAppUser(): UseAppUserReturn {
       try {
         const userSnap = await getDoc(doc(db, "users", firebaseUser.uid));
         const data = userSnap.data() ?? {};
+        // A region removed from the access list is no longer the active one,
+        // matching userTenantId() in firestore.rules.
+        const tenantAccess = data.tenantAccess ?? null;
+        const regionHeld = !tenantAccess || (data.tenantId && data.tenantId in tenantAccess) || !!data.networkRole;
         const merged: AppUser = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
           emailVerified: firebaseUser.emailVerified,
-          tenantId: data.tenantId ?? "",
+          tenantId: regionHeld ? data.tenantId ?? "" : "",
           churchName: data.churchName ?? "",
           name: data.churchName ?? data.name ?? "",
           role: data.role ?? "",
           assignedCellRegion: data.assignedCellRegion ?? "",
           assignedBranch: data.assignedBranch ?? "",
+          sectorId: data.sectorId ?? "",
+          familyGroupId: data.familyGroupId ?? "",
+          orgId: data.orgId ?? "",
+          networkRole: data.networkRole ?? "",
+          tenantIds: data.tenantIds ?? (data.tenantId ? [data.tenantId] : []),
+          tenantAccess,
         };
         cachedUid = firebaseUser.uid;
         cachedAppUser = merged;
@@ -93,6 +111,12 @@ export function useAppUser(): UseAppUserReturn {
           role: "",
           assignedCellRegion: "",
           assignedBranch: "",
+          sectorId: "",
+          familyGroupId: "",
+          orgId: "",
+          networkRole: "",
+          tenantIds: [],
+          tenantAccess: null,
         });
       } finally {
         setLoading(false);
