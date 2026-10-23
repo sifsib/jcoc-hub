@@ -25,10 +25,21 @@ export interface ChildClass {
   supervisorUids?: string[];
 }
 
-/** The first active class whose phases match the child's. */
+/** A child's phases from most to least specific, for choosing a class. */
+const BAND_ORDER = ["baby", "pre_school", "pre_teen", "teen", "scholar", "kidz_zone", "child", "campus_student"];
+
+/**
+ * The active class for the child's most specific phase: a pre-teen (who is
+ * also a Scholar) goes to a Pre-teens class if there is one, else Scholars.
+ */
 export function suggestClass(childPhases: string[], classes: ChildClass[]): ChildClass | null {
-  const held = new Set(childPhases);
-  return classes.find((c) => !c.archived && c.phases.some((p) => held.has(p))) ?? null;
+  const active = classes.filter((c) => !c.archived);
+  for (const band of BAND_ORDER) {
+    if (!childPhases.includes(band)) continue;
+    const match = active.find((c) => c.phases.includes(band));
+    if (match) return match;
+  }
+  return null;
 }
 
 /** A 4-digit code. `random` is injectable for tests; the server passes crypto randomness. */
@@ -85,6 +96,9 @@ export interface FamilyForSearch {
   guardianName: string;
   guardianPhone: string;
   children: { name: string }[];
+  /** The other parent in a member household. */
+  otherGuardians?: string[];
+  otherPhones?: string[];
 }
 
 /** Search by cell number (any part of it) or by a guardian's or child's name. Three characters at least. */
@@ -93,11 +107,12 @@ export function matchesSearch(query: string, family: FamilyForSearch): boolean {
   if (q.length < 3) return false;
   const digits = q.replace(/\D/g, "");
   if (digits.length >= 3 && digits.length === q.replace(/\s|\+/g, "").length) {
-    const phone = family.guardianPhone || "";
-    return digits.length >= 9 ? phone === normalisePhone(q) : phone.includes(digits);
+    const phones = [family.guardianPhone, ...(family.otherPhones ?? [])].filter(Boolean);
+    return phones.some((phone) => (digits.length >= 9 ? phone === normalisePhone(q) : phone.includes(digits)));
   }
   const lower = q.toLocaleLowerCase("en-ZA");
-  return [family.guardianName, ...family.children.map((c) => c.name)].some((n) => n.toLocaleLowerCase("en-ZA").includes(lower));
+  return [family.guardianName, ...(family.otherGuardians ?? []), ...family.children.map((c) => c.name)]
+    .some((n) => n.toLocaleLowerCase("en-ZA").includes(lower));
 }
 
 /** Children's ministry is for children up to the year they turn 13 (Kidz Zone runs to Grade 7). */
@@ -117,6 +132,7 @@ export interface CheckinFamily extends FamilyForSearch {
   key: string;
   kind: "member" | "visitor";
   otherGuardians: string[];
+  otherPhones: string[];
   children: CheckinChild[];
 }
 
@@ -186,7 +202,8 @@ export function buildFamilies(
     families.push({
       key: `household:${hid}`, kind: "member",
       guardianName: nameOf(guardians[0]), guardianPhone: guardians[0].phone ?? "",
-      otherGuardians: guardians.slice(1).map(nameOf), children,
+      otherGuardians: guardians.slice(1).map(nameOf),
+      otherPhones: guardians.slice(1).map((g) => g.phone ?? "").filter(Boolean), children,
     });
   }
 
@@ -199,7 +216,7 @@ export function buildFamilies(
         suggestedClassId: suggestClass(childPhases(c.dob, year), classes)?.id ?? null, allergies: c.allergies ?? "" });
     }
     if (children.length === 0) continue;
-    families.push({ key: `visitor:${v.id}`, kind: "visitor", guardianName: nameOf(v), guardianPhone: v.phone ?? "", otherGuardians: [], children });
+    families.push({ key: `visitor:${v.id}`, kind: "visitor", guardianName: nameOf(v), guardianPhone: v.phone ?? "", otherGuardians: [], otherPhones: [], children });
   }
   return families.sort((a, b) => a.guardianName.localeCompare(b.guardianName, "en-ZA"));
 }

@@ -14,6 +14,7 @@
 //   Network owner:        network@demo-jcoc.test        / emulator-only-pass-4   (every region, Network page)
 //   Two-region leader:    leader.two@demo-jcoc.test     / emulator-only-pass-5   (admin of Soweto and Northwest)
 //   Family group leader:  group.north1@demo-jcoc.test   / emulator-only-pass-6   (Soweto, North 1 only)
+//   Children's teacher:   teacher@demo-jcoc.test        / emulator-only-pass-7   (Soweto, Pre-School and Scholars)
 //
 // Birthdays and anniversaries are generated relative to today, so the
 // Birthdays & Anniversaries page always has something in "This week".
@@ -64,6 +65,7 @@ await upsertUser("member-thabo", "thabo@demo-jcoc.test", "emulator-only-pass-3",
 await upsertUser("network-owner", "network@demo-jcoc.test", "emulator-only-pass-4", "Network Owner (demo)");
 await upsertUser("leader-two", "leader.two@demo-jcoc.test", "emulator-only-pass-5", "Kagiso Two-Region Leader");
 await upsertUser("group-north1", "group.north1@demo-jcoc.test", "emulator-only-pass-6", "Zanele Group Leader");
+await upsertUser("kids-teacher", "teacher@demo-jcoc.test", "emulator-only-pass-7", "Mpho Teacher");
 // The pre-Phase 2 branch admin login is replaced by the sector leader.
 await auth.deleteUser("branch-north").catch(() => {});
 await db.doc("users/branch-north").delete();
@@ -202,6 +204,36 @@ await db.doc("households/hh-dlamini").set({
 for (const { id, ...m } of members) {
   await db.doc(`members/${id}`).set({ ...base, ...m, fullName: `${m.firstName} ${m.lastName}` });
 }
+// ── Children's ministry (ADR-012) ─────────────────────────────────────────
+await db.doc("users/kids-teacher").set({
+  email: "teacher@demo-jcoc.test", displayName: "Mpho Teacher", role: "children_teacher",
+  tenantId: TENANT_ID, sectorId: "", familyGroupId: "", roles: [], status: "active", createdAt: ts,
+  ...held({ [TENANT_ID]: { role: "children_teacher" } }),
+});
+const kidsClasses = [
+  ["cls-babies", "Babies", ["baby"], []],
+  ["cls-preschool", "Pre-School", ["pre_school"], ["kids-teacher"]],
+  ["cls-scholars", "Scholars", ["scholar"], ["kids-teacher"]],
+  ["cls-preteens", "Pre-teens", ["pre_teen"], []],
+];
+for (const [id, name, phases, teacherUids] of kidsClasses) {
+  await db.doc(`childClasses/${id}`).set({ tenantId: TENANT_ID, name, phases, teacherUids, supervisorUids: [], archived: false, capacity: null, createdAt: ts });
+}
+await db.doc("memberCareNotes/m-neo").set({ tenantId: TENANT_ID, notes: "Peanut allergy", updatedAt: ts });
+await db.doc("members/m-neo").update({ consentedToSpecialInfo: true });
+// A visitor family with a child, for check-in.
+await db.doc("visitors/vis-sam").set({
+  tenantId: TENANT_ID, fullName: "Sam Mokoena", firstName: "Sam", lastName: "Mokoena", phone: "27830000001",
+  serviceDate: on(-7, new Date(friday).getUTCFullYear()), reason: "Invited by a friend", followUpStatus: "pending",
+  visitCount: 1, firstVisitDate: on(-7, new Date(friday).getUTCFullYear()), lastVisitDate: on(-7, new Date(friday).getUTCFullYear()),
+  children: [{ id: "c-lebo", firstName: "Lebo", lastName: "Mokoena", dob: `${thisYear - 5}-01-01`, dobApprox: true, allergies: "Dairy" }],
+  capturedBy: "seed", createdAt: ts,
+});
+await db.doc(`visitors/vis-sam/visits/${on(-7, new Date(friday).getUTCFullYear())}`).set({ tenantId: TENANT_ID, serviceDate: on(-7, new Date(friday).getUTCFullYear()), capturedBy: "seed" });
+for (const col of ["childCheckins", "childCheckinSecrets"]) {
+  (await db.collection(col).where("tenantId", "==", TENANT_ID).get()).forEach((d) => d.ref.delete());
+}
+
 // Clear any earlier life phase reviews and the approved year, so a fresh run starts clean.
 for (const t of [TENANT_ID, NORTHWEST, TSHWANE]) {
   await db.doc(`tenants/${t}`).update({ lifePhaseYear: admin.firestore.FieldValue.delete() });

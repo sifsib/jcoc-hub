@@ -260,7 +260,7 @@ function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
           {family.children.map((c) => (
             <div key={c.key} className="flex flex-wrap items-center gap-3">
               <label className="flex flex-1 items-center gap-3 text-base text-slate-800">
-                <input type="checkbox" className="h-6 w-6" checked={!!picked[c.key]}
+                <input type="checkbox" className="h-6 w-6" aria-label={`Check in ${c.name}`} checked={!!picked[c.key]}
                   onChange={(e) => setPicked((p) => ({ ...p, [c.key]: e.target.checked ? (c.suggestedClassId && classIds.has(c.suggestedClassId) ? c.suggestedClassId : defaultClassId) : "" }))} />
                 {c.name}{c.age !== null && <span className="text-sm text-slate-500">({c.age})</span>}
               </label>
@@ -376,16 +376,16 @@ function CheckoutDialog({ record, isAdmin, onClose, onDone }: {
         <p className="text-xl font-semibold text-slate-800">Check out {record.child.name}</p>
         <fieldset className="mt-4 flex flex-col gap-2 text-base text-slate-700">
           <legend className="text-sm text-slate-500">Who is collecting?</legend>
-          <label className="flex items-center gap-2"><input type="radio" checked={collector === "dropoff"} onChange={() => setCollector("dropoff")} /> {record.guardian.name} (dropped off)</label>
+          <label className="flex items-center gap-2"><input type="radio" aria-label="The adult who dropped off" checked={collector === "dropoff"} onChange={() => setCollector("dropoff")} /> {record.guardian.name} (dropped off)</label>
           {record.allowedCollectors.length > 0 && (
-            <label className="flex items-center gap-2"><input type="radio" checked={collector === "named"} onChange={() => { setCollector("named"); setName(record.allowedCollectors[0]); }} /> Someone the parent named</label>
+            <label className="flex items-center gap-2"><input type="radio" aria-label="Someone the parent named" checked={collector === "named"} onChange={() => { setCollector("named"); setName(record.allowedCollectors[0]); }} /> Someone the parent named</label>
           )}
           {collector === "named" && (
             <select value={name} onChange={(e) => setName(e.target.value)} className="ml-6 rounded-lg border border-slate-300 px-3 py-2" aria-label="Named adult">
               {record.allowedCollectors.map((n) => <option key={n}>{n}</option>)}
             </select>
           )}
-          <label className="flex items-center gap-2"><input type="radio" checked={collector === "other"} onChange={() => { setCollector("other"); setName(""); setNeedsOverride(true); }} /> Someone else (needs a supervisor)</label>
+          <label className="flex items-center gap-2"><input type="radio" aria-label="Someone else, with a supervisor" checked={collector === "other"} onChange={() => { setCollector("other"); setName(""); setNeedsOverride(true); }} /> Someone else (needs a supervisor)</label>
           {collector === "other" && (
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Their full name" className={`${input} ml-6`} aria-label="Collector's name" />
           )}

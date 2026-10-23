@@ -61,7 +61,16 @@ describe("children's check-in", () => {
     { id: "scholars", name: "Scholars", phases: ["scholar", "pre_teen"], archived: false },
   ];
 
-  it("suggests the first active class matching the child's phases", () => {
+  it("prefers the class for the child's most specific phase, whatever the order", () => {
+    const ordered = [
+      { id: "sch", name: "Scholars", phases: ["scholar"], archived: false },
+      { id: "pt", name: "Pre-teens", phases: ["pre_teen"], archived: false },
+    ];
+    expect(suggestClass(["child", "pre_teen", "scholar", "kidz_zone"], ordered)?.id).toBe("pt");
+    expect(suggestClass(["child", "scholar", "kidz_zone"], ordered)?.id).toBe("sch");
+  });
+
+  it("suggests the active class matching the child's phases", () => {
     expect(suggestClass(["child", "pre_school", "kidz_zone"], classes)?.id).toBe("preschool");
     expect(suggestClass(["child", "pre_teen", "scholar", "kidz_zone"], classes)?.id).toBe("scholars");
     expect(suggestClass(["teen", "scholar"], classes)?.id).toBe("scholars");
@@ -113,6 +122,15 @@ describe("children's check-in", () => {
     expect(matchesSearch("zz", fam)).toBe(false);
     expect(matchesSearch("ne", fam)).toBe(false); // too short to search
   });
+
+  it("finds a family by the other parent's number or name too", () => {
+    const fam = {
+      guardianName: "Thabo Dlamini", guardianPhone: "27820000001", children: [{ name: "Neo Dlamini" }],
+      otherGuardians: ["Lerato Dlamini"], otherPhones: ["27820000002"],
+    };
+    expect(matchesSearch("082 000 0002", fam)).toBe(true);
+    expect(matchesSearch("lerato", fam)).toBe(true);
+  });
 });
 
 import { buildFamilies } from "../../lib/kidsCheckin";
@@ -142,6 +160,7 @@ describe("families for check-in", () => {
     expect(fams.map((f) => f.guardianName)).toEqual(["Lerato Dlamini", "Sam Visitor"]);
     const dl = fams[0];
     expect(dl.otherGuardians).toEqual(["Thabo Dlamini"]);
+    expect(dl.otherPhones).toEqual(["27820000001"]);
     expect(dl.children).toEqual([
       { key: "member:neo", kind: "member", name: "Neo Dlamini", age: 9, suggestedClassId: "sch", allergies: "" },
       { key: "household:h1:0", kind: "household", name: "Ayo Dlamini", age: 5, suggestedClassId: "pre", allergies: "" },

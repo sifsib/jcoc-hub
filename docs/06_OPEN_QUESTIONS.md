@@ -46,6 +46,17 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 | V4 | Campus Student is automatic for everyone aged 18 to 20, studying or not | Automatic; admins can untick it per person |
 | V5 | Married people with no wedding date get no Young/Mature Married phase until one is entered | As stated; the review page and roster show who is affected |
 
+## From the Phase 4 build (ADR-012), 2026-10-23, for Anita to confirm
+
+| # | Question | Built as |
+|---|---|---|
+| W1 | **Who may collect a child** (safeguarding). Plan v2 says "the same parent, or another listed adult"; ADR-008 said only the adult who signed in | The dropping-off adult, or an adult the parent names at drop-off, with the 4-digit code. Anyone else, a lost code, or 5 wrong codes needs a supervisor (region owner/admin or a named class supervisor) with a reason, logged |
+| W2 | Class names and which ages go in each (open question L) | Seeded as Babies, Pre-School, Scholars, Pre-teens by life phase; admins can change them |
+| W3 | How long check-in records are kept (open question L) | Kept; nothing deleted automatically. Decide a retention period before go-live |
+| W4 | Children's ministry stops at the year a child turns 13 (end of Kidz Zone) | As stated; teens are not offered for check-in |
+| W5 | A visitor who returns after more than 180 days gets a new follow-up | As stated (`FOLLOW_UP_GAP_DAYS`) |
+| W6 | The collection code is sent by SMS only when the church's BulkSMS account is set up (about 19c per message); otherwise the parent photographs the code on screen | As stated |
+
 ## Non-blocking, needed before the relevant phase
 
 | # | Question | Phase |
