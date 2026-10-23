@@ -3,7 +3,7 @@
 **Date:** 2026-10-23
 **Phase:** Plan v2 Phase 2 (church structure and admin roles). ADR-010, accepted by Sifiso with all six recommendations.
 **Session:** 2 (continued)
-**Branch:** `feature/p2-church-structure`, cut from `docs/jcoc-build-plan` (ffd1044 line). Not pushed.
+**Branch:** `feature/p2-church-structure`, cut from `docs/jcoc-build-plan` at ee456bf. Not pushed.
 
 ## Context correction, read this first
 
