@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "emulators": "firebase emulators:start --only auth,firestore --project demo-jcoc",
+    "emulators": "firebase emulators:start --only auth,firestore,storage --project demo-jcoc",
     "seed:emulator": "node scripts/seed-emulator.mjs",
     "dev:emulator": "node scripts/dev-emulator.mjs"
   },

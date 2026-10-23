@@ -57,6 +57,17 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 | W5 | A visitor who returns after more than 180 days gets a new follow-up | As stated (`FOLLOW_UP_GAP_DAYS`) |
 | W6 | The collection code is sent by SMS only when the church's BulkSMS account is set up (about 19c per message); otherwise the parent photographs the code on screen | As stated |
 
+## From the Phase 5 build (ADR-013), 2026-10-23, for Anita to confirm
+
+| # | Question | Built as |
+|---|---|---|
+| X1 | Items I, J and K below (indemnity template, banking details and reference format, t-shirt sizes and options) are still open | Built as settings per event: the organiser types the bank details (pre-filled from the banking details on the Branding page, if saved), a reference prefix (e.g. YC26-SURNAME-007), the t-shirt sizes, and switches each question on or off. Dietary is free text; transport is yes/no. The indemnity is a signed form the registrant uploads; there is no template in the app yet |
+| X2 | Who checks proof of payment | Each event names its own verifiers (any team member). The organiser is added to that list automatically. Region owners, admins and member managers can always see and act |
+| X3 | Does a place count before payment is confirmed? | A place is held once proof is uploaded, so the event cannot overfill while proofs wait for checking |
+| X4 | Registrants under 18 | Worked out from date of birth on the event date; they are asked to upload a signed indemnity. A missing indemnity is shown to verifiers but does not block approval |
+| X5 | Emails to registrants | Approval emails the ticket, and staff can email registrants by status, only when the region's Brevo account is set up (item M). Without Brevo the registrant sees the ticket on their own status page |
+| X6 | **Inherited faults found, not fixed** (present in the base product too): (a) when a member RSVPs from the member app, the event's RSVP counter does not update, because members cannot write to events; (b) the member events page logs a permission error when a member has not RSVPed yet; (c) the tenant Storage rules let any signed-in user of a region, members included, read and write that region's files such as invoices | (a) and (b) are about half a day together. (c) needs its own rules change with negative tests; about half a day. Sifiso to decide when |
+
 ## Non-blocking, needed before the relevant phase
 
 | # | Question | Phase |

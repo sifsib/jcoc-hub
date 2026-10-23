@@ -15,6 +15,9 @@
 //   Two-region leader:    leader.two@demo-jcoc.test     / emulator-only-pass-5   (admin of Soweto and Northwest)
 //   Family group leader:  group.north1@demo-jcoc.test   / emulator-only-pass-6   (Soweto, North 1 only)
 //   Children's teacher:   teacher@demo-jcoc.test        / emulator-only-pass-7   (Soweto, Pre-School and Scholars)
+//   Payment verifier:     verifier@demo-jcoc.test       / emulator-only-pass-8   (Soweto, Youth Camp payments only)
+//
+// Public registration for the demo Youth Camp: http://localhost:3000/register/ev-youth-camp
 //
 // Birthdays and anniversaries are generated relative to today, so the
 // Birthdays & Anniversaries page always has something in "This week".
@@ -66,6 +69,7 @@ await upsertUser("network-owner", "network@demo-jcoc.test", "emulator-only-pass-
 await upsertUser("leader-two", "leader.two@demo-jcoc.test", "emulator-only-pass-5", "Kagiso Two-Region Leader");
 await upsertUser("group-north1", "group.north1@demo-jcoc.test", "emulator-only-pass-6", "Zanele Group Leader");
 await upsertUser("kids-teacher", "teacher@demo-jcoc.test", "emulator-only-pass-7", "Mpho Teacher");
+await upsertUser("pay-verifier", "verifier@demo-jcoc.test", "emulator-only-pass-8", "Lindiwe Verifier");
 // The pre-Phase 2 branch admin login is replaced by the sector leader.
 await auth.deleteUser("branch-north").catch(() => {});
 await db.doc("users/branch-north").delete();
@@ -233,6 +237,31 @@ await db.doc(`visitors/vis-sam/visits/${on(-7, new Date(friday).getUTCFullYear()
 for (const col of ["childCheckins", "childCheckinSecrets"]) {
   (await db.collection(col).where("tenantId", "==", TENANT_ID).get()).forEach((d) => d.ref.delete());
 }
+
+// ── Event registration (ADR-013) ─────────────────────────────────────────
+// A paid camp a month away, with every question switched on. Lindiwe holds a
+// follow-up role and is a verifier on this event only. Registrations are
+// made through the public page, so earlier ones are cleared.
+await db.doc("users/pay-verifier").set({
+  email: "verifier@demo-jcoc.test", displayName: "Lindiwe Verifier", role: "follow_up",
+  tenantId: TENANT_ID, sectorId: "", familyGroupId: "", roles: [], status: "active", createdAt: ts,
+  ...held({ [TENANT_ID]: { role: "follow_up" } }),
+});
+const campDate = new Date(todayUTC + 30 * DAY).toISOString().slice(0, 10);
+await db.doc("events/ev-youth-camp").set({
+  tenantId: TENANT_ID, title: "Youth Camp (demo)", type: "youth", description: "A weekend away for the youth. Invented test event.",
+  date: campDate, endDate: campDate, startTime: "09:00", endTime: "16:00", location: "Magaliesberg (demo)", capacity: 0, active: true,
+  createdAt: ts, organiserUid: TENANT_ID, verifierUids: ["pay-verifier", TENANT_ID],
+  registration: {
+    enabled: true, amountCents: 35000, referencePrefix: "YC26", proofRequired: true,
+    paymentInstructions: "Bank: Demo Bank\nAccount name: Demo Church\nAccount number: 0000000000 (not real)\nUse your payment reference exactly as shown.",
+    fields: { tshirt: true, transport: true, dietary: true, region: true, indemnity: true },
+    tshirtSizes: ["S", "M", "L", "XL"], capacity: 50, closesAt: "", eventDate: campDate,
+  },
+  registrationSeq: 0,
+});
+(await db.collection("registrations").where("tenantId", "==", TENANT_ID).get()).forEach((d) => d.ref.delete());
+(await db.collection("registrationRateLimits").get()).forEach((d) => d.ref.delete());
 
 // Clear any earlier life phase reviews and the approved year, so a fresh run starts clean.
 for (const t of [TENANT_ID, NORTHWEST, TSHWANE]) {
