@@ -1,8 +1,13 @@
 # JCOC Hub build plan
 
-Version 1, 23 October 2026. Owner: Sifiso Sibuyane.
+Version 2, 23 October 2026. Owner: Sifiso Sibuyane.
 
-Save this file in the jcoc-hub repo as `docs/jcoc-build-plan.md` so every Claude Code session can read it.
+Save this file in the jcoc-hub repo as `docs/jcoc-build-plan.md` so every Claude Code session can read it. It replaces version 1.
+
+Changes from version 1:
+- Teen now starts on 1 January of the year a child turns 14, whatever their grade. Teen replaces Pre-teen and Kidz Zone. The Phase 3 summary, the life phases tables and Prompt D are updated to match.
+- Phase 0 status updated: the rules fix is live and the misuse checks are done (see Phase 0).
+- New item for porting to kereke-hub: an audit trail for member changes.
 
 ## Commercial terms (agreed with JCOC)
 
@@ -28,16 +33,26 @@ Save this file in the jcoc-hub repo as `docs/jcoc-build-plan.md` so every Claude
 - Click through the feature on the emulators with seeded test data. Never use real member data.
 - Don't push or deploy. Sifiso does that.
 - Any security hole found that also exists in the base code goes on a list for porting to kereke-hub.
+- The repos pin Node 20 in `.nvmrc`, but Node 20 reached end of life on 30 April 2026. Move both repos to the current Node LTS (and set the same version in Vercel) as a small, separate change.
 - Finish every session with a handover in `handovers/` and a plain-language summary for Sifiso, who is not a developer.
 
 ## Phases
 
 ### Phase 0: security and housekeeping (Sifiso, now)
 
-1. Make kereke-hub, jcoc-hub and LeyabonasBoutique private on GitHub.
-2. Deploy the Firestore rules fix to live Kereke Hub.
-3. Check live data for signs of misuse.
-4. Push `fix/rules-tenant-escalation` (kereke-hub) and the jcoc-hub branches.
+1. Make kereke-hub, jcoc-hub and LeyabonasBoutique private on GitHub. Done for kereke-hub and jcoc-hub. LeyabonasBoutique not yet checked.
+2. Deploy the Firestore rules fix to live Kereke Hub. Done on 23 October 2026. The first CLI deploy didn't take. The rules from commit `86d3232` were then published in the Firebase console and checked. Members, roster and Church Settings save work on the live app. Storage rules were not changed by the fix.
+3. Check live data for signs of misuse. Done on 23 October 2026:
+   - Tenants with `accountType == "internal"`: one, Sifiso's own.
+   - Users with `role == "super_admin"`: one, Sifiso.
+   - Member status, branch and role changes: can't be checked. The app keeps no audit trail of member changes, and Firestore point-in-time recovery has not been confirmed as on.
+   - Vercel logs for `/api/admin/*`: can't be checked. The Hobby plan keeps one hour of logs.
+   - So no signs of misuse were found, but two checks had no data behind them. Use that wording when getting legal advice.
+4. Push `fix/rules-tenant-escalation` (kereke-hub) and the jcoc-hub branches. kereke-hub branch pushed on 23 October 2026. Don't merge into `main` until the app changes are tested in a browser.
+
+Items to port to kereke-hub:
+- Audit trail for member changes (who changed what, and when), at least for status, branch, role and life phase fields.
+- Server-side allowlist of Sifiso's UID for `/api/admin` routes.
 
 ### Phase 1: hosting on jcoc.kerekehub.co.za
 
@@ -61,24 +76,32 @@ Save this file in the jcoc-hub repo as `docs/jcoc-build-plan.md` so every Claude
 - A person can hold several life phases at once (for example widow, empty nester, single parent).
 - Admins can filter on combinations (for example mature married with children).
 - Life phases move at the start of each year, not on birthdays.
-- Children: preschooler or scholar only, no school grades. Teen ministry from age 14.
+- Children up to the year they turn 13: the school grade drives the phase (see the spec below).
+- Teen starts on 1 January of the year a child turns 14, whatever their grade. Some children turn 13 while still in primary school, so grade can't decide this.
 - Parents' phases follow their children's ages (parent of child under 10, over 10, teen parent).
 - Admins can still set or override a phase by hand.
 
 #### Life phases spec (from JCOC's "Life Phases" sheet)
 
-Children: the school grade drives the phase, not the birthday. Store a grade per child. Default it from the birth year (Grade 1 in the year the child turns 7, which matches the sheet), let admins override it for children who started early or repeated, and move everyone up one grade each January.
+Children: up to the year they turn 13, the school grade drives the phase, not the birthday. Store a grade per child. Default it from the birth year (Grade 1 in the year the child turns 7, which matches the sheet), let admins override it for children who started early or repeated, and move everyone up one grade each January.
+
+From the year a child turns 14, age decides, not grade (confirmed 23 October 2026). On 1 January of that year the child becomes Teen and drops Pre-teen, Child and Kidz Zone, even if they are still in Grade 7.
 
 | Band | Age (sheet) | Grade | Tags the child holds |
 |---|---|---|---|
 | Baby | 0 to 1 | none | Child, Baby |
 | Pre-School | 1 to 6 | Gr 000, Gr 00, Gr R | Child, Pre-School, Kidz Zone |
 | Scholar | 6 to 11 | Gr 1 to Gr 5 | Child, Scholar, Kidz Zone |
-| Pre-teen | 11 to 13 | Gr 6 to Gr 7 | Child, Pre-teen, Scholar, Kidz Zone |
-| Teen | 13 to 18 | Gr 8 to Gr 12 | Teen, Scholar |
+| Pre-teen | 11 to 13 | Gr 6 to Gr 7, or later grades while under 14 | Child, Pre-teen, Scholar, Kidz Zone |
+| Teen | Turns 14 this year, up to 18 | Any | Teen, Scholar |
 | Campus Student | 18 to 21 | none | Campus Student |
 
-Reading of the sheet's fourth column: each band lists the tags in a vertical run. Confirm with Anita.
+Edge cases (Sifiso's reading of the 14 rule; confirm with Anita):
+- A child who turns 14 while in Grade 7: Teen and Scholar only. No Kidz Zone.
+- A child in Grade 8 who turns 13 this year (started early): stays Pre-teen and Kidz Zone until 1 January of the year they turn 14.
+- Teens keep the Scholar tag while they're still at school.
+
+Reading of the sheet's fourth column: each band lists the tags in a vertical run. Confirmed on 23 October 2026.
 
 Adults:
 
@@ -99,7 +122,7 @@ Adults:
 | Empty Nester | Youngest linked child is 21 or older | Yes, from linked children; admins can override |
 
 Confirmed answers (23 October 2026):
-- The tag reading is correct. Kidz Zone runs from Pre-School to Grade 7.
+- The tag reading is correct. Kidz Zone runs from Pre-School to Grade 7, and ends early for any child who turns 14 before finishing Grade 7.
 - Single Dad is a separate phase from Single Mom.
 - Campus Student is automatic from 18 up to 21. Admins can mark anyone else as a student by hand. At 21 they become Young Single (or whatever their marital status gives).
 - A child stops being dependent at 21 (used for Empty Nester and for the Single Mom/Dad definition).
@@ -107,9 +130,10 @@ Confirmed answers (23 October 2026):
 
 The 1 January rule (applies to every age-based phase):
 - All changes happen on 1 January of the year the age changes. Work with "age this calendar year" = current year minus birth year, never the exact birthday.
-- Examples: a child counts as under 10 up to and including the year they turn 10. From 1 January of the year they turn 11, the parent becomes "Parents of Kids >10". A single becomes Mature Single on 1 January of the year they turn 25. Campus Student ends on 1 January of the year they turn 21. Empty Nester starts on 1 January of the year the youngest child turns 21. Young/Mature Married uses the wedding year in the same way.
+- Examples: a child becomes Teen on 1 January of the year they turn 14, whatever their grade. A child counts as under 10 up to and including the year they turn 10. From 1 January of the year they turn 11, the parent becomes "Parents of Kids >10". A single becomes Mature Single on 1 January of the year they turn 25. Campus Student ends on 1 January of the year they turn 21. Empty Nester starts on 1 January of the year the youngest child turns 21. Young/Mature Married uses the wedding year in the same way.
 - A scheduled job runs early on 1 January to apply the changes, and the same logic runs whenever a member's details are saved.
 - Unit tests must cover December 31 vs January 1, and children born on 1 January and 31 December.
+- Unit tests must also cover the Teen switch: a child turning 14 while in Grade 7 (becomes Teen, loses Kidz Zone), and a child in Grade 8 turning 13 (stays Pre-teen).
 
 Old marital statuses (confirmed):
   - "Traditional Marriage" (customary marriage) becomes Married, with a marriage type field (civil, customary, religious). It counts for Young/Mature Married.
@@ -215,9 +239,9 @@ Start by writing an ADR for the data model and role scoping and show it to me. W
 ```
 Read docs/jcoc-build-plan.md and the latest handover. Build Phase 3 on a new branch feature/p3-life-phases.
 
-Here's JCOC's life phases list: <paste list>
+The life phases spec is in the plan under Phase 3, including the 1 January rule and the Teen-from-14 rule.
 
-Write an ADR first, covering: multi-select phases, which phases are age-based, the start-of-year transition (teen from 14, preschooler vs scholar, parents following children's ages), and manual overrides. Show it to me and wait for approval. Then add unit tests for the transition rules with edge cases (children born late in the year, families with several children, a child turning 14 mid-year), rules tests, the build, filters for combinations, and a click-through. Don't push or deploy. Finish with a handover and a plain-language summary.
+Write an ADR first, covering: multi-select phases, the grade field for children up to 13, which phases are age-based, the 1 January transition (Teen on 1 January of the year a child turns 14 whatever their grade, grade-driven bands below that, parents following children's ages), the wedding date and marriage type fields, how old marital statuses map, and manual overrides. Show it to me and wait for approval. Then add unit tests for the transition rules with edge cases (31 December vs 1 January, children born on 1 January and 31 December, a child turning 14 in Grade 7, a child in Grade 8 turning 13, families with several children), rules tests, the build, filters for combinations, and a click-through. Don't push or deploy. Finish with a handover and a plain-language summary.
 ```
 
 ## Prompt E: prototype checkpoint
