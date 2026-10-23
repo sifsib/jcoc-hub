@@ -12,17 +12,13 @@ import {
   getDoc,
   doc,
 } from "firebase/firestore";
+import { useChurchStructure } from "../../../../lib/useChurchStructure";
+import { familyGroupsIn, pickerOptions } from "../../../../lib/churchStructure";
+import { STRUCTURE_LABELS } from "../../../../lib/whiteLabel";
 
-// Cell groups belong to a branch via cellGroupBranch. Groups with no branch
-// assigned stay visible under every branch (legacy-safe).
-function cellGroupsForBranch(
-  cellGroups: string[],
-  cellGroupBranch: Record<string, string>,
-  branch: string,
-): string[] {
-  if (!branch || branch === "all") return cellGroups;
-  return cellGroups.filter(cg => !cellGroupBranch[cg] || cellGroupBranch[cg] === branch);
-}
+// The report groups by sector and family group ids (ADR-010). The "region"
+// view below is the base product's name for its cell-group breakdown; it now
+// breaks down by family group.
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,8 +26,8 @@ interface Member {
   id: string;
   fullName: string;
   role: string;
-  branch?: string;
-  cellRegion?: string;
+  sectorId?: string;
+  familyGroupId?: string;
   ministryGroup?: string;
 }
 
@@ -128,20 +124,21 @@ export default function AttendanceReportPage() {
   const [allMembers, setMembers] = useState<Member[]>([]);
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([]);
   const [sessions, setSessions] = useState<ServiceSession[]>([]);
-  const [branches, setBranches] = useState<string[]>([]);
-  const [cellGroupBranch, setCellGroupBranch] = useState<Record<string, string>>({});
-  const [allCellRegions, setAllCellRegions] = useState<string[]>([]);
+  const structure = useChurchStructure(appUser?.tenantId);
+  const branches = useMemo(() => pickerOptions(structure.sectors).map(x => x.id), [structure.sectors]);
   const [branchFilter, setBranchFilter] = useState("all");
+  const sectorName = (id: string) => structure.sectorById.get(id)?.name ?? "";
+  const groupName = (id: string) => structure.familyGroupById.get(id)?.name ?? "";
 
-  // Everything downstream reads these branch-scoped lists, so switching branch
-  // narrows the whole report at once.
+  // Everything downstream reads these sector-scoped lists, so switching
+  // sector narrows the whole report at once.
   const members = useMemo(
-    () => branchFilter === "all" ? allMembers : allMembers.filter(m => m.branch === branchFilter),
+    () => branchFilter === "all" ? allMembers : allMembers.filter(m => m.sectorId === branchFilter),
     [allMembers, branchFilter],
   );
   const cellRegions = useMemo(
-    () => cellGroupsForBranch(allCellRegions, cellGroupBranch, branchFilter),
-    [allCellRegions, cellGroupBranch, branchFilter],
+    () => (branchFilter === "all" ? pickerOptions(structure.familyGroups) : familyGroupsIn(structure.familyGroups, branchFilter)).map(g => g.id),
+    [structure.familyGroups, branchFilter],
   );
   const [loading, setLoading] = useState(true);
 
@@ -168,15 +165,17 @@ export default function AttendanceReportPage() {
         const tenantSnap = await getDoc(doc(db, "tenants", tenantId));
         const td = tenantSnap.data() || {};
         setSessions(td.serviceSessions || []);
-        setBranches(td.branches || []);
-        setCellGroupBranch(td.cellGroupBranch || {});
-        setAllCellRegions(td.cellRegions || []);
 
-        // Members. Cell leaders are scoped to their cell group; branch admins
-        // to their branch.
+        // Members. Sector and family group leaders see only their own people,
+        // and the rules refuse anything wider (ADR-010). The base product's
+        // cell leaders and branch admins keep their old scope.
         const isCellLeader = appUser.role === "cell_leader";
         const isBranchAdmin = appUser.role === "branch_admin";
-        const mQuery = isCellLeader && appUser.assignedCellRegion
+        const leaderField = appUser.role === "sector_leader" ? "sectorId" : appUser.role === "family_group_leader" ? "familyGroupId" : null;
+        const leaderId = leaderField === "sectorId" ? appUser.sectorId : appUser.familyGroupId;
+        const mQuery = leaderField
+          ? query(collection(db, "members"), where("tenantId", "==", tenantId), where(leaderField, "==", leaderId))
+          : isCellLeader && appUser.assignedCellRegion
           ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("cellRegion", "==", appUser.assignedCellRegion))
           : isBranchAdmin && appUser.assignedBranch
           ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("branch", "==", appUser.assignedBranch))
@@ -187,9 +186,11 @@ export default function AttendanceReportPage() {
         mList.sort((a, b) => a.fullName.localeCompare(b.fullName));
         setMembers(mList);
 
-        // All attendance for this tenant
+        // All attendance for this tenant (or the leader's own people)
         const aSnap = await getDocs(
-          query(collection(db, "attendance"), where("tenantId", "==", tenantId))
+          leaderField
+            ? query(collection(db, "attendance"), where("tenantId", "==", tenantId), where(leaderField, "==", leaderId))
+            : query(collection(db, "attendance"), where("tenantId", "==", tenantId))
         );
         const aList: AttendanceRecord[] = [];
         aSnap.forEach(d => aList.push({ id: d.id, ...d.data() } as AttendanceRecord));
@@ -250,7 +251,7 @@ export default function AttendanceReportPage() {
   }
 
   function regionStats(region: string) {
-    const inRegion = members.filter(m => m.cellRegion === region);
+    const inRegion = members.filter(m => m.familyGroupId === region);
     if (inRegion.length === 0 || servicesInPeriod.length === 0) return { pct: 0, present: 0, slots: 0 };
     let present = 0;
     const slots = inRegion.length * servicesInPeriod.length;
@@ -353,7 +354,7 @@ export default function AttendanceReportPage() {
           <h2 className="text-2xl font-bold text-gray-800">{member.fullName}</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             {member.role}
-            {member.cellRegion && <> &middot; {member.cellRegion}</>}
+            {member.familyGroupId && <> &middot; {groupName(member.familyGroupId)}</>}
             {member.ministryGroup && <> &middot; {member.ministryGroup}</>}
           </p>
         </div>
@@ -425,7 +426,7 @@ export default function AttendanceReportPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-800">Attendance Report</h1>
         <p className="text-gray-500 text-sm mt-1">
-          Analyse attendance trends across services, branches, cell groups, and members
+          Analyse attendance trends across services, {STRUCTURE_LABELS.sector.many.toLowerCase()}, {STRUCTURE_LABELS.familyGroup.many.toLowerCase()}, and members
         </p>
       </div>
 
@@ -491,10 +492,10 @@ export default function AttendanceReportPage() {
           </div>
         )}
 
-        {/* Branch filter — scopes the whole report to one campus */}
+        {/* Sector filter: scopes the whole report to one sector */}
         {branches.length > 1 && (
           <div className="flex flex-wrap gap-2 pt-1 border-t border-gray-100">
-            <span className="text-xs text-gray-400 font-medium self-center">Branch:</span>
+            <span className="text-xs text-gray-400 font-medium self-center">{STRUCTURE_LABELS.sector.one}:</span>
             <button
               onClick={() => { setBranchFilter("all"); setRegionFilter("all"); }}
               className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${
@@ -509,7 +510,7 @@ export default function AttendanceReportPage() {
                   branchFilter === b ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
                 }`}
               >
-                {b}
+                {sectorName(b)}
               </button>
             ))}
           </div>
@@ -520,7 +521,7 @@ export default function AttendanceReportPage() {
       <div className="flex gap-2 border-b border-gray-200 pb-0">
         {[
           { label: "Overview", value: "overview" as View },
-          { label: "By Cell Group", value: "region" as View },
+          { label: `By ${STRUCTURE_LABELS.familyGroup.one}`, value: "region" as View },
           { label: "By Member", value: "person" as View },
           { label: `Falling Off${fallingOff.length > 0 ? ` (${fallingOff.length})` : ""}`, value: "dropoff" as View },
         ].map(tab => (
@@ -562,7 +563,7 @@ export default function AttendanceReportPage() {
               {cellRegions.length > 0 && (
                 <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                   <div className="px-4 py-3 border-b bg-gray-50">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cell Groups at a Glance</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{STRUCTURE_LABELS.familyGroup.many} at a Glance</p>
                   </div>
                   <div className="divide-y divide-gray-100">
                     {cellRegions
@@ -571,7 +572,7 @@ export default function AttendanceReportPage() {
                       .sort((a, b) => b.stats.pct - a.stats.pct)
                       .map(({ region, stats }) => (
                         <div key={region} className="flex items-center justify-between px-4 py-3">
-                          <p className="text-sm font-medium text-gray-700">{region}</p>
+                          <p className="text-sm font-medium text-gray-700">{groupName(region)}</p>
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-gray-400">{stats.present} / {stats.slots}</span>
                             <span className={`text-sm font-bold ${getPctColor(stats.pct)}`}>{stats.pct}%</span>
@@ -606,21 +607,21 @@ export default function AttendanceReportPage() {
         <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
           {cellRegions.length === 0 ? (
             <p className="p-8 text-center text-sm text-gray-400">
-              No Cell Groups configured. Add them in Configure Lists to enable cell group reporting.
+              No {STRUCTURE_LABELS.familyGroup.many.toLowerCase()} yet. Add them on the Church Structure page to report by group.
             </p>
           ) : servicesInPeriod.length === 0 ? (
             <p className="p-8 text-center text-sm text-gray-400">No attendance data for this period.</p>
           ) : (
             <>
               <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cell Group Breakdown</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{STRUCTURE_LABELS.familyGroup.one} Breakdown</p>
                 <select
                   value={regionFilter}
                   onChange={e => setRegionFilter(e.target.value)}
                   className="text-xs border rounded p-1 text-gray-600 focus:outline-blue-500"
                 >
-                  <option value="all">All cell groups</option>
-                  {cellRegions.map(r => <option key={r} value={r}>{r}</option>)}
+                  <option value="all">All {STRUCTURE_LABELS.familyGroup.many.toLowerCase()}</option>
+                  {cellRegions.map(r => <option key={r} value={r}>{groupName(r)}</option>)}
                 </select>
               </div>
 
@@ -628,11 +629,11 @@ export default function AttendanceReportPage() {
               {(regionFilter === "all" ? cellRegions : [regionFilter])
                 .map(r => {
                   const stats = regionStats(r);
-                  const inRegion = members.filter(m => m.cellRegion === r);
+                  const inRegion = members.filter(m => m.familyGroupId === r);
                   return (
                     <div key={r}>
                       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
-                        <p className="text-sm font-semibold text-gray-700">{r}</p>
+                        <p className="text-sm font-semibold text-gray-700">{groupName(r)}</p>
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-gray-400">{stats.present}/{stats.slots} slots</span>
                           <span className={`text-sm font-bold ${getPctColor(stats.pct)}`}>{stats.pct}%</span>
@@ -683,8 +684,8 @@ export default function AttendanceReportPage() {
               onChange={e => setRegionFilter(e.target.value)}
               className="text-xs border rounded p-1 text-gray-600 focus:outline-blue-500"
             >
-              <option value="all">All cell groups</option>
-              {cellRegions.map(r => <option key={r} value={r}>{r}</option>)}
+              <option value="all">All {STRUCTURE_LABELS.familyGroup.many.toLowerCase()}</option>
+              {cellRegions.map(r => <option key={r} value={r}>{groupName(r)}</option>)}
             </select>
           </div>
 
@@ -693,7 +694,7 @@ export default function AttendanceReportPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {members
-                .filter(m => regionFilter === "all" || m.cellRegion === regionFilter)
+                .filter(m => regionFilter === "all" || m.familyGroupId === regionFilter)
                 .map(m => ({ m, ps: personStats(m.id) }))
                 .sort((a, b) => (a.ps.pct ?? 0) - (b.ps.pct ?? 0))
                 .map(({ m, ps }) => (
@@ -705,8 +706,8 @@ export default function AttendanceReportPage() {
                     <div>
                       <p className="text-sm font-medium text-gray-800">{m.fullName}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        {m.cellRegion && (
-                          <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{m.cellRegion}</span>
+                        {m.familyGroupId && (
+                          <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{groupName(m.familyGroupId)}</span>
                         )}
                         <span className="text-xs text-gray-400">{ps.present}/{ps.total} services</span>
                       </div>
@@ -754,7 +755,7 @@ export default function AttendanceReportPage() {
                           {member.fullName}
                         </button>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          {member.cellRegion && <>{member.cellRegion} &middot; </>}{reason}
+                          {member.familyGroupId && <>{groupName(member.familyGroupId)} &middot; </>}{reason}
                         </p>
                       </div>
                       <div className="flex gap-1.5 shrink-0">

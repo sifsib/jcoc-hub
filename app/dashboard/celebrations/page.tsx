@@ -22,7 +22,7 @@ import {
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 
 // Roles that can already see the member list. Scoping below mirrors the roster.
-const ALLOWED_ROLES = ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "super_admin"];
+const ALLOWED_ROLES = ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader", "super_admin"];
 
 // The weekly members' email goes out on a Friday and covers Friday to the
 // following Thursday. JavaScript weekday numbering: 5 is Friday.
@@ -60,8 +60,14 @@ export default function CelebrationsPage() {
         // Same scoping as the roster: cell leaders see their cell, branch
         // admins their branch, everyone else the whole church.
         const base = [where("tenantId", "==", appUser.tenantId)];
+        // Sector and family group leaders: their own people only; the rules
+        // refuse the query without the filter (ADR-010).
         const q =
-          appUser.role === "cell_leader" && appUser.assignedCellRegion
+          appUser.role === "sector_leader"
+            ? query(collection(db, "members"), ...base, where("sectorId", "==", appUser.sectorId))
+            : appUser.role === "family_group_leader"
+            ? query(collection(db, "members"), ...base, where("familyGroupId", "==", appUser.familyGroupId))
+            : appUser.role === "cell_leader" && appUser.assignedCellRegion
             ? query(collection(db, "members"), ...base, where("cellRegion", "==", appUser.assignedCellRegion))
             : appUser.role === "branch_admin" && appUser.assignedBranch
             ? query(collection(db, "members"), ...base, where("branch", "==", appUser.assignedBranch))

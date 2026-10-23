@@ -8,6 +8,9 @@ import { useAppUser } from "../../../lib/useAppUser";
 import ExportMemberButton from "../../components/ExportMemberButton";
 import InfoTooltip from "../../components/InfoTooltip";
 import { formatSurnameFirst, compareBySurname } from "../../../lib/nameFormat";
+import { useChurchStructure } from "../../../lib/useChurchStructure";
+import { pickerOptions } from "../../../lib/churchStructure";
+import { STRUCTURE_LABELS } from "../../../lib/whiteLabel";
 import {
   collection,
   query,
@@ -27,8 +30,8 @@ interface Member {
   firstName?: string;
   lastName?: string;
   role: string;
-  branch?: string;
-  cellRegion?: string;
+  sectorId?: string;
+  familyGroupId?: string;
   ministryGroup?: string;
   absenceException?: { tag: string } | null;
   createdAt?: { toDate: () => Date } | null; // Firestore Timestamp
@@ -59,8 +62,20 @@ const DAY_INDEX: Record<string, number> = {
 
 export default function AttendancePage() {
   const { appUser, loading: userLoading } = useAppUser();
+  const structure = useChurchStructure(appUser?.tenantId);
+  // Sector and family group leaders work only with their own people (ADR-010).
+  const leaderScope: { field: "sectorId" | "familyGroupId"; id: string } | null =
+    appUser?.role === "sector_leader" && appUser.sectorId ? { field: "sectorId", id: appUser.sectorId }
+    : appUser?.role === "family_group_leader" && appUser.familyGroupId ? { field: "familyGroupId", id: appUser.familyGroupId }
+    : null;
 
   const [members, setMembers] = useState<Member[]>([]);
+  // Every record carries the person's sector and family group, so the rules
+  // can limit leaders to their own people's records (ADR-010).
+  const placementOf = (personId: string) => {
+    const m = members.find(x => x.id === personId);
+    return { sectorId: m?.sectorId || "", familyGroupId: m?.familyGroupId || "" };
+  };
   const [attendanceCache, setAttendanceCache] = useState<Record<string, AttendanceRecord>>({});
   const [loading, setLoading] = useState(true);
 
@@ -74,10 +89,8 @@ export default function AttendancePage() {
   const [dateError, setDateError] = useState("");
 
   // Attendance filter state
-  const [filterType, setFilterType] = useState<"all" | "branch" | "cellRegion" | "ministryGroup">("all");
+  const [filterType, setFilterType] = useState<"all" | "sectorId" | "familyGroupId" | "ministryGroup">("all");
   const [filterValue, setFilterValue] = useState("");
-  const [configBranches, setConfigBranches] = useState<string[]>([]);
-  const [configCellRegions, setConfigCellRegions] = useState<string[]>([]);
   const [configMinistryGroups, setConfigMinistryGroups] = useState<string[]>([]);
 
   // Tracking start date lock
@@ -121,8 +134,6 @@ export default function AttendancePage() {
         const loaded: ServiceSession[] = td.serviceSessions || [];
         setSessions(loaded);
         setTrackingStartDate(td.trackingStartDate || "");
-        setConfigBranches(td.branches || []);
-        setConfigCellRegions(td.cellRegions || []);
         setConfigMinistryGroups(td.ministryGroups || []);
 
         // Set default date: today if it matches a session day, else nearest upcoming match
@@ -223,11 +234,14 @@ export default function AttendancePage() {
       const serviceId = `${selectedDate}_${activeSession.id}`;
 
       try {
-        // Cell leaders only see their assigned cell group; branch admins only
-        // see their assigned branch.
+        // Sector and family group leaders only see, and mark, their own
+        // people; the rules refuse anything wider (ADR-010). The base
+        // product's cell leaders and branch admins keep their old scope.
         const isCellLeader = appUser.role === "cell_leader";
         const isBranchAdmin = appUser.role === "branch_admin";
-        const qMembers = isCellLeader && appUser.assignedCellRegion
+        const qMembers = leaderScope
+          ? query(collection(db, "members"), where("tenantId", "==", tenantId), where(leaderScope.field, "==", leaderScope.id))
+          : isCellLeader && appUser.assignedCellRegion
           ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("cellRegion", "==", appUser.assignedCellRegion))
           : isBranchAdmin && appUser.assignedBranch
           ? query(collection(db, "members"), where("tenantId", "==", tenantId), where("branch", "==", appUser.assignedBranch))
@@ -238,11 +252,18 @@ export default function AttendancePage() {
         memberList.sort(compareBySurname);
         setMembers(memberList);
 
-        const qAttendance = query(
-          collection(db, "attendance"),
-          where("serviceId", "==", serviceId),
-          where("tenantId", "==", tenantId)
-        );
+        const qAttendance = leaderScope
+          ? query(
+              collection(db, "attendance"),
+              where("serviceId", "==", serviceId),
+              where("tenantId", "==", tenantId),
+              where(leaderScope.field, "==", leaderScope.id)
+            )
+          : query(
+              collection(db, "attendance"),
+              where("serviceId", "==", serviceId),
+              where("tenantId", "==", tenantId)
+            );
         const attendanceSnap = await getDocs(qAttendance);
         const cache: Record<string, AttendanceRecord> = {};
         attendanceSnap.forEach((d) => {
@@ -279,6 +300,7 @@ export default function AttendancePage() {
         {
           tenantId: appUser.tenantId,
           personId,
+          ...placementOf(personId),
           serviceId,
           serviceDate: selectedDate,
           serviceType: activeSession.id,
@@ -328,6 +350,7 @@ export default function AttendancePage() {
         {
           tenantId: appUser.tenantId,
           personId: selectedPerson.id,
+          ...placementOf(selectedPerson.id),
           serviceId,
           serviceDate: selectedDate,
           serviceType: activeSession.id,
@@ -377,8 +400,8 @@ export default function AttendancePage() {
     // Hide members from services that pre-date their capture.
     const eligibleFrom = earliestEligibleDate(m);
     if (eligibleFrom && selectedDate && selectedDate < eligibleFrom) return false;
-    if (filterType === "branch") return m.branch === filterValue;
-    if (filterType === "cellRegion") return m.cellRegion === filterValue;
+    if (filterType === "sectorId") return m.sectorId === filterValue;
+    if (filterType === "familyGroupId") return m.familyGroupId === filterValue;
     if (filterType === "ministryGroup") return m.ministryGroup === filterValue;
     return true;
   });
@@ -473,8 +496,8 @@ export default function AttendancePage() {
         firstName: m.firstName || parts[0] || "",
         lastName: m.lastName || parts.slice(1).join(" ") || "",
         role: m.role || "-",
-        branch: m.branch || "-",
-        cellRegion: m.cellRegion || "-",
+        sector: structure.sectorById.get(m.sectorId || "")?.name || "-",
+        familyGroup: structure.familyGroupById.get(m.familyGroupId || "")?.name || "-",
         ministryGroup: m.ministryGroup || "-",
         status,
         absenceReported,
@@ -494,8 +517,8 @@ export default function AttendancePage() {
     { key: "firstName" as const, label: "First Name" },
     { key: "lastName" as const, label: "Last Name" },
     { key: "role" as const, label: "Role" },
-    { key: "branch" as const, label: "Branch" },
-    { key: "cellRegion" as const, label: "Cell Group" },
+    { key: "sector" as const, label: STRUCTURE_LABELS.sector.one },
+    { key: "familyGroup" as const, label: STRUCTURE_LABELS.familyGroup.one },
     { key: "ministryGroup" as const, label: "Ministry Group" },
     { key: "status" as const, label: "Status" },
     { key: "absenceReported" as const, label: "Absence Reported" },
@@ -574,7 +597,17 @@ export default function AttendancePage() {
         <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
           {/* Filter Bar */}
           <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
-            {appUser?.role === "cell_leader" ? (
+            {leaderScope ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Showing:</span>
+                <span className="text-xs px-3 py-1 rounded-full font-semibold bg-teal-100 text-teal-700 border border-teal-300">
+                  {leaderScope.field === "sectorId"
+                    ? structure.sectorById.get(leaderScope.id)?.name
+                    : structure.familyGroupById.get(leaderScope.id)?.name}
+                </span>
+                <span className="text-xs text-gray-400">(restricted to your {leaderScope.field === "sectorId" ? STRUCTURE_LABELS.sector.one.toLowerCase() : STRUCTURE_LABELS.familyGroup.one.toLowerCase()})</span>
+              </div>
+            ) : appUser?.role === "cell_leader" ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Showing:</span>
                 <span className="text-xs px-3 py-1 rounded-full font-semibold bg-teal-100 text-teal-700 border border-teal-300">
@@ -593,25 +626,25 @@ export default function AttendancePage() {
                   All ({members.length})
                 </button>
 
-                {configBranches.length > 0 && (
+                {pickerOptions(structure.sectors).length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-xs text-gray-400 font-medium">Branch:</span>
-                    {configBranches.map(b => (
-                      <button key={b} onClick={() => { setFilterType("branch"); setFilterValue(b); }}
-                        className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "branch" && filterValue === b ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
-                        {b}
+                    <span className="text-xs text-gray-400 font-medium">{STRUCTURE_LABELS.sector.one}:</span>
+                    {pickerOptions(structure.sectors).map(x => (
+                      <button key={x.id} onClick={() => { setFilterType("sectorId"); setFilterValue(x.id); }}
+                        className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "sectorId" && filterValue === x.id ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
+                        {x.name}
                       </button>
                     ))}
                   </div>
                 )}
 
-                {configCellRegions.length > 0 && (
+                {pickerOptions(structure.familyGroups).length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-xs text-gray-400 font-medium">Cell Group:</span>
-                    {configCellRegions.map(r => (
-                      <button key={r} onClick={() => { setFilterType("cellRegion"); setFilterValue(r); }}
-                        className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "cellRegion" && filterValue === r ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
-                        {r}
+                    <span className="text-xs text-gray-400 font-medium">{STRUCTURE_LABELS.familyGroup.one}:</span>
+                    {pickerOptions(structure.familyGroups).map(g => (
+                      <button key={g.id} onClick={() => { setFilterType("familyGroupId"); setFilterValue(g.id); }}
+                        className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${filterType === "familyGroupId" && filterValue === g.id ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"}`}>
+                        {g.name}
                       </button>
                     ))}
                   </div>
@@ -629,8 +662,8 @@ export default function AttendancePage() {
                   </div>
                 )}
 
-                {configBranches.length === 0 && configCellRegions.length === 0 && configMinistryGroups.length === 0 && (
-                  <span className="text-xs text-gray-400 italic">Add Branches, Cell Groups and Ministry Groups in Configure Lists to enable filtering.</span>
+                {structure.sectors.length === 0 && configMinistryGroups.length === 0 && (
+                  <span className="text-xs text-gray-400 italic">Add {STRUCTURE_LABELS.sector.many.toLowerCase()} on the Church Structure page, or ministry groups in Configure Lists, to enable filtering.</span>
                 )}
               </>
             )}
@@ -693,9 +726,9 @@ export default function AttendancePage() {
                       <p className="font-medium text-gray-900">{formatSurnameFirst(person)}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="text-xs text-gray-500">{person.role}</span>
-                        {person.cellRegion && (
+                        {person.familyGroupId && structure.familyGroupById.get(person.familyGroupId) && (
                           <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
-                            {person.cellRegion}
+                            {structure.familyGroupById.get(person.familyGroupId)?.name}
                           </span>
                         )}
                         {person.ministryGroup && (
