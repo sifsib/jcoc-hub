@@ -10,8 +10,14 @@ service cloud.firestore {
     function userData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
+    // The caller's ACTIVE region. A user whose active region is no longer in
+    // their access list (it was removed) has no region at all, so access ends
+    // at once even if the server step that moves them failed (ADR-010).
+    // Users without an access list are single-region users from before
+    // Phase 2 and keep their one tenant.
     function userTenantId() {
-      return userData().tenantId;
+      let u = userData();
+      return regionHeld(u) ? u.tenantId : '__no_region__';
     }
     // Handles both a single 'role' string field and a 'roles' array field.
     function hasRole(role) {
@@ -76,6 +82,49 @@ service cloud.firestore {
           || hasRole('follow_up') || hasRole('branch_admin')
           || userData().get('visitorMinistry', false) == true;
     }
+    // ============================================
+    // REGION ACCESS AND NETWORK ROLES (ADR-010) - helpers
+    // ============================================
+    // A user works in one region at a time (tenantId, role). Leaders with
+    // several regions hold them in tenantAccess { [tenantId]: { role, roles?,
+    // sectorId?, familyGroupId? } }, written only by /api/region-access.
+    // network_owner and network_viewer reach every region of their orgId.
+    function regionHeld(u) {
+      return u.get('tenantAccess', null) == null
+          || u.tenantId in u.tenantAccess
+          || (u.get('networkRole', '') in ['network_owner', 'network_viewer']
+              && regionInOrg(u.tenantId, u.get('orgId', '')));
+    }
+    function regionInOrg(tenantId, orgId) {
+      return orgId is string && orgId != ''
+          && tenantId is string
+          && exists(/databases/$(database)/documents/tenants/$(tenantId))
+          && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('orgId', '') == orgId;
+    }
+    function callerOrgId() {
+      return userData().get('orgId', '');
+    }
+    function isNetworkOwner() {
+      return userData().get('networkRole', '') == 'network_owner';
+    }
+    function hasNetworkRole() {
+      return userData().get('networkRole', '') in ['network_owner', 'network_viewer'];
+    }
+    // Cross-region read and write for network roles, within their own org only.
+    function networkCanRead(tenantId) {
+      return hasNetworkRole() && regionInOrg(tenantId, callerOrgId());
+    }
+    function networkCanWrite(tenantId) {
+      return isNetworkOwner() && regionInOrg(tenantId, callerOrgId());
+    }
+    // Sector and family group leaders: the scope held in the active region.
+    function leaderSectorId() {
+      return hasRole('sector_leader') ? userData().get('sectorId', '') : '';
+    }
+    function leaderFamilyGroupId() {
+      return hasRole('family_group_leader') ? userData().get('familyGroupId', '') : '';
+    }
+
     function sameTenant(resource) {
       return resource.data.tenantId == userTenantId();
     }
@@ -148,6 +197,87 @@ service cloud.firestore {
     }
 
     // ============================================
+    // CHURCH STRUCTURE (ADR-010) - start
+    // ============================================
+    // organizations > churches > region tenants > sectors > familyGroups.
+    // Organisations, churches and regions are created by the server only.
+    // Sectors and family groups are managed by region owners and admins and
+    // by network owners. Nothing here is ever deleted: archive instead.
+    // Covered by tests/rules/churchStructure.test.ts.
+    match /organizations/{orgId} {
+      allow read: if isSignedIn() && callerOrgId() == orgId;
+      allow write: if false;
+    }
+    match /churches/{churchId} {
+      allow read: if isSignedIn()
+                  && callerOrgId() != ''
+                  && resource.data.orgId == callerOrgId();
+      allow write: if false;
+    }
+
+    function canManageStructureIn(tenantId) {
+      return (tenantId == userTenantId() && (hasRole('owner') || hasRole('admin')))
+          || networkCanWrite(tenantId);
+    }
+    function canReadStructureIn(tenantId) {
+      return tenantId == userTenantId() || networkCanRead(tenantId);
+    }
+    function validStructureName(data) {
+      return data.name is string && data.name.trim().size() > 0 && data.name.size() <= 100;
+    }
+    function sectorInTenant(sectorId, tenantId) {
+      return sectorId is string
+          && exists(/databases/$(database)/documents/sectors/$(sectorId))
+          && get(/databases/$(database)/documents/sectors/$(sectorId)).data.tenantId == tenantId;
+    }
+
+    match /sectors/{sectorId} {
+      allow read: if isSignedIn() && canReadStructureIn(resource.data.tenantId);
+      allow create: if isSignedIn()
+                    && canManageStructureIn(request.resource.data.tenantId)
+                    && validStructureName(request.resource.data)
+                    && request.resource.data.archived == false;
+      allow update: if isSignedIn()
+                    && canManageStructureIn(resource.data.tenantId)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && validStructureName(request.resource.data)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['name', 'archived', 'archivedAt', 'archivedBy', 'updatedAt', 'updatedBy']);
+      allow delete: if false;
+    }
+
+    match /familyGroups/{groupId} {
+      allow read: if isSignedIn() && canReadStructureIn(resource.data.tenantId);
+      allow create: if isSignedIn()
+                    && canManageStructureIn(request.resource.data.tenantId)
+                    && validStructureName(request.resource.data)
+                    && request.resource.data.archived == false
+                    && sectorInTenant(request.resource.data.sectorId, request.resource.data.tenantId);
+      allow update: if isSignedIn()
+                    && canManageStructureIn(resource.data.tenantId)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && validStructureName(request.resource.data)
+                    && sectorInTenant(request.resource.data.sectorId, resource.data.tenantId)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['name', 'sectorId', 'leaderMemberId', 'archived', 'archivedAt',
+                                   'archivedBy', 'updatedAt', 'updatedBy']);
+      allow delete: if false;
+    }
+
+    // Member change history, written only by the onMemberUpdated Cloud
+    // Function. Region owners and admins read their region; network owners
+    // read their org.
+    match /member_audit/{id} {
+      allow read: if isSignedIn()
+                  && ((resource.data.tenantId == userTenantId() && (hasRole('owner') || hasRole('admin')))
+                      || networkCanWrite(resource.data.tenantId));
+      allow write: if false;
+    }
+    // ============================================
+    // CHURCH STRUCTURE (ADR-010) - end
+    // ============================================
+
+    // ============================================
     // TENANTS COLLECTION
     // ============================================
     // Fields only the server may write: identity, billing, plan, status, slug
@@ -161,7 +291,8 @@ service cloud.firestore {
         'lastPaymentAt', 'lastPaymentAmount', 'billingHold', 'grandfathered',
         'trialEndsAt', 'evaluationEndsAt', 'fullRateStartsAt',
         'slug', 'ownerEmail', 'signupSource', 'signupDate', 'createdAt',
-        'lastLoginAt', 'lastLoginEmail', 'orgId', 'orgRole'
+        'lastLoginAt', 'lastLoginEmail', 'orgId', 'orgRole',
+        'churchId', 'archived', 'archivedAt', 'archivedBy'
       ]);
     }
 
@@ -173,6 +304,15 @@ service cloud.firestore {
       allow create: if false;
       allow read: if isSignedIn()
                   && (isSuperAdmin() || tenantId == userTenantId());
+      // Network roles read every region of their org (the Network page, the
+      // switcher). Multi-region leaders read the regions they hold, for the
+      // switcher. Covered by tests/rules/churchStructure.test.ts.
+      allow read: if isSignedIn()
+                  && hasNetworkRole()
+                  && callerOrgId() != ''
+                  && resource.data.get('orgId', '') == callerOrgId();
+      allow read: if isSignedIn()
+                  && tenantId in userData().get('tenantAccess', {});
       allow update: if isSignedIn()
                     && (isSuperAdmin()
                         || (tenantId == userTenantId()
@@ -195,28 +335,79 @@ service cloud.firestore {
       allow create: if false;
 
       // Read widened to managers so they can see the team list for DRI pickers.
-      // Write stays restricted to the owner via canManageUsers() below.
+      // Team lists query tenantIds (every region a user holds), so a leader
+      // with several regions appears in each. Network owners see their org.
       allow read: if isSignedIn()
                   && (userId == request.auth.uid
                       || isSuperAdmin()
                       || (sameTenant(resource) && canManageMembers()));
+      allow read: if isSignedIn()
+                  && canManageMembers()
+                  && userTenantId() in resource.data.get('tenantIds', []);
+      allow read: if isSignedIn()
+                  && isNetworkOwner()
+                  && callerOrgId() != ''
+                  && resource.data.get('orgId', '') == callerOrgId();
+
+      // Fields that decide what a user can reach. Only the server writes them
+      // (/api/region-access), apart from the region switch below. Role changes
+      // on the team page go through the same route (ADR-010).
+      function accessFields() {
+        return ['tenantId', 'role', 'roles', 'sectorId', 'familyGroupId',
+                'tenantAccess', 'tenantIds', 'orgId', 'networkRole',
+                'assignedBranch', 'assignedCellRegion'];
+      }
+      function changedUserKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+      // Switching the active region: only to a region the user holds (or, for
+      // network roles, any region of their org), taking exactly the role and
+      // scope recorded for it. Nothing else may change in the same write.
+      function isRegionSwitch() {
+        let after = request.resource.data;
+        let before = resource.data;
+        let t = after.get('tenantId', '');
+        let acc = before.get('tenantAccess', {});
+        return changedUserKeys().hasOnly(['tenantId', 'role', 'roles', 'sectorId', 'familyGroupId'])
+            && t is string && t != ''
+            && ((t in acc
+                 && after.get('role', '') == acc[t].get('role', '')
+                 && after.get('roles', []) == acc[t].get('roles', [])
+                 && after.get('sectorId', '') == acc[t].get('sectorId', '')
+                 && after.get('familyGroupId', '') == acc[t].get('familyGroupId', ''))
+                || (!(t in acc)
+                    && regionInOrg(t, before.get('orgId', ''))
+                    && ((before.get('networkRole', '') == 'network_owner' && after.get('role', '') == 'admin')
+                        || (before.get('networkRole', '') == 'network_viewer' && after.get('role', '') == 'viewer'))
+                    && after.get('roles', []) == []
+                    && after.get('sectorId', '') == ''
+                    && after.get('familyGroupId', '') == ''));
+      }
 
       allow update: if isSignedIn()
                     && (
                       isSuperAdmin()
+                      // Own profile (name, linked member). Never access, status
+                      // or the follow-up flag, which grants guest access.
                       || (userId == request.auth.uid
-                          && request.resource.data.role == resource.data.role
-                          && request.resource.data.roles == resource.data.roles
-                          && request.resource.data.tenantId == resource.data.tenantId)
+                          && !changedUserKeys().hasAny(accessFields())
+                          && !changedUserKeys().hasAny(['status', 'visitorMinistry']))
+                      || (userId == request.auth.uid && isRegionSwitch())
+                      // Owner managing their team: the follow-up flag and other
+                      // non-access fields only.
                       || (sameTenant(resource)
                           && canManageUsers()
-                          && request.resource.data.tenantId == resource.data.tenantId
-                          && request.resource.data.get('role', '') != 'super_admin'
-                          && !('super_admin' in request.resource.data.get('roles', [])))
+                          && !changedUserKeys().hasAny(accessFields()))
                     );
 
+      // Deleting a user removes every region they hold, so a region owner may
+      // only delete someone who holds no other region and no network role.
       allow delete: if isSignedIn()
-                    && (isSuperAdmin() || (sameTenant(resource) && canManageUsers()));
+                    && (isSuperAdmin()
+                        || (sameTenant(resource)
+                            && canManageUsers()
+                            && resource.data.get('tenantIds', []).size() <= 1
+                            && resource.data.get('networkRole', '') == ''));
     }
 
     // ============================================
@@ -232,14 +423,29 @@ service cloud.firestore {
       // (ADR-007). The old direct self-update let a member change their own
       // status, branch or church role. Covered by tests/rules/memberSelfService.test.ts.
       allow read: if isSignedIn() && isOwnMemberDoc(resource);
+      // Network roles read every region of their org. Sector and family group
+      // leaders read only their own people; list queries must filter on the
+      // same field (ADR-010).
+      allow read: if isSignedIn() && networkCanRead(resource.data.tenantId);
+      allow read: if isSignedIn()
+                  && sameTenant(resource)
+                  && leaderSectorId() != ''
+                  && resource.data.sectorId == leaderSectorId();
+      allow read: if isSignedIn()
+                  && sameTenant(resource)
+                  && leaderFamilyGroupId() != ''
+                  && resource.data.familyGroupId == leaderFamilyGroupId();
       allow create: if isSignedIn()
-                    && tenantAllowedWrite(request.resource.data)
-                    && canManageMembers()
+                    && ((tenantAllowedWrite(request.resource.data) && canManageMembers())
+                        || networkCanWrite(request.resource.data.tenantId))
                     && withinMemberLimit(request.resource.data);
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
                     && canManageMembers();
+      allow update: if isSignedIn()
+                    && networkCanWrite(resource.data.tenantId)
+                    && request.resource.data.tenantId == resource.data.tenantId;
       // Follow-up team: may touch the care follow-up stamp ONLY, so completing a
       // care workflow moves the member off the Care Tier Alerts list. No other
       // member field can be changed through this rule.
@@ -260,6 +466,27 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && tenantAllowed(resource)
                   && canReadAttendance();
+      // Sector and family group leaders: records stamped with their own sector
+      // or group only, for people who really are in it. Records carry absence
+      // reasons, so region-wide access is not given (ADR-010).
+      function leaderMayMark(data) {
+        return data.tenantId == userTenantId()
+            && exists(/databases/$(database)/documents/members/$(data.personId))
+            && ((leaderSectorId() != ''
+                 && data.sectorId == leaderSectorId()
+                 && get(/databases/$(database)/documents/members/$(data.personId)).data.get('sectorId', '') == leaderSectorId())
+                || (leaderFamilyGroupId() != ''
+                    && data.familyGroupId == leaderFamilyGroupId()
+                    && get(/databases/$(database)/documents/members/$(data.personId)).data.get('familyGroupId', '') == leaderFamilyGroupId()));
+      }
+      allow read: if isSignedIn()
+                  && sameTenant(resource)
+                  && ((leaderSectorId() != '' && resource.data.sectorId == leaderSectorId())
+                      || (leaderFamilyGroupId() != '' && resource.data.familyGroupId == leaderFamilyGroupId()));
+      allow create: if isSignedIn() && leaderMayMark(request.resource.data);
+      allow update: if isSignedIn()
+                    && leaderMayMark(resource.data)
+                    && leaderMayMark(request.resource.data);
       allow create: if isSignedIn()
                     && tenantAllowedWrite(request.resource.data)
                     && canManageAttendance();

@@ -265,7 +265,7 @@ members/{memberId}               tenantId, sectorId, familyGroupId (ids, not nam
 
 ## ADR-010. Phase 2 church structure, region access and role scoping
 
-**Status:** **Proposed 2026-10-23. Awaiting Sifiso's approval. No code until approved.**
+**Status:** **Accepted 2026-10-23 by Sifiso, with all six recommended decisions below.**
 **Builds on:** ADR-001 revision 2 (tenant at the region) and its A4 decisions. Plan: `docs/jcoc-build-plan.md` version 2, Phase 2.
 **Branch:** `feature/p2-church-structure`.
 

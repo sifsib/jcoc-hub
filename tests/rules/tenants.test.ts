@@ -242,8 +242,11 @@ describe("user documents cannot be used to escalate", () => {
     await assertFails(updateDoc(doc(dbAs(env, "ownerA"), "users", "adminA"), { tenantId: TENANT_B }));
   });
 
-  it("allows an owner to change a team member's role within their tenant", async () => {
-    await assertSucceeds(
+  // Role changes moved to the server route /api/region-access (ADR-010), so
+  // the role held in a region and the user's access list can't drift apart.
+  // The positive case lives in regionAccess.test.ts.
+  it("denies an owner changing a team member's role and branch directly", async () => {
+    await assertFails(
       updateDoc(doc(dbAs(env, "ownerA"), "users", "adminA"), {
         role: "branch_admin",
         assignedBranch: "North",
