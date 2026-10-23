@@ -30,9 +30,6 @@ export async function GET(
       primaryColor:    td.primaryColor    || "#2E7D4F",
       logoUrl:         td.logoUrl         || null,
       membershipTypes: td.membershipTypes || [],
-      branches:        td.branches        || [],
-      cellGroupBranch: td.cellGroupBranch || {},
-      cellRegions:     td.cellRegions     || [],
       ministryGroups:  td.ministryGroups  || [],
     });
   } catch (err) {

@@ -6,10 +6,13 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from "firebase/firestore";
 import Link from "next/link";
 import InfoTooltip from "../../components/InfoTooltip";
+import { STRUCTURE_LABELS } from "../../../lib/whiteLabel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FieldType = "text" | "dropdown" | "multiselect" | "toggle";
+// "structure" fields pick from the region's sectors and family groups, which
+// are managed on the Church Structure page, so they have no options here.
+type FieldType = "text" | "dropdown" | "multiselect" | "toggle" | "structure";
 
 interface FieldConfig {
   label: string;
@@ -65,19 +68,17 @@ const DEFAULT_MEMBER_FIELDS: Record<string, FieldConfig> = {
     type: "dropdown",
     options: ["Member", "Pastor", "Youth Leader", "Treasurer", "Branch Administrator"],
   },
-  branch: {
-    label: "Branch",
+  sectorId: {
+    label: STRUCTURE_LABELS.sector.one,
     enabled: true,
     required: false,
-    type: "dropdown",
-    options: [],
+    type: "structure",
   },
-  cellRegion: {
-    label: "Cell Group",
+  familyGroupId: {
+    label: STRUCTURE_LABELS.familyGroup.one,
     enabled: true,
     required: false,
-    type: "dropdown",
-    options: [],
+    type: "structure",
   },
   ministryGroup: {
     label: "Ministry Group",
@@ -659,7 +660,9 @@ function FieldRow({
               <button onClick={() => { setLabelDraft(field.label); setEditingLabel(true); }} className="text-gray-300 hover:text-gray-500 text-xs">✏️</button>
             </div>
           )}
-          <p className="text-xs text-gray-400 capitalize mt-0.5">{field.type}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {field.type === "structure" ? "Choices come from the Church Structure page" : <span className="capitalize">{field.type}</span>}
+          </p>
         </div>
 
         {/* Required toggle */}
