@@ -383,6 +383,220 @@ See `handovers/2026-10-23-phase-2-church-structure.md`.
 
 ---
 
+## ADR-011. Phase 3 life phases: rules engine, overrides and the 1 January review
+
+**Status:** **Proposed 2026-10-23. Awaiting Sifiso's approval. No code until approved.**
+**Builds on:** ADR-002 (phases are an array), ADR-003 (yearly, previewed, never silent), ADR-010 (`member_audit`, stamped writes). Spec: `docs/jcoc-build-plan.md` v2, Phase 3.
+**Branch:** `feature/p3-life-phases`, cut from `feature/p2-church-structure`.
+**Revises ADR-003 in one place:** children up to the year they turn 13 now have a school grade (JCOC's sheet, confirmed 23 October), where ADR-003 said "no grade bands". Everything else in ADR-003 stands.
+
+### The core idea
+
+Life phases are **worked out, not typed in**. One pure function (`lib/lifePhases.ts`) takes a person, their household and the year, and returns their phases. It is the only place the rules live, so the save, the yearly review and the tests all agree. Admins can add phases by hand or switch an automatic one off, and those choices survive every recalculation.
+
+### Data on the member
+
+| Field | Meaning |
+|---|---|
+| `lifePhases: string[]` | What everyone sees and filters on: automatic phases, minus any switched off, plus any added by hand |
+| `lifePhasesAuto: string[]` | What the rules gave, kept so the review can show what changes |
+| `lifePhasesAdded: string[]` | Added by an admin (for example Single Mom, Campus Student for an older student) |
+| `lifePhasesRemoved: string[]` | Automatic phases an admin switched off (for example Empty Nester for someone the rule gets wrong) |
+| `gradeAdjust: number` | Children only. 0 by default; +1 started a year early, −1 repeated. Grade is worked out each year, never stored, so nothing has to "move up" in January |
+| `marriageType` | `civil`, `customary` or `religious`. New field on the form |
+| `anniversaryDate` | Already exists (quick win 1). Used as the wedding date; no second date field |
+
+`maritalStatus` stays (Single, Married, Divorced, Widowed). It is an input to the rules, not a phase.
+
+### The rules (JCOC's sheet)
+
+Everything uses **age this year** = this year − birth year, in the region's time zone, and **grade this year** = age this year − 6 + `gradeAdjust` (Gr R = 0, Gr 00 = −1, Gr 000 = −2).
+
+Children (member records only; children who are not members still count for their parents):
+
+| Phase | Rule | Also holds |
+|---|---|---|
+| Baby | age this year 0 or 1 | Child |
+| Pre-School | age 2 to 6 and grade Gr R or below | Child, Kidz Zone |
+| Scholar | grade 1 to 5, and turning under 14 | Child, Kidz Zone |
+| Pre-teen | grade 6 or higher, and turning under 14 | Child, Scholar, Kidz Zone |
+| Teen | turning 14 to 17 this year, whatever the grade | Scholar while grade is 12 or lower |
+| Campus Student | turning 18 to 20 | |
+
+Adults (age this year 21 or more, or married/widowed/divorced at any age from 18):
+
+| Phase | Rule |
+|---|---|
+| Young Single / Mature Single | Single and turning under 25 / 25 or more |
+| Young Married / Mature Married | Married and wedding year less than 5 / 5 or more years ago. No wedding date: neither, admins set it by hand |
+| Widowed, Divorced | From marital status |
+| Parents of Kids <10 / >10 / <>10 | From the household's dependent children (turning 20 or under): all turning 10 or under / all 11 or over / both |
+| Teen Parent | Any dependent child in the Teen phase |
+| Empty Nester | Has children, and the youngest turns 21 or more |
+| Single Mom, Single Dad | By hand only |
+
+"Parents" are the primary member and spouse of a household; "children" are the household's member children plus its non-member children (`households.nonMemberChildren`). Automatic parent phases only work when children are linked, as the plan says.
+
+### When phases are worked out
+
+1. **On every save**, through a Cloud Function (`onMemberWrittenLifePhases`): when a member's birth date, marital status, wedding date, grade adjustment, household or manual choices change, it recalculates that person and everyone in their household, and writes only if something changed (so it cannot loop). Doing it on the server means every screen and the importer get it, not just the roster. These derived changes show in `member_audit` as made by "system".
+2. **The 1 January review.** Early on 1 January a scheduled function works out every region's changes for the new year and saves them as a **proposal**, not as changes. A region admin sees "who changes, from what, to what" on a **New Year review** page and approves it (all at once, or leaving some people out). Only then are the changes written, with one `member_audit` entry each. An approved review can be undone for 30 days. Until approved, members keep last year's phases. This is ADR-003's "previewed, never silent".
+
+### Filtering
+
+The roster and the Network page get a life phase filter: pick several phases and choose "has all of these" (for example Mature Married and Parents of Kids <10) or "has any of these". Filtering happens in the browser on the list already loaded, so there is no limit on combinations.
+
+### Old data
+
+`lib/lifePhases.ts` also holds the mapping from the old system's marital statuses, for the importer later: "Traditional Marriage" becomes Married with `marriageType: customary`; "Scholar/Student" becomes Single (the phase follows from age).
+
+### Rules (security)
+
+- Only people who can already edit members (region owner/admin, member manager, network owner) can change `lifePhasesAdded`, `lifePhasesRemoved`, `gradeAdjust` and `marriageType`, and the change is stamped (they join the audited fields).
+- `lifePhases` and `lifePhasesAuto` are written by the server only. A browser write that touches them is refused.
+- `lifePhaseReviews/{tenantId_year}`: read and approve by that region's owner/admin and network owners; written otherwise by the server only; never deleted.
+
+### Tests, before the build
+
+Unit tests on `lib/lifePhases.ts`: 31 December against 1 January; children born on 1 January and on 31 December; a child turning 14 while in Grade 7 (Teen, Scholar, no Kidz Zone); a child in Grade 8 turning 13 (Pre-teen, Kidz Zone); started early and repeated (grade adjustment); Teen to Campus Student at 18 and Campus Student to Young Single at 21; families with several children (<10, >10, <>10, Teen Parent, Empty Nester); no wedding date; manual add and remove surviving a recalculation. Rules tests: browsers cannot write the computed fields; only editors can set overrides; reviews readable and approvable only inside the region (and by network owners).
+
+### Estimate
+
+| Piece | Days |
+|---|---|
+| Rules engine and unit tests | 2 |
+| Member form: phases shown, add/remove, grade adjustment, marriage type | 1.5 |
+| Save trigger (household recalculation) and rules | 1.5 |
+| New Year review: scheduled proposal, review page, approve, undo | 3 |
+| Life phase filters on roster and Network page | 1 |
+| Seed, click-through, handover | 1 |
+| **Total** | **~10** |
+
+### Decisions for Sifiso
+
+1. **The 1 January changes wait for an admin's approval** (ADR-003), rather than applying automatically as plan v2 says. Recommended: approval, because one wrong rule across a region is hard to undo by hand. Day-to-day saves still update straight away.
+2. **Teen ends at 18; Campus Student is 18 to 20; single adults start at 21.** Plan v2 has Teen "up to 18" and Campus Student "18 to 21". Confirm with Anita.
+3. **Teens keep Scholar until Grade 12**, using the worked-out grade. Plan v2 does not say when Scholar ends.
+4. **Teen Parent means a dependent child in the Teen phase (turning 14 to 17)**. The sheet says "parent with teens".
+5. **Campus Student is automatic for everyone aged 18 to 20**, studying or not (plan v2, "confirm"). Admins can switch it off per person.
+
+---
+
+## ADR-012. Phase 4 visitor register and children's check-in
+
+**Status:** **Proposed 2026-10-23. Awaiting Sifiso's approval. No code until approved.**
+**Builds on:** ADR-008 (screen-based collection code, audit trail), ADR-011 (children's bands), `docs/02_SCOPE.md` B5 and B10. Plan v2 Phase 4.
+**Branch:** `feature/p4-visitors-kids`, cut from `feature/p3-life-phases`.
+
+### What exists today
+
+- `visitors` holds **one document per visit**, created on the dashboard only. A returning visitor becomes a new document; nothing joins them up. Follow-up workflows hang off these documents.
+- **No children's check-in of any kind exists.**
+- The service QR check-in page searches the whole member list by name and only works on a signed-in steward's device.
+
+### Visitor register
+
+- **One visitor, many visits.** A `visitors` document becomes the **person**, and each visit is a document in `visitors/{id}/visits`. When someone is captured, the app first looks for the same cell number in the region. A match adds a visit to the existing person instead of creating a duplicate, and the screen says "Welcome back, third visit".
+- **Visitor children** live on the visitor: `children: [{ id, firstName, lastName, dob, allergies }]`. They never become member records.
+- **Follow-up keeps working.** Workflows still attach to the visitor document; only the first visit (or a returning visitor after a long gap, configurable) starts a new follow-up.
+- **Never becomes a member automatically.** No code path writes `members` from a visitor. Becoming a member stays the normal admin process. A rules test already proves the follow-up team cannot create members; one more covers "visitor data cannot be copied into members by the follow-up team".
+- Visit history, visit count and last visit show on the visitor's page, for the follow-up team.
+
+### Children's check-in (Safety Nest)
+
+- **Classes.** `childClasses/{id}` per region: name (for example "Pre-School", "Scholars Gr 1–3"), which children belong by default (by Phase 3 band or grade range), capacity, and the teachers who run it. Managed by region admins on a Children's Ministry settings page.
+- **New region role `children_teacher`**, scoped to their classes. Teachers see only the children checked into their class today, with the guardian's name and number and any allergy or medical note. They see nothing else of the roster.
+- **Check-in on the teacher's tablet.** The parent searches for their child (members' children through their family; visitors' children through the visitor register, or captured on the spot: child's name and age, parent's name, cell number, email). Siblings check in together in one step.
+- **Collection code.** On check-in the app makes a 4-digit code, shows it on screen and sends it to the guardian's phone by SMS when the church has BulkSMS set up (WhatsApp is not available). The code is stored where browsers cannot read it (`childCheckinSecrets`, server only). Check-out goes through a server route that compares the code, so a teacher's device can never list codes.
+- **Who may collect.** At drop-off, the parent may name other adults allowed to collect (decision 1 below). At check-out the teacher picks who is collecting: the dropping-off adult or a named adult, plus the code. Anyone else needs a **supervisor override** (region admin or a named supervisor), with a reason, logged prominently.
+- **Audit trail.** `childCheckins/{id}` records class, date, child, guardian, who checked in and when, who collected and when, and any override. Records are never edited after check-out and never deleted from the browser. Attendance history per child comes from these records.
+- **Never touches members.** Check-in creates no member and changes no member record (ADR-008).
+
+### Medical and allergy notes
+
+A new optional `medicalNotes` field on member children (and `allergies` on visitor children), shown only to the child's class teacher and admins. This is special personal information under POPIA, so it is captured only where `consentedToSpecialInfo` is true.
+
+### Rules (security), tests first
+
+- `children_teacher` reads `childCheckins` for their own classes and today only; cannot read members, visitors or other classes.
+- No browser can read `childCheckinSecrets`. No browser can mark a child as collected; only the check-out route can.
+- Check-in records cannot be deleted, and cannot be changed after check-out.
+- Visitors and visitor children stay readable only by the follow-up team and region staff, as today.
+- Negative tests for each of the above, plus another region's teacher, a member, and a visitor record being turned into a member.
+
+### Estimate
+
+| Piece | Days |
+|---|---|
+| Visitor register: person and visits, returning-visitor match, children, history | 3 |
+| Classes, teacher role, settings page | 2 |
+| Check-in screen: search, siblings, visitor child capture | 2.5 |
+| Codes, SMS, check-out route, supervisor override | 2.5 |
+| Audit records, per-child history, rules and tests | 1.5 |
+| Seed, click-through, handover | 1 |
+| **Total** | **~12.5** (the plan had 8 for check-in and 3 for the register) |
+
+### Decisions for Sifiso (and Anita)
+
+1. **Who may collect a child.** ADR-008 says only the adult who signed in; plan v2 says "the same parent, or another listed adult". Recommended: the dropping-off adult, or an adult the parent names at drop-off; anyone else needs a logged supervisor override. **Confirm with Anita: this is a safeguarding rule.**
+2. **Class names and age bands** (open question L). Until JCOC gives them, seed classes follow the Phase 3 bands: Babies, Pre-School, Scholars, Pre-teens.
+3. **How long check-in records are kept** (open question L). Recommended: keep them, and decide a retention period with Anita before go-live. No automatic deletion is built now.
+4. **SMS for the collection code** uses the church's BulkSMS account if set up (about 19c a message). Without it, the code shows on screen only and the parent takes a photo.
+
+---
+
+## ADR-013. Phase 5 event registration with proof of payment
+
+**Status:** **Proposed 2026-10-23. Awaiting Sifiso's approval. No code until approved.**
+**Builds on:** ADR-004 (registration never touches members), ADR-005 (uploads through a server route), ADR-006 (per-event verifiers, hold and re-upload). Plan v2 Phase 5; `docs/02_SCOPE.md` B4.
+**Branch:** `feature/p5-event-registration`, cut from `feature/p4-visitors-kids`.
+
+### What exists today
+
+- **Events** have no price or payment fields. RSVPs are name, phone, email and "attending/maybe/declined".
+- **Two open doors in the rules:** `event_rsvps` and `form_submissions` both allow anyone on the internet to create any document with any fields (`allow create: if true`). The public RSVP page already uses a server route, so the open rule is not even needed for it.
+- **No file uploads from the public**; Storage refuses anything not signed in, which is correct and stays that way.
+- Event check-in requires a member login and checks no RSVP.
+
+### Design
+
+- **Registration settings on the event** (`events.registration`), each switched on per event: amount due (ZAR); bank details and the reference to use; proof of payment required; optional fields (T-shirt size, transport, dietary needs, choice of church or region); youth indemnity upload for under-18s; capacity; closing date. Plus `organiserUid` and `verifierUids` (ADR-006).
+- **`registrations/{id}`**, its own collection (ADR-004). Status: `awaiting_payment` → `payment_uploaded` → `confirmed`, or `payment_rejected` (with a reason; the registrant uploads again) or `cancelled`. **A registration counts towards capacity once proof is uploaded.**
+- **Public registration page** `/register/[eventId]`: no login, no member lookup. It submits to a server route that checks the event is open and has room, validates every field, and returns a private link the registrant uses to upload proof, check their status and see their ticket. Basic rate limiting per phone number and per IP.
+- **Uploads** go through a server route (ADR-005): PDF or image, 10 MB maximum, stored privately under the region's folder. Verifiers open files through short-lived links from the server, never public links.
+- **Verification queue** on the event page: the organiser and named verifiers approve, or reject with a reason. Approving sends the ticket.
+- **Ticket and QR check-in.** A confirmed registration gets a QR code (in the confirmation email and on the status page). At the event, the organiser's phone scans it (or types the short code) and the server marks it checked in once, only if confirmed.
+- **Messaging registrants** by email through the church's Brevo account, filtered by status or by church/region. (Mailchimp is still undecided; open question.)
+- **Choice of church or region** lists the network's regions by name only.
+
+### Rules (security), tests first
+
+- `registrations` and uploads: **no browser writes at all**. Everything goes through the server routes. Staff with event rights and the event's verifiers can read; verifiers see only their events.
+- **Close the two open doors:** `event_rsvps` create only by a signed-in member for themselves in the event's region (the public page keeps working through its server route); `form_submissions` create only with the form's real `tenantId`, the form active, and a size limit.
+- Negative tests: another region's staff, a verifier of a different event, a registrant reading someone else's registration, and the two closed doors.
+
+### Estimate
+
+| Piece | Days |
+|---|---|
+| Registration settings on events | 3 |
+| Public page and registration route, rate limits | 3 |
+| Upload route, private storage, signed links | 2 |
+| Verification queue, statuses, re-upload | 3 |
+| Tickets and QR check-in | 2.5 |
+| Messaging registrants | 2 |
+| Closing the open doors, rules and tests | 1.5 |
+| **Total** | **~17** (as in the original plan) |
+
+### Decisions for Sifiso
+
+1. **A registration counts once proof is uploaded**, not only once confirmed, so places are held while verifiers catch up. (Plan: "before the registration counts".)
+2. **Close the two open rules** (`event_rsvps`, `form_submissions`) in this phase. They are holes in the base product too, so they go on the porting list.
+3. **Still needed from JCOC** (open questions I, J, K): the youth indemnity template, banking details and payment reference format, and the T-shirt, dietary and transport options. The build uses editable placeholders until then.
+4. **Email only for registrant messages** for now; Mailchimp waits for a decision.
+
+---
+
 ## Known base-repo quirks to work around, not build on
 
 **Two WhatsApp send contracts.** The deployed Baileys service expects `POST /message/send` with `{ phoneNumber, message }` plus `X-Service-Key` and `X-Tenant-Id`. The Next.js route `app/api/whatsapp/send-message/route.ts` posts `{ sessionName, phone, message }` with only `X-Service-Key`, targeting an older wppconnect shape. The Baileys contract is the live one.
