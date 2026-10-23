@@ -31,7 +31,7 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 
 | # | Question | Who answers | Notes |
 |---|---|---|---|
-| U1 | Who sets Anita's and Baba D's network role on the live project? There is no screen for it; it is a `networkRole` and `orgId` on their user document, set by Kereke Hub staff | Sifiso | Needs a one-off admin script or console edit at go-live. Do not give it through the app |
+| U1 | Who sets Anita's and Baba D's network role on the live project? There is no screen for it; it is a `networkRole` and `orgId` on their user document, set by Kereke Hub staff | Sifiso | Needs a one-off admin script or console edit at go-live. Do not give it through the app **Built 2026-10-23: `scripts/setup-network.mjs` (dry run by default, `--apply` to write), run by Kereke Hub staff only. See `handovers/2026-10-23-network-setup-script.md`.** |
 | U2 | Sector and family group leaders can read their people and mark attendance. Should they also see visitors, groups or events? Today they see neither | Anita | Rules deny by default; widening needs tests |
 | U3 | The base roles `branch_admin` and `cell_leader` still exist in the rules for upstream compatibility, but JCOC can no longer be given them. Remove them from the JCOC rules entirely? | Sifiso | Safe to leave; removing makes the fork diverge further |
 | U4 | Org-level tier resolution (ADR-009) is still not built. New regions leave `tier` unset, which the app treats as fully enabled. Fine for JCOC, but a deliberate plan for billing should replace it | Sifiso | Not blocking |

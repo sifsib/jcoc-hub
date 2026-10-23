@@ -9,7 +9,8 @@
     "lint": "eslint",
     "emulators": "firebase emulators:start --only auth,firestore,storage --project demo-jcoc",
     "seed:emulator": "node scripts/seed-emulator.mjs",
-    "dev:emulator": "node scripts/dev-emulator.mjs"
+    "dev:emulator": "node scripts/dev-emulator.mjs",
+    "setup:network": "node scripts/setup-network.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.12.0",

@@ -87,3 +87,6 @@ tsconfig.tsbuildinfo
 # OS / Office temp files
 ~$*
 *.tmp
+
+# Network setup file: names real people, keep out of the repository
+network-setup.json
