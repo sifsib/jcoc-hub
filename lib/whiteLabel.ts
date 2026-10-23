@@ -22,8 +22,8 @@ export const STRUCTURE_LABELS: Record<"network" | "church" | "region" | "sector"
 };
 
 /**
- * Credit shown in the footer of the member app. Agreed in principle as
- * "Designed by Kereke Hub" (docs/02_SCOPE.md B9); exact wording still to be
- * confirmed with JCOC, so change it here only.
+ * Credit shown in the footer of the member app and public pages. Sifiso chose
+ * "Powered by Kereke Hub" on 2026-10-23 to propose to JCOC (docs/02_SCOPE.md B9
+ * says the wording is to be agreed with them), so change it here only.
  */
-export const ATTRIBUTION = "Designed by Kereke Hub";
+export const ATTRIBUTION = "Powered by Kereke Hub";

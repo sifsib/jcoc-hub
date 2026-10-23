@@ -290,3 +290,7 @@ Deploy:
 
 - **The nightly clean-up:** it has not been run. The emulator does not fire scheduled functions; the date logic is unit tested.
 - **The check-out dialog:** not opened in the browser; the route was exercised directly.
+
+## Footer wording
+
+On 2026-10-23, Sifiso chose "Powered by Kereke Hub" as the wording to propose to JCOC. `ATTRIBUTION` in `lib/whiteLabel.ts` now says that, so every footer and the invite email show it. JCOC still has to agree it before go-live.
