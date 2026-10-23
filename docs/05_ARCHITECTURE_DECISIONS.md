@@ -263,6 +263,120 @@ members/{memberId}               tenantId, sectorId, familyGroupId (ids, not nam
 
 ---
 
+## ADR-010. Phase 2 church structure, region access and role scoping
+
+**Status:** **Proposed 2026-10-23. Awaiting Sifiso's approval. No code until approved.**
+**Builds on:** ADR-001 revision 2 (tenant at the region) and its A4 decisions. Plan: `docs/jcoc-build-plan.md` version 2, Phase 2.
+**Branch:** `feature/p2-church-structure`.
+
+**Context.** JCOC has no structure list yet, so regions, sectors and family groups must be created, renamed and archived in the app, and members moved between them. Anita and Baba D need network-wide access. Any leader can be region admin of one or more regions, changing over time, and switches between them. The base product assumes one `tenantId` and one `role` per user, and every rule reads both from `users/{uid}`. Sector and cell scoping (`branch_admin`, `cell_leader`) exists only on screen.
+
+**Approach in one line.** Keep the base's "one active region per user" model, which every existing rule and screen already understands, and add a controlled way to **switch** the active region. Add a narrow cross-region path only where the network view needs it (members and structure).
+
+### Data model
+
+```
+organizations/{orgId}          name, labels?            JCOC network. Server-written only.
+churches/{churchId}            orgId, name, archived    Joburg CoC, Tshwane, ... Server-written only.
+tenants/{tenantId}             + orgId, churchId, orgRole: "region", archived, archivedAt, archivedBy
+                               New regions get a generated id, not an owner's uid.
+sectors/{sectorId}             tenantId, name, archived, archivedAt, archivedBy, createdAt
+familyGroups/{groupId}         tenantId, sectorId, name, leaderMemberId?, archived, ...
+members/{memberId}             + sectorId, familyGroupId   (ids, both optional)
+member_audit/{auto}            tenantId, memberId, field, from, to, changedByUid, changedAt
+                               Written by a Cloud Function on member update. Never client-written.
+users/{uid}
+  tenantId, role, roles        the ACTIVE region and the role held there (unchanged meaning)
+  sectorId, familyGroupId      the active region's scope, for sector and family group leaders
+  orgId, networkRole           "network_owner" | "network_viewer" | absent
+  tenantAccess                 { [tenantId]: { role, roles?, sectorId?, familyGroupId? } }
+  tenantIds                    keys of tenantAccess, as an array, so team lists can query it
+```
+
+- **Archive, never delete.** Archived regions, sectors and family groups disappear from pickers but stay readable, and members keep their ids. Rules deny `delete` on all three, for everyone.
+- **Names are labels only.** Members hold ids, so a rename touches one document.
+- **Labels** ("Region", "Sector", "Family group") come from a new `lib/whiteLabel.ts` (CLAUDE.md rule 7), created with only what this phase reads.
+
+### Roles
+
+| Role | Where it lives | Can do |
+|---|---|---|
+| `network_owner` (Anita, Baba D) | `users.networkRole` + `orgId` | Read and manage members in every region of the org. Switch into any region of the org as `admin`. Add, rename and archive regions. Grant and remove region access. |
+| `network_viewer` | same | Read members in every region of the org. Switch into any region as `viewer`. Nothing else. |
+| `owner` / `admin` (region admin) | `tenantAccess[t].role` | Unchanged inside their region. Manage sectors and family groups there, move members, grant access to **their own region only**. |
+| `sector_leader` (replaces `branch_admin`) | `tenantAccess[t]` + `sectorId` | Read members in their sector, **enforced in rules**. Mark attendance. Cannot add members. |
+| `family_group_leader` (replaces `cell_leader`) | `tenantAccess[t]` + `familyGroupId` | Read members in their family group, enforced in rules. Mark attendance. |
+| `member_manager`, `member_viewer`, `viewer`, `follow_up` | unchanged | Unchanged, region-wide. |
+
+`church_admin` from ADR-001 rev 2 is **deferred** until open question A3 is answered. Sister churches are set up as one region each until A1 is answered. `super_admin` is untouched and never given to JCOC staff.
+
+### How region access works
+
+1. **Granting and removing** goes through a server route (`/api/region-access`, Admin SDK), never a client write. It checks the caller: a network owner may grant any region in their org; a region owner or admin only their own region. Nobody may change their own access. Every change writes an `admin_audit` entry. Pure permission logic lives in `lib/regionAccess.ts` with unit tests.
+2. **Switching** is the only client write that changes `tenantId`. The rule allows it only if the new region is in the user's `tenantAccess` (or, for network roles, belongs to their `orgId`), and only if `role`, `roles`, `sectorId` and `familyGroupId` are set to exactly what that entry says. The switcher does a full reload so the cached user in `useAppUser()` is replaced.
+3. **Removing the active region** makes the server move the user to another region in their list, or to none. In addition, a rules helper treats a user whose active `tenantId` is no longer in `tenantAccess` as having no region, so access ends immediately even if the server step fails.
+4. **Users with one region** get one entry and see no switcher. Existing single-tenant users without `tenantAccess` keep working (the helper treats a missing map as legacy).
+5. All other client writes to `users` (self-edit, the owner's team page) may no longer touch `tenantId`, `role`, `roles`, `sectorId`, `familyGroupId`, `tenantAccess`, `tenantIds`, `orgId` or `networkRole`. This also closes the inherited hole where users could set their own `assignedBranch` and `assignedCellRegion`. Role changes on the team page go through the server route.
+
+### Network view
+
+A "Network" page for network roles lists members across regions, filtered by church, region, sector and family group. It fans out one query per region (`tenantId == X`). That keeps each query provable by the rules. The rule adds one path on `members`, `sectors` and `familyGroups`: read when the caller has a network role and the document's tenant has the caller's `orgId`. For everything else (attendance, events, settings), network owners switch into the region and use the normal screens.
+
+### Rules shape
+
+- New helpers in one place: `activeTenantId()`, `hasNetworkRole()`, `tenantInCallerOrg(tenantId)`. Existing rules that call `userTenantId()` keep working.
+- Sector and family group scoping is added to `canReadMembers` for the two leader roles: the member's `sectorId` or `familyGroupId` must match the caller's. **List queries from those roles must filter on the same field**, or Firestore rejects them. The roster, celebrations and member-updates pages change their queries to match.
+- New collections sit in a delimited `CHURCH STRUCTURE` block, and region access in a `REGION ACCESS` block.
+
+### Replacing the branch and cell strings
+
+The 13 files that read `branch`, `cellRegion`, `assignedBranch`, `assignedCellRegion` and the tenant's `branches`, `cellGroups` and `cellGroupBranch` lists switch to sector and family group ids and pickers. JCOC has no legacy data in this project, so nothing is migrated here. A migration script (pure mapping in `lib/`, using `cellGroupBranch`) is written and unit-tested for the later port to Kereke Hub, and logged in `07_PORTING_LOG.md`.
+
+### Negative tests to write first (in `tests/rules/`)
+
+- A region admin cannot read or write members, sectors or family groups of another region.
+- A multi-region leader cannot switch to a region not in their list, cannot switch while setting a role other than the one listed, and has no rights in region B from their role in region A.
+- No user can write their own `tenantAccess`, `tenantIds`, `networkRole` or `orgId`. No client can write anyone's.
+- A region owner cannot delete a user who also has another region.
+- A user whose active region was removed loses access at once.
+- A network owner cannot read or switch into a region of another org. A network viewer cannot write anything.
+- A sector leader cannot read a member of another sector, cannot list members without the sector filter, and cannot add members. The same applies for family group leaders.
+- No one can delete a region, sector or family group. No client can create a region or church.
+- A member cannot add members, and a visitor record never becomes a member (ADR-004 style, from Prompt C).
+- `member_audit` cannot be written or deleted from a client.
+
+### Inherited bug to fix in passing
+
+`app/api/communications/email/route.ts` logs broadcasts with `tenantId: uid` (the sender), not the sender's tenant. It is wrong for anyone but a founding owner, and more so with switching. The same bug is in upstream.
+
+### Estimate
+
+| Piece | Days |
+|---|---|
+| Org, church, region documents; server routes to add, rename, archive regions | 2 |
+| Sectors and family groups: entities, management screen, moving members | 2 |
+| Replace branch and cell strings across 13 files; port migration script | 2 |
+| Region access: server route, switch rule, switcher, team page | 3 |
+| Network role rules and the Network page with filters | 2.5 |
+| Sector and family group scoping in rules, query changes | 1.5 |
+| Rules tests (negative first) | 1.5 |
+| `member_audit` Cloud Function (recommended, see decision 5) | 1 |
+| Seed one invented campus, `lib/whiteLabel.ts` labels, click-through | 1 |
+| **Total** | **~16.5** |
+
+This replaces most of the old Phase 1 (21 days) but not the rollups or network broadcast, which move to plan Phase 6. It is longer than a prototype allows. See the decisions.
+
+### Decisions for Sifiso
+
+1. **Adding and archiving regions:** network owners only. The plan says campus admins too, but a region admin creating new regions bypasses the commercial setup (each region is billed). Region admins manage sectors and family groups in their own region.
+2. **Sector and family group leaders:** they read their own people and mark attendance, and do not add members (plan: "only named admins add members").
+3. **Network owners** use the switcher for normal screens, plus the cross-region Network page. There is no special network version of every screen.
+4. **Deferred:** `church_admin` (A3), sister churches with regions of their own (A1), rollups and network email (Phase 6).
+5. **Member change history (`member_audit`):** build it now. It is plan v2's port item, Anita is a POPIA officer, and moving members between sectors is exactly the change worth recording. About 1 day.
+6. **Prototype:** Phase 2 alone is about 16 days, so phases 1 to 3 do not fit "end of week, latest Monday". Decide what the prototype shows (P1).
+
+---
+
 ## Known base-repo quirks to work around, not build on
 
 **Two WhatsApp send contracts.** The deployed Baileys service expects `POST /message/send` with `{ phoneNumber, message }` plus `X-Service-Key` and `X-Tenant-Id`. The Next.js route `app/api/whatsapp/send-message/route.ts` posts `{ sessionName, phone, message }` with only `X-Service-Key`, targeting an older wppconnect shape. The Baileys contract is the live one.
