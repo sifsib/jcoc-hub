@@ -70,8 +70,19 @@ export async function POST(req: NextRequest) {
   if (!subject?.trim()) return NextResponse.json({ error: "Subject is required." }, { status: 400 });
   if (!htmlContent?.trim()) return NextResponse.json({ error: "Email body is required." }, { status: 400 });
 
-  // 1. Load tenant's Brevo credentials (never sent back to client)
-  const tenantSnap = await adminDb.collection("tenants").doc(uid).get();
+  // 1. Resolve the caller's active region and check they may send. This
+  // route used to treat the caller's uid as the tenant id, which only held
+  // for a church's founding owner (fixed in Phase 2; upstream has it too).
+  const callerSnap = await adminDb.collection("users").doc(uid).get();
+  const caller = callerSnap.data();
+  const tenantId: string = caller?.tenantId ?? "";
+  const heldRegions: Record<string, unknown> | undefined = caller?.tenantAccess;
+  if (!tenantId || (heldRegions && !(tenantId in heldRegions)) || !["owner", "admin"].includes(caller?.role)) {
+    return NextResponse.json({ error: "Only region owners and admins can send email." }, { status: 403 });
+  }
+
+  // Load tenant's Brevo credentials (never sent back to client)
+  const tenantSnap = await adminDb.collection("tenants").doc(tenantId).get();
   if (!tenantSnap.exists) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
 
   const tenant = tenantSnap.data()!;
@@ -96,7 +107,7 @@ export async function POST(req: NextRequest) {
   // 2. Load active members with email addresses
   const membersSnap = await adminDb
     .collection("members")
-    .where("tenantId", "==", uid)
+    .where("tenantId", "==", tenantId)
     .where("status", "==", "active")
     .get();
 
@@ -146,7 +157,7 @@ export async function POST(req: NextRequest) {
     type: "email_broadcast",
     subject: subject.trim(),
     sentBy: uid,
-    tenantId: uid,
+    tenantId,
     recipientCount: sent,
     failedCount: failed,
     createdAt: ts,

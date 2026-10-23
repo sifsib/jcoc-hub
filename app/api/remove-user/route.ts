@@ -38,8 +38,18 @@ export async function POST(req: NextRequest) {
   // 4. Check target belongs to same tenant
   const targetDoc = await adminDb.collection("users").doc(targetUid).get();
   const targetData = targetDoc.data();
-  if (!targetData || targetData.tenantId !== callerData.tenantId) {
+  const targetRegions: string[] = targetData?.tenantIds ?? (targetData?.tenantId ? [targetData.tenantId] : []);
+  if (!targetData || !targetRegions.includes(callerData.tenantId)) {
     return NextResponse.json({ error: "User not found in your organisation." }, { status: 404 });
+  }
+
+  // 4b. Removing disables the whole account, so only for someone who holds
+  // this region alone (ADR-010). Otherwise remove the region from them instead.
+  if (targetRegions.length > 1 || targetData.networkRole) {
+    return NextResponse.json(
+      { error: "This person also works in other regions. Remove this region from their access instead." },
+      { status: 409 }
+    );
   }
 
   // 5. Disable in Firebase Auth (preserves data/audit trail, just blocks login)

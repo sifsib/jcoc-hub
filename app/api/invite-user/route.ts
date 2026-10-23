@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { cookies } from "next/headers";
 import { isPaidTier } from "@/lib/tier";
 import crypto from "crypto";
+import { getCaller, regionOrgId } from "@/lib/serverCaller";
+import { applyAccessChange, decideAccessChange, REGION_ROLES, type AccessRequest, type UserAccess } from "../../../lib/regionAccess";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hub.kerekehub.co.za";
 const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
@@ -20,15 +21,7 @@ async function sendInviteEmail(
 ): Promise<boolean> {
   if (!BREVO_API_KEY) return false;
 
-  const roleLabel: Record<string, string> = {
-    admin: "Admin",
-    viewer: "View Only",
-    finance: "Finance Manager",
-    member_manager: "Membership Manager",
-    member_viewer: "Membership Viewer",
-    cell_leader: "Cell Leader",
-    follow_up: "Follow-Up Coordinator",
-  };
+  const roleLabel: Record<string, string> = Object.fromEntries(REGION_ROLES.map((r) => [r.key, r.label]));
 
   const html = `
 <!DOCTYPE html>
@@ -120,46 +113,34 @@ async function sendInviteEmail(
   }
 }
 
+// Adds a leader to a region (ADR-010). A new email gets an account and an
+// invite link. An email that already has an account in the same network gets
+// the region added to their access list instead, which is how a leader comes
+// to hold more than one region. Who may give which role is decided in
+// lib/regionAccess.ts, the same rules as /api/region-access.
 export async function POST(req: NextRequest) {
-  // 1. Verify session cookie
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("session")?.value;
-  if (!sessionCookie) {
+  const caller = await getCaller();
+  if (!caller) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let callerUid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    callerUid = decoded.uid;
-  } catch {
-    return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  const email = typeof body.email === "string" ? body.email.toLowerCase().trim() : "";
+  const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
+  const tenantId = typeof body.tenantId === "string" && body.tenantId ? body.tenantId : caller.tenantId ?? "";
+  if (!email || !tenantId) {
+    return NextResponse.json({ error: "An email address is required." }, { status: 400 });
   }
+  const request: Extract<AccessRequest, { action: "grant" }> = {
+    action: "grant",
+    tenantId,
+    role: String(body.role ?? ""),
+    sectorId: typeof body.sectorId === "string" ? body.sectorId : undefined,
+    familyGroupId: typeof body.familyGroupId === "string" ? body.familyGroupId : undefined,
+  };
+  const orgId = await regionOrgId(tenantId);
 
-  // 2. Check caller is owner
-  const callerDoc = await adminDb.collection("users").doc(callerUid).get();
-  const callerData = callerDoc.data();
-  if (!callerData || callerData.role !== "owner") {
-    return NextResponse.json({ error: "Only the church owner can invite users." }, { status: 403 });
-  }
-
-  const { email, displayName, role, assignedBranch, assignedCellRegion } = await req.json();
-
-  // 3. Validate role
-  const assignableRoles = ["admin", "viewer", "finance", "member_manager", "member_viewer", "cell_leader", "follow_up", "branch_admin"];
-  if (!assignableRoles.includes(role)) {
-    return NextResponse.json({ error: "Invalid role." }, { status: 400 });
-  }
-  if (role === "cell_leader" && !assignedCellRegion?.trim()) {
-    return NextResponse.json({ error: "A cell group is required for cell leaders." }, { status: 400 });
-  }
-  if (role === "branch_admin" && !assignedBranch?.trim()) {
-    return NextResponse.json({ error: "A branch is required for branch admins." }, { status: 400 });
-  }
-
-  const tenantId = callerData.tenantId;
-
-  // 4. Load tenant info for church name
+  // Load tenant info for the region name
   const tenantDoc = await adminDb.collection("tenants").doc(tenantId).get();
   const churchName = tenantDoc.data()?.name || "your church";
 
@@ -171,22 +152,59 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 5. Check if an inactive user with this email already exists
-  const existingInactive = await adminDb
-    .collection("users")
-    .where("tenantId", "==", tenantId)
-    .where("email", "==", email.toLowerCase().trim())
-    .where("status", "==", "inactive")
-    .get();
-
-  if (!existingInactive.empty) {
-    return NextResponse.json(
-      { error: "This person was previously deactivated. Use the Reactivate button in the Deactivated Users section instead." },
-      { status: 409 }
-    );
+  // The sector or family group must belong to this region.
+  for (const [field, collection, label, role] of [
+    ["sectorId", "sectors", "sector", "sector_leader"],
+    ["familyGroupId", "familyGroups", "family group", "family_group_leader"],
+  ] as const) {
+    const id = request[field];
+    if (request.role === role && id) {
+      const snap = await adminDb.collection(collection).doc(id).get();
+      if (!snap.exists || snap.data()?.tenantId !== tenantId || snap.data()?.archived) {
+        return NextResponse.json({ error: `That ${label} is not in this region.` }, { status: 400 });
+      }
+    }
   }
 
-  // 6. Create Firebase Auth user
+  // An existing account: add the region to it.
+  let existingUid: string | null = null;
+  try {
+    existingUid = (await adminAuth.getUserByEmail(email)).uid;
+  } catch {
+    existingUid = null;
+  }
+  if (existingUid) {
+    const ref = adminDb.collection("users").doc(existingUid);
+    const snap = await ref.get();
+    const target: UserAccess = { ...(snap.data() as Omit<UserAccess, "uid">), uid: existingUid };
+    if (snap.data()?.status === "inactive") {
+      return NextResponse.json(
+        { error: "This person was previously deactivated. Use the Reactivate button in the Deactivated Users section instead." },
+        { status: 409 }
+      );
+    }
+    const decision = decideAccessChange(caller, target, request, orgId);
+    if (!decision.ok || target.role === "super_admin") {
+      // Same message whether or not the account is in another network.
+      return NextResponse.json({ error: "A user with that email already exists." }, { status: 409 });
+    }
+    const patch = applyAccessChange(target, request, orgId ?? "");
+    const ts = new Date().toISOString();
+    await ref.update({ ...patch, accessUpdatedAt: ts, accessUpdatedBy: caller.uid });
+    await adminDb.collection("admin_audit").add({
+      action: "region_access_grant", actorUid: caller.uid, targetUid: existingUid, tenantId,
+      orgId: orgId ?? "", role: request.role, previousRole: null, createdAt: ts,
+    });
+    return NextResponse.json({ success: true, uid: existingUid, addedRegion: true, emailSent: false, inviteUrl: null });
+  }
+
+  // A new person: check the grant against a blank account first.
+  const decision = decideAccessChange(caller, { uid: "" }, request, orgId);
+  if (!decision.ok) {
+    return NextResponse.json({ error: decision.reason }, { status: 403 });
+  }
+
+  // Create Firebase Auth user
   let newUser;
   try {
     newUser = await adminAuth.createUser({
@@ -206,25 +224,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to create user." }, { status: 500 });
   }
 
-  // 7. Write Firestore user doc
+  // Write Firestore user doc, with the region as the first one they hold
+  const access = applyAccessChange({ uid: newUser.uid }, request, orgId ?? "");
   await adminDb.collection("users").doc(newUser.uid).set({
-    email: email.toLowerCase().trim(),
+    email,
     displayName: displayName || email,
-    role,
-    tenantId,
+    ...access,
     status: "invited",
-    assignedBranch: role === "branch_admin" ? assignedBranch.trim() : null,
-    assignedCellRegion: role === "cell_leader" ? assignedCellRegion.trim() : null,
     createdAt: new Date().toISOString(),
-    invitedBy: callerUid,
+    invitedBy: caller.uid,
+  });
+  await adminDb.collection("admin_audit").add({
+    action: "region_access_grant", actorUid: caller.uid, targetUid: newUser.uid, tenantId,
+    orgId: orgId ?? "", role: request.role, previousRole: null, createdAt: new Date().toISOString(),
   });
 
-  // 8. Generate a 24-hour invite token
+  // Generate a 24-hour invite token
   const inviteToken = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS).toISOString();
   await adminDb.collection("invites").doc(inviteToken).set({
     uid: newUser.uid,
-    email: email.toLowerCase().trim(),
+    email,
     tenantId,
     createdAt: new Date().toISOString(),
     expiresAt,
@@ -233,13 +253,13 @@ export async function POST(req: NextRequest) {
 
   const inviteUrl = `${APP_URL}/accept-invite?token=${inviteToken}`;
 
-  // 9. Send via Brevo
+  // Send via Brevo
   const emailSent = await sendInviteEmail(
     email,
     displayName || "",
-    callerData.displayName || "Your church admin",
+    caller.displayName || "Your church admin",
     churchName,
-    role,
+    request.role,
     inviteUrl
   );
 
