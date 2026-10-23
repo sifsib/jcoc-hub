@@ -76,6 +76,12 @@ export const USERS = {
     tenantIds: [TENANT_A],
   },
   ownerC: { role: "owner", tenantId: TENANT_C, status: "active", orgId: ORG_X },
+  // Phase 4, ADR-012: a children's teacher in region A, teaching classA.
+  teacherA: {
+    role: "children_teacher", tenantId: TENANT_A, status: "active", orgId: ORG_J,
+    tenantAccess: { [TENANT_A]: { role: "children_teacher" } },
+    tenantIds: [TENANT_A],
+  },
 } as const;
 
 export type SeededUid = keyof typeof USERS;

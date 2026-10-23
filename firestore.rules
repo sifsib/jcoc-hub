@@ -290,6 +290,85 @@ service cloud.firestore {
     // ============================================
 
     // ============================================
+    // VISITOR REGISTER AND CHILDREN'S CHECK-IN (ADR-012) - start
+    // ============================================
+    // A visitors document is a person; visits are kept underneath and never
+    // changed. Check-in and check-out happen only through the /api/kids
+    // routes, so check-in records are server-written; codes are never
+    // readable. Children's care notes are special personal information and
+    // stay with the people who manage members.
+    // Covered by tests/rules/kids.test.ts.
+    function visitorTenant(visitorId) {
+      return get(/databases/$(database)/documents/visitors/$(visitorId)).data.tenantId;
+    }
+    match /visitors/{visitorId}/visits/{visitId} {
+      allow read: if isSignedIn()
+                  && visitorTenant(visitorId) == userTenantId()
+                  && (canReadMembers() || canDoFollowUp());
+      allow create: if isSignedIn()
+                    && request.resource.data.tenantId == userTenantId()
+                    && visitorTenant(visitorId) == userTenantId()
+                    && (canManageMembers() || canDoFollowUp());
+      allow update, delete: if false;
+    }
+
+    function validChildClass(d) {
+      return d.name is string && d.name.trim().size() > 0 && d.name.size() <= 100
+          && d.phases is list && d.phases.size() <= 30
+          && d.get('teacherUids', []) is list && d.get('teacherUids', []).size() <= 30
+          && d.get('supervisorUids', []) is list && d.get('supervisorUids', []).size() <= 30
+          && (d.get('capacity', null) == null || (d.capacity is int && d.capacity >= 0));
+    }
+    match /childClasses/{classId} {
+      allow read: if isSignedIn()
+                  && !isCongregationMember()
+                  && canReadStructureIn(resource.data.tenantId);
+      allow create: if isSignedIn()
+                    && canManageStructureIn(request.resource.data.tenantId)
+                    && validChildClass(request.resource.data)
+                    && request.resource.data.archived == false;
+      allow update: if isSignedIn()
+                    && canManageStructureIn(resource.data.tenantId)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && validChildClass(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /childCheckins/{checkinId} {
+      allow read: if isSignedIn()
+                  && ((resource.data.tenantId == userTenantId() && (hasRole('owner') || hasRole('admin')))
+                      || networkCanWrite(resource.data.tenantId));
+      allow write: if false;
+    }
+
+    match /childCheckinSecrets/{groupId} {
+      allow read, write: if false;
+    }
+
+    function canManageCareNotes(tenantId) {
+      return tenantId == userTenantId()
+          && (hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
+    }
+    function careNoteFor(memberId, data) {
+      return data.notes is string && data.notes.size() <= 2000
+          && get(/databases/$(database)/documents/members/$(memberId)).data.tenantId == data.tenantId;
+    }
+    match /memberCareNotes/{memberId} {
+      allow read: if isSignedIn() && canManageCareNotes(resource.data.tenantId);
+      allow create: if isSignedIn()
+                    && canManageCareNotes(request.resource.data.tenantId)
+                    && careNoteFor(memberId, request.resource.data);
+      allow update: if isSignedIn()
+                    && canManageCareNotes(resource.data.tenantId)
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && careNoteFor(memberId, request.resource.data);
+      allow delete: if isSignedIn() && canManageCareNotes(resource.data.tenantId);
+    }
+    // ============================================
+    // VISITOR REGISTER AND CHILDREN'S CHECK-IN (ADR-012) - end
+    // ============================================
+
+    // ============================================
     // TENANTS COLLECTION
     // ============================================
     // Fields only the server may write: identity, billing, plan, status, slug

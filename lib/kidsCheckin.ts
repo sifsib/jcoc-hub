@@ -11,7 +11,8 @@
  * routes in app/api/kids/ are the only callers that write.
  */
 
-import { normalisePhone } from "./visitorRegister";
+import { normalisePhone, type VisitorChild } from "./visitorRegister";
+import { ageThisYear, childPhases } from "./lifePhases";
 
 export interface ChildClass {
   id: string;
@@ -97,4 +98,108 @@ export function matchesSearch(query: string, family: FamilyForSearch): boolean {
   }
   const lower = q.toLocaleLowerCase("en-ZA");
   return [family.guardianName, ...family.children.map((c) => c.name)].some((n) => n.toLocaleLowerCase("en-ZA").includes(lower));
+}
+
+/** Children's ministry is for children up to the year they turn 13 (Kidz Zone runs to Grade 7). */
+export const OLDEST_CHILD_AGE = 13;
+
+export interface CheckinChild {
+  /** member:{id}, household:{householdId}:{index} or visitor:{visitorId}:{childId} */
+  key: string;
+  kind: "member" | "household" | "visitor";
+  name: string;
+  age: number | null;
+  suggestedClassId: string | null;
+  allergies: string;
+}
+
+export interface CheckinFamily extends FamilyForSearch {
+  key: string;
+  kind: "member" | "visitor";
+  otherGuardians: string[];
+  children: CheckinChild[];
+}
+
+interface MemberLike {
+  id: string;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  dob?: string;
+  status?: string;
+  householdId?: string;
+  householdRole?: string;
+  lifePhases?: string[];
+  gradeAdjust?: number;
+}
+
+interface VisitorLike {
+  id: string;
+  fullName?: string;
+  phone?: string;
+  children?: VisitorChild[];
+}
+
+const nameOf = (m: { fullName?: string; firstName?: string; lastName?: string }) =>
+  (m.fullName || [m.firstName, m.lastName].filter(Boolean).join(" ")).trim();
+
+/**
+ * Everyone who can be checked in, grouped by family: member households (member
+ * children and the household's non-member children) and visitor families.
+ * Families with no child young enough are left out. Allergies are filled in
+ * by the server for members, from memberCareNotes.
+ */
+export function buildFamilies(
+  members: MemberLike[],
+  households: Map<string, { nonMemberChildren?: { firstName?: string; lastName?: string; dob?: string }[] }>,
+  visitors: VisitorLike[],
+  year: number,
+  classes: ChildClass[],
+): CheckinFamily[] {
+  const young = (age: number | null) => age !== null && age >= 0 && age <= OLDEST_CHILD_AGE;
+  const families: CheckinFamily[] = [];
+
+  const byHousehold = new Map<string, MemberLike[]>();
+  for (const m of members) {
+    if (m.status === "suspended" || m.status === "inactive" || !m.householdId) continue;
+    byHousehold.set(m.householdId, [...(byHousehold.get(m.householdId) ?? []), m]);
+  }
+  for (const [hid, group] of byHousehold) {
+    const guardians = group.filter((m) => m.householdRole === "primary" || m.householdRole === "spouse")
+      .sort((a, b) => (a.householdRole === "primary" ? -1 : 1) - (b.householdRole === "primary" ? -1 : 1));
+    if (guardians.length === 0) continue;
+    const children: CheckinChild[] = [];
+    for (const c of group.filter((m) => m.householdRole === "child")) {
+      const age = ageThisYear(c.dob, year);
+      if (!young(age)) continue;
+      const phases = c.lifePhases?.length ? c.lifePhases : childPhases(c.dob, year, c.gradeAdjust ?? 0);
+      children.push({ key: `member:${c.id}`, kind: "member", name: nameOf(c), age, suggestedClassId: suggestClass(phases, classes)?.id ?? null, allergies: "" });
+    }
+    (households.get(hid)?.nonMemberChildren ?? []).forEach((c, i) => {
+      const age = ageThisYear(c.dob, year);
+      if (!young(age)) return;
+      children.push({ key: `household:${hid}:${i}`, kind: "household", name: nameOf(c), age,
+        suggestedClassId: suggestClass(childPhases(c.dob, year), classes)?.id ?? null, allergies: "" });
+    });
+    if (children.length === 0) continue;
+    families.push({
+      key: `household:${hid}`, kind: "member",
+      guardianName: nameOf(guardians[0]), guardianPhone: guardians[0].phone ?? "",
+      otherGuardians: guardians.slice(1).map(nameOf), children,
+    });
+  }
+
+  for (const v of visitors) {
+    const children: CheckinChild[] = [];
+    for (const c of v.children ?? []) {
+      const age = ageThisYear(c.dob, year);
+      if (!young(age)) continue;
+      children.push({ key: `visitor:${v.id}:${c.id}`, kind: "visitor", name: nameOf(c), age,
+        suggestedClassId: suggestClass(childPhases(c.dob, year), classes)?.id ?? null, allergies: c.allergies ?? "" });
+    }
+    if (children.length === 0) continue;
+    families.push({ key: `visitor:${v.id}`, kind: "visitor", guardianName: nameOf(v), guardianPhone: v.phone ?? "", otherGuardians: [], children });
+  }
+  return families.sort((a, b) => a.guardianName.localeCompare(b.guardianName, "en-ZA"));
 }

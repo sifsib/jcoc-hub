@@ -114,3 +114,46 @@ describe("children's check-in", () => {
     expect(matchesSearch("ne", fam)).toBe(false); // too short to search
   });
 });
+
+import { buildFamilies } from "../../lib/kidsCheckin";
+
+describe("families for check-in", () => {
+  const classes = [
+    { id: "pre", name: "Pre-School", phases: ["pre_school"], archived: false },
+    { id: "sch", name: "Scholars", phases: ["scholar"], archived: false },
+  ];
+  const members = [
+    { id: "mom", fullName: "Lerato Dlamini", phone: "27820000002", householdId: "h1", householdRole: "primary", status: "active" },
+    { id: "dad", fullName: "Thabo Dlamini", phone: "27820000001", householdId: "h1", householdRole: "spouse", status: "active" },
+    { id: "neo", fullName: "Neo Dlamini", dob: "2017-08-01", householdId: "h1", householdRole: "child", status: "active",
+      lifePhases: ["child", "scholar", "kidz_zone"] },
+    { id: "gone", fullName: "Old Child", dob: "2018-01-01", householdId: "h1", householdRole: "child", status: "suspended" },
+    { id: "single", fullName: "No Kids", phone: "27820000009", status: "active" },
+  ];
+  const households = new Map([["h1", { nonMemberChildren: [{ firstName: "Ayo", lastName: "Dlamini", dob: "2021-05-20" }] }]]);
+  const visitors = [
+    { id: "v1", fullName: "Sam Visitor", phone: "27830000001",
+      children: [{ id: "c1", firstName: "Lebo", lastName: "Visitor", dob: "2021-01-01", dobApprox: true, allergies: "peanuts" }] },
+    { id: "v2", fullName: "Childless Visitor", phone: "27830000002", children: [] },
+  ];
+
+  it("lists member families with member and non-member children, and visitor families", () => {
+    const fams = buildFamilies(members, households, visitors, 2026, classes);
+    expect(fams.map((f) => f.guardianName)).toEqual(["Lerato Dlamini", "Sam Visitor"]);
+    const dl = fams[0];
+    expect(dl.otherGuardians).toEqual(["Thabo Dlamini"]);
+    expect(dl.children).toEqual([
+      { key: "member:neo", kind: "member", name: "Neo Dlamini", age: 9, suggestedClassId: "sch", allergies: "" },
+      { key: "household:h1:0", kind: "household", name: "Ayo Dlamini", age: 5, suggestedClassId: "pre", allergies: "" },
+    ]);
+    expect(fams[1].children[0]).toEqual({ key: "visitor:v1:c1", kind: "visitor", name: "Lebo Visitor", age: 5, suggestedClassId: "pre", allergies: "peanuts" });
+  });
+
+  it("leaves out suspended children, families without children, and children too old for children's ministry", () => {
+    const older = [...members, { id: "teen", fullName: "Big Teen", dob: "2008-01-01", householdId: "h1", householdRole: "child", status: "active" }];
+    const fams = buildFamilies(older, households, visitors, 2026, classes);
+    expect(fams.flatMap((f) => f.children.map((c) => c.name))).not.toContain("Old Child");
+    expect(fams.flatMap((f) => f.children.map((c) => c.name))).not.toContain("Big Teen");
+    expect(fams.map((f) => f.guardianName)).not.toContain("Childless Visitor");
+  });
+});
