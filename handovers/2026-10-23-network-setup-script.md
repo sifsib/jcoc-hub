@@ -50,7 +50,7 @@ None new. The script writes the same shapes the seed and `/api/regions` use:
 - `tenants/{orgId}-{name}` (or the attached id) with `orgId`, `churchId`, `orgRole: "region"`;
 - `users/{uid}.orgId` and `.networkRole`.
 
-## How Sifiso runs it on jcoc-hub
+## How Sifiso runs it on the JCOC project (jcoc-d6322)
 
 1. Deploy the app and rules (see the deployment steps), then sign up at `/signup`. That makes your first region.
 2. Find your region id: Firebase console, Firestore, `tenants`. It is the document whose `name` is the church name you signed up with; it equals your user id.
@@ -61,7 +61,7 @@ None new. The script writes the same shapes the seed and `/api/regions` use:
    - Use the real email addresses.
 5. Dry run, then check the list it prints:
 
-   `node scripts/setup-network.mjs --config ~/Desktop/network-setup.json --project jcoc-hub --key ~/path/to/service-account.json`
+   `node scripts/setup-network.mjs --config ~/Desktop/network-setup.json --project jcoc-d6322 --key ~/path/to/service-account.json`
 
 6. If the list is right, run the same command with `--apply` on the end.
 7. Run it once more; it should say "Nothing to do".

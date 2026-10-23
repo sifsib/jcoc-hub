@@ -100,6 +100,7 @@ Anything not in `docs/02_SCOPE.md` goes here with an estimate before it gets bui
 
 | # | Question | Answer | Date |
 |---|---|---|---|
+| – | Firebase project for JCOC | Project "JCOC", ID `jcoc-d6322` (not `jcoc-hub`, which older handovers and the plan use). `.firebaserc` now points at it | 2026-10-23 |
 | W1 | Who may collect a child | Only the person who signs them in | 2026-10-23 |
 | W2 | Class names and ages | They differ per region; capture them manually for each class | 2026-10-23 |
 | W3 | How long check-in records are kept | 24 months | 2026-10-23 |

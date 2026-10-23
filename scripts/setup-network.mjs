@@ -7,8 +7,8 @@
 // nothing. Add --apply to make the changes. Safe to run again; anything
 // already set up is left alone. The rules are in scripts/networkSetupPlan.mjs.
 //
-//   node scripts/setup-network.mjs --config <setup.json> --project jcoc-hub --key <service-account.json>
-//   node scripts/setup-network.mjs --config <setup.json> --project jcoc-hub --key <service-account.json> --apply
+//   node scripts/setup-network.mjs --config <setup.json> --project jcoc-d6322 --key <service-account.json>
+//   node scripts/setup-network.mjs --config <setup.json> --project jcoc-d6322 --key <service-account.json> --apply
 //
 // Against the local emulators (npm run emulators), leave out --key and use a
 // demo- project id: --project demo-jcoc.
