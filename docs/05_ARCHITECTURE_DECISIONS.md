@@ -175,7 +175,7 @@ Note the call itself was mixed: Sifiso first described birthday-triggered moves,
 
 ## ADR-001 revision 2. Network, church, region, sector, family group. The tenant boundary stays at the region.
 
-**Status:** **Accepted 2026-10-22, signed off by Sifiso.** Supersedes ADR-001. Follow-ups A1 to A5 refine it but do not reopen the tenant boundary. A4 (multi-tenant users) must be decided before Phase 1 starts.
+**Status:** **Accepted 2026-10-22, signed off by Sifiso.** Supersedes ADR-001. Follow-ups A1 to A5 refine it but do not reopen the tenant boundary. A4 (multi-tenant users) decided 2026-10-23: network role, see "A4 decision" below.
 **Source:** Follow-up meeting with Anita Pearson, Baba D and Erick Li Sik (transcript `transcript3.docx`, date not recorded in the transcript). Baba D shared his structure on screen.
 **Confidence:** High on the hierarchy and the tenant boundary. Medium on the church level, because we do not yet know whether sister churches have regions of their own.
 
@@ -224,6 +224,12 @@ members/{memberId}               tenantId, sectorId, familyGroupId (ids, not nam
 **Consequences.**
 
 - **A user can need roles in more than one tenant.** Baba D administers Soweto and Central East, which are two region tenants. Today every user has exactly one `tenantId`, and `firestore.rules` resolves access from it. Either Baba D works through `network_owner` alone, or users gain a tenant-access list (`users.tenantAccess: { [tenantId]: role }`) with an active-tenant switch. The second is a significant rules change and needs its own negative tests. Recommend deciding this before Phase 1 starts.
+
+**A4 decision (2026-10-23, Sifiso): network role.** Baba D administers Soweto and Central East through `network_owner`, not through a tenant-access list. Consequences:
+- Users keep exactly one `tenantId`. No `users.tenantAccess` and no active-tenant switch for now.
+- `network_owner` gains **write** on members (add and edit) in any region tenant of its org, not only read. That is wider than the table above, so the rules need negative tests: no write into another org's tenants, `network_viewer` stays read-only, a region `owner`/`admin` still cannot write outside their tenant.
+- The network view gets a **region filter** (and church filter) so Baba D can narrow to one region. It is a convenience on screen, not a security boundary; his access is network-wide either way.
+- Keep tenant resolution in one helper in the rules and in `useAppUser()`, so a tenant-access list can be added later if a region-level admin ever needs more than one region.
 - **Network roles read personal information across churches.** If sister churches are separate legal entities, each is its own POPIA responsible party, and head office reading their members' personal information needs a lawful basis and an agreement covering it. That is a governance question for Anita as information officer, not a technical one. Build the network roles to her answer.
 - **Rollups aggregate at three levels:** region (tenant), church (sum of its region tenants), network (sum of churches). The scheduled rollup writes per tenant; church and network totals are computed from those.
 - **Scoping inside a region becomes enforceable.** Because sector and family group become ids on the member, rules can check `sectorId` against the caller's assignment. The base product never enforced `branch_admin` in rules; this is the chance to fix that rather than copy it.

@@ -84,6 +84,8 @@ What changes: sectors and family groups become their own records with ids. Renam
 
 Recommendation: option 1 now. Keep the tenant lookup in one place so option 2 can be added later.
 
+**Decided by Sifiso, 2026-10-23: option 1, with a region filter in the network view.** Recorded in ADR-001 revision 2 ("A4 decision") and moved to Answered in `06_OPEN_QUESTIONS.md`.
+
 ### Merge order
 
 The branches are already stacked, so merge them in this order, each one a fast-forward: p0 rules → birthday pull → member self-edit → docs.
@@ -109,6 +111,6 @@ The branches are already stacked, so merge them in this order, each one a fast-f
 ## Open items for next session
 
 1. Install the Node LTS so `node -v` works in a new terminal, then re-run the four checks.
-2. Sifiso decides A4, and whether to renumber the docs to the plan's phase order.
+2. Sifiso decides whether to renumber the docs to the plan's phase order. (A4 is decided.)
 3. Ask Anita: who may sign a child out, Teen versus Campus Student at 18, when Scholar ends for teens.
 4. Prompt B (hosting) in kereke-hub, then jcoc-hub.
