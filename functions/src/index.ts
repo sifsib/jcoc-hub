@@ -1374,6 +1374,11 @@ export { dailySummary } from "./dailySummary";
 export { onMemberUpdatedAudit } from "./memberAudit";
 
 // ─────────────────────────────────────────────────────────────
+// LIFE PHASES (see ./lifePhases.ts, ADR-011)
+// ─────────────────────────────────────────────────────────────
+export { onMemberWrittenLifePhases, onHouseholdWrittenLifePhases, lifePhaseNewYear } from "./lifePhases";
+
+// ─────────────────────────────────────────────────────────────
 // MEMBER COUNTER
 // Keeps tenants/{tenantId}.activeMemberCount in sync so the free-tier
 // member limit can be checked cheaply (in the app and in security rules)
