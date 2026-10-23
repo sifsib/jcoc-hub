@@ -533,7 +533,7 @@ function PromoteMember({ members, tenantId, roles, structure, scopeProblem, onDo
   return (
     <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="font-medium text-slate-800">Give a member a role</h2>
-      <p className="mt-1 text-xs text-slate-500">For members who already use the member app. They keep their member access.</p>
+      <p className="mt-1 text-xs text-slate-500">For members who already use the member app. They keep it, but from now on they sign in on the main login page and open the member app from the dashboard.</p>
       {picked ? (
         <div className="mt-3 space-y-3">
           <p className="text-sm text-slate-700">{picked.displayName} <span className="text-slate-400">({picked.email})</span></p>

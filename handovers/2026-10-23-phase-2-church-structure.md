@@ -76,9 +76,20 @@ When the `jcoc-hub` Firebase project exists, after merging:
   - Two-region leader: sees exactly their three regions and no Network link; switching to Northwest shows only Northwest's two members; editing a member's family group saves, and the record holds the ids and `updatedBy` = their uid (checked in the emulator database).
   - Sector leader: menu reduced to roster, birthdays, attendance, report and support; roster shows "Viewing your sector: North" and only North's four active members, with no edit or add buttons.
 
+- **Second click-through (same day), the items left over from the first:**
+  - Sector leader, Attendance Capture: shows "North (restricted to your sector)" with only North's four people. Marked one present and one absent; both records saved with `sectorId` and `familyGroupId` (checked in the database).
+  - Sector leader, Attendance Report: only North's data. A South absence with a reason, added directly to the database, did not appear. **Fixed:** the report offered leaders a sector filter listing other sectors' names; it is now hidden for sector and family group leaders, and checked in the browser.
+  - Family group leader: menu reduced the same way. Roster shows "Viewing your family group: North 1" with its two members and no edit buttons. Attendance shows only North 1, including the record the sector leader made. Marking present saved with the right stamps. Birthdays shows only North 1's birthday and anniversary; North 2's and South's this week were left out.
+  - Promote: the Soweto owner searched for Thabo (member-app user) and made him family group leader of North 2. His account kept `memberId`, got the access list, and an `admin_audit` entry records member to family group leader.
+  - Remove from this region: the two-region leader disappeared from Soweto's team and their account moved to Northwest as the active and only region.
+  - Deactivate: the North 1 leader moved to the Deactivated list; account `inactive`, sign-in disabled.
+  - Server checks called directly: deactivating the network owner was refused (409, "also works in other regions"); a Soweto owner giving someone access to Northwest was refused (403).
+  - Wording fixed on the Team page: a promoted member keeps the member app but must now sign in on the main login page, because the member login page only admits the `congregation_member` role (existing behaviour, unchanged).
+
 ## What I did NOT verify
 
-- **Not clicked:** attendance capture and the attendance report as a leader; the family group leader's views; promoting a congregation member; "Remove from this region" and "Deactivate"; renaming a region; restoring an archived item; the CSV export (download); member import matching of sector and group names.
+- **Not clicked:** renaming a region; restoring an archived item; changing a role with "Change role"; reactivating a deactivated user; the CSV exports (downloads); member import matching of sector and group names.
+- The attendance report counts suspended members in its totals (5 for North, where capture shows 4). That is the base report's existing behaviour and was left alone.
 - **The `onMemberUpdatedAudit` function was not run** (the functions emulator was not started). Its logic is unit-tested; the trigger wrapper is not.
 - The emulator-only Firestore proxy (`next.config.ts`, `lib/firebase.ts`) was only tried in the in-app browser pane, not in a normal browser.
 - Not tested on a phone or narrow screen.
@@ -87,7 +98,7 @@ When the `jcoc-hub` Firebase project exists, after merging:
 ## Open items for next session
 
 1. Install the Node LTS and rerun the checks.
-2. Click through the unverified items above (attendance as a leader, family group leader, promote, remove, deactivate).
+2. Click through the few remaining unverified items above. In the in-app browser, restart the dev server every few page changes: the proxied long-polls build up and the pane stops responding, while the server itself stays fine.
 3. Write the port-back migration script around `planBranchCellMigration` (logic and tests exist).
 4. Open questions U1 to U4 in `docs/06_OPEN_QUESTIONS.md`, plus A1, A3 and A5, which still shape sister churches and `church_admin`.
 5. The plan's Phase 3 (life phases) can start once Sifiso is happy with this branch; it builds on `member_audit` and the stamped writes.

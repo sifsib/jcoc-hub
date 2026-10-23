@@ -109,7 +109,8 @@ await db.doc("churches/church-tshwane").set({ orgId: ORG_ID, name: "Tshwane (dem
 
 const region = { accountType: "internal", status: "active", tier: "paid", memberLimit: null,
   activeMemberCount: 0, billingPhase: "active", currentRate: 0, primaryColor: "#059669",
-  timezone: "Africa/Johannesburg", orgId: ORG_ID, orgRole: "region", archived: false, createdAt: ts, updatedAt: ts };
+  timezone: "Africa/Johannesburg", orgId: ORG_ID, orgRole: "region", archived: false, createdAt: ts, updatedAt: ts,
+  serviceSessions: [{ id: "sunday", day: "Sunday", name: "Sunday Service" }] };
 await db.doc(`tenants/${TENANT_ID}`).set({
   ...region, name: "Soweto", churchId: "church-joburg", slug: "demo-region",
 });

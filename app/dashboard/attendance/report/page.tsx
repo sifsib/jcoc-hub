@@ -492,8 +492,9 @@ export default function AttendanceReportPage() {
           </div>
         )}
 
-        {/* Sector filter: scopes the whole report to one sector */}
-        {branches.length > 1 && (
+        {/* Sector filter: scopes the whole report to one sector. Leaders only
+            have their own people, so they never see it. */}
+        {branches.length > 1 && !["sector_leader", "family_group_leader"].includes(appUser?.role ?? "") && (
           <div className="flex flex-wrap gap-2 pt-1 border-t border-gray-100">
             <span className="text-xs text-gray-400 font-medium self-center">{STRUCTURE_LABELS.sector.one}:</span>
             <button
