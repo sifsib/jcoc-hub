@@ -95,6 +95,8 @@ export default async function DashboardLayout({
     { name: "Birthdays & Anniversaries", href: "/dashboard/celebrations", icon: "🎂", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
     { name: "Attendance Capture", href: "/dashboard/attendance", icon: "📝", roles: ["owner", "admin", "member_manager", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
     { name: "Attendance Report", href: "/dashboard/attendance/report", icon: "📊", roles: ["owner", "admin", "member_manager", "member_viewer", "cell_leader", "branch_admin", "sector_leader", "family_group_leader"] },
+    { name: "Children's Check-in", href: "/dashboard/kids", icon: "🧒", roles: ["owner", "admin", "children_teacher"] },
+    { name: "Children's Ministry", href: "/dashboard/kids/settings", icon: "🧸", roles: ["owner", "admin"] },
     { name: "First-Time Guests", href: "/dashboard/visitors", icon: "👋", roles: ["owner", "admin", "member_manager", "member_viewer", "follow_up", "branch_admin"] },
     { name: "Financials", href: "/dashboard/finance", icon: "💰", roles: ["owner", "admin", "finance", "branch_admin"] },
     { name: "Pastoral Care", href: "/dashboard/pastoral", icon: "🫶", roles: ["owner", "admin"] },

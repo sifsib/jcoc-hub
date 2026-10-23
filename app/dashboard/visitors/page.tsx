@@ -9,11 +9,13 @@ import { useTeamMembers } from "../../../lib/useTeamMembers";
 import { pickAutoAssignee, notifyAssignee } from "../../../lib/visitorMinistry";
 import {
   collection, query, where, getDocs, addDoc,
-  updateDoc, doc, serverTimestamp, getDoc,
+  updateDoc, doc, serverTimestamp, getDoc, setDoc, increment, limit,
 } from "firebase/firestore";
 import NotesPanel from "../../components/NotesPanel";
 import InfoTooltip from "../../components/InfoTooltip";
 import { formatSurnameFirst } from "../../../lib/nameFormat";
+import { followUpDue, normalisePhone, visitLabel, type VisitorChild } from "../../../lib/visitorRegister";
+import VisitorRegisterPanel from "./VisitorRegisterPanel";
 
 interface Visitor {
   id: string;
@@ -38,6 +40,11 @@ interface Visitor {
   captureNote?: string;     // free-text note captured at sign-in
   oneTimeSmsPending?: boolean; // queued to receive the thank-you SMS ~24h after capture
   oneTimeSmsSent?: boolean;  // true once the automatic thank-you SMS has gone out
+  // Visitor register (ADR-012): one document per person, visits underneath.
+  visitCount?: number;
+  firstVisitDate?: string;
+  lastVisitDate?: string;
+  children?: VisitorChild[];
 }
 
 interface VisitorFieldConfig {
@@ -90,6 +97,7 @@ export default function VisitorsPage() {
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [returningNotice, setReturningNotice] = useState("");
   const [visitorConfig, setVisitorConfig] = useState<VisitorFormConfig>(DEFAULT_VISITOR_CONFIG);
 
   const [firstName, setFirstName] = useState("");
@@ -301,8 +309,7 @@ export default function VisitorsPage() {
     if (!appUser) return;
     setSubmitLoading(true);
 
-    let formattedPhone = phone.trim().replace(/\s+/g, "");
-    if (formattedPhone.startsWith("0")) formattedPhone = "27" + formattedPhone.substring(1);
+    const formattedPhone = normalisePhone(phone);
 
     const fc = visitorConfig.fields;
     const shouldTriggerWorkflow = fc.reasonForVisiting?.triggerWorkflow && reason && reason !== "Just visiting";
@@ -313,6 +320,44 @@ export default function VisitorsPage() {
     const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
 
     try {
+      // Visitor register (ADR-012): the same cell number in this region is the
+      // same person. Record another visit instead of a duplicate visitor, and
+      // start a new follow-up only after a long gap.
+      if (formattedPhone) {
+        const existing = await getDocs(query(
+          collection(db, "visitors"),
+          where("tenantId", "==", appUser.tenantId), where("phone", "==", formattedPhone), limit(1),
+        ));
+        if (!existing.empty) {
+          const prev = existing.docs[0];
+          const pv = prev.data() as Visitor;
+          const lastDate = pv.lastVisitDate || pv.serviceDate;
+          const sameDay = lastDate === serviceDate;
+          const restartFollowUp = !sameDay && followUpDue(lastDate, serviceDate) && pv.followUpStatus === "done";
+          await setDoc(doc(db, "visitors", prev.id, "visits", serviceDate), {
+            tenantId: appUser.tenantId, serviceDate, reason, capturedBy: appUser.email, createdAt: serverTimestamp(),
+          });
+          const updates: Record<string, unknown> = {};
+          if (!sameDay) {
+            updates.lastVisitDate = serviceDate;
+            updates.visitCount = increment(1);
+          }
+          if (restartFollowUp) {
+            updates.followUpStatus = "pending";
+            updates.reason = reason;
+          }
+          if (Object.keys(updates).length) await updateDoc(doc(db, "visitors", prev.id), updates);
+          const newCount = (pv.visitCount || 1) + (sameDay ? 0 : 1);
+          setVisitors((list) => list.map((v) => v.id === prev.id
+            ? { ...v, lastVisitDate: sameDay ? lastDate : serviceDate, visitCount: newCount, ...(restartFollowUp ? { followUpStatus: "pending" as const, reason } : {}) }
+            : v));
+          setReturningNotice(`Welcome back, ${pv.fullName}: ${visitLabel(newCount).toLowerCase()}.${restartFollowUp ? " A new follow-up has started." : ""}`);
+          setFirstName(""); setLastName(""); setPhone(""); setEmail(""); setGender(""); setAgeGroup(""); setReason(""); setAssignedTo(""); setCaptureNote(""); setCustomValues({});
+          return;
+        }
+      }
+      setReturningNotice("");
+
       // Work out who is accountable: the chosen person, or auto-pick from the
       // Visitor Ministry when this visitor needs a follow-up and none was chosen.
       let assignee: { uid: string; name: string } | null = assignedTo
@@ -330,6 +375,7 @@ export default function VisitorsPage() {
         fullName, firstName: firstName.trim(), lastName: lastName.trim(),
         phone: formattedPhone, serviceDate, reason,
         followUpStatus: initialStatus, capturedBy: appUser.email, createdAt: serverTimestamp(),
+        visitCount: 1, firstVisitDate: serviceDate, lastVisitDate: serviceDate, children: [],
       };
       if (fc.email?.enabled && email.trim()) newVisitorData.email = email.trim().toLowerCase();
       if (fc.gender?.enabled && gender) newVisitorData.gender = gender;
@@ -345,6 +391,9 @@ export default function VisitorsPage() {
       if (Object.keys(customValues).length > 0) newVisitorData.customFields = customValues;
 
       const docRef = await addDoc(collection(db, "visitors"), newVisitorData);
+      await setDoc(doc(db, "visitors", docRef.id, "visits", serviceDate), {
+        tenantId: appUser.tenantId, serviceDate, reason, capturedBy: appUser.email, createdAt: serverTimestamp(),
+      });
 
       if (shouldTriggerWorkflow) {
         // The workflow trigger emails the assignee itself (kind: workflow).
@@ -705,6 +754,9 @@ export default function VisitorsPage() {
             <button type="submit" disabled={submitLoading} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors text-sm flex justify-center items-center gap-2 mt-2 disabled:opacity-50">
               {submitLoading ? "Saving..." : "Save Visitor"}
             </button>
+            {returningNotice && (
+              <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">{returningNotice}</p>
+            )}
           </form>
         </div>
 
@@ -720,7 +772,7 @@ export default function VisitorsPage() {
                 pendingVisitors.map((v) => (
                   <div key={v.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
                     <div>
-                      <p className="font-bold text-gray-900">{formatSurnameFirst(v)} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
+                      <p className="font-bold text-gray-900">{formatSurnameFirst(v)} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span>{(v.visitCount ?? 1) > 1 && <span className="ml-2 text-xs font-medium text-emerald-700">{visitLabel(v.visitCount ?? 1)}</span>}</p>
                       <p className="text-sm text-gray-600 mt-1">{v.reason}</p>
                       {v.captureNote && <p className="text-xs text-gray-500 mt-1 italic">Note: {v.captureNote}</p>}
                       <p className="text-xs text-gray-400 mt-1">Visited: {formatDisplayDate(v.serviceDate)}{v.ageGroup ? ` · ${v.ageGroup}` : ""}</p>
@@ -888,7 +940,7 @@ export default function VisitorsPage() {
                   <div key={v.id} className="p-4 hover:bg-gray-50 transition-colors">
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                       <div className="flex-1">
-                        <p className="font-bold text-gray-900">{formatSurnameFirst(v)} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span></p>
+                        <p className="font-bold text-gray-900">{formatSurnameFirst(v)} <span className="font-mono text-xs text-gray-500 ml-2">+{v.phone}</span>{(v.visitCount ?? 1) > 1 && <span className="ml-2 text-xs font-medium text-emerald-700">{visitLabel(v.visitCount ?? 1)}</span>}</p>
                         {v.email && <p className="text-xs text-gray-500 mt-1">{v.email}</p>}
                         <p className="text-sm text-gray-600 mt-1">{v.reason}</p>
                         <div className="flex gap-3 text-xs text-gray-500 mt-2">
@@ -921,10 +973,17 @@ export default function VisitorsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-bold text-gray-800">Visitor: {formatSurnameFirst(selectedVisitor)}</h3>
-                <p className="text-gray-500 text-sm mt-0.5">{selectedVisitor.reason} · {selectedVisitor.serviceDate}</p>
+                <p className="text-gray-500 text-sm mt-0.5">{selectedVisitor.reason} · first came {selectedVisitor.firstVisitDate || selectedVisitor.serviceDate}</p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-lg">✕</button>
             </div>
+
+            <VisitorRegisterPanel
+              visitorId={selectedVisitor.id}
+              visitCount={selectedVisitor.visitCount || 1}
+              initialChildren={selectedVisitor.children || []}
+              lastName={selectedVisitor.lastName || ""}
+            />
 
             {/* Capture note (captured at sign-in) */}
             {selectedVisitor.captureNote && (

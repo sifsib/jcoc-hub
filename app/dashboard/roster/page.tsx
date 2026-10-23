@@ -19,6 +19,7 @@ import { familyGroupsIn, pickerOptions, placementLabel, type FamilyGroup, type S
 import { STRUCTURE_LABELS } from "../../../lib/whiteLabel";
 import { LIFE_PHASES, MARRIAGE_TYPES, phaseLabel } from "../../../lib/lifePhases";
 import LifePhasePanel from "./LifePhasePanel";
+import CareNotesPanel from "./CareNotesPanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -2134,6 +2135,18 @@ export default function ManageMembershipPage() {
                 data={primary}
                 set={(k, v) => setP(k, v)}
                 stored={members.find(m => m.id === editingMemberId) ?? {}}
+              />
+            </div>
+          )}
+
+          {isEditing && editingMemberId && appUser && ["owner", "admin", "member_manager"].includes(appUser.role) && (
+            <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col gap-3">
+              <SecHead n={next()} title="Care Notes" sub="Allergies and medical needs, for children's check-in" />
+              <CareNotesPanel
+                memberId={editingMemberId}
+                tenantId={appUser.tenantId}
+                uid={appUser.uid}
+                consented={(members.find(m => m.id === editingMemberId) as { consentedToSpecialInfo?: boolean } | undefined)?.consentedToSpecialInfo === true}
               />
             </div>
           )}
