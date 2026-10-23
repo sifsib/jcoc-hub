@@ -76,7 +76,7 @@ export default function LifePhasePanel({
           <div className="mt-1 flex flex-wrap gap-3">
             {auto.map((p) => (
               <label key={p} className="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="checkbox" checked={!removed.has(p)} onChange={() => toggleAuto(p)} />
+                <input type="checkbox" aria-label={`Keep ${phaseLabel(p)}`} checked={!removed.has(p)} onChange={() => toggleAuto(p)} />
                 {phaseLabel(p)}
               </label>
             ))}

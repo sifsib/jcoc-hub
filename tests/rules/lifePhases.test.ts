@@ -112,6 +112,13 @@ describe("the 1 January review", () => {
     await assertSucceeds(getDoc(review("networkOwner")));
   });
 
+  it("lets an owner or admin check for a review that does not exist yet, and nobody else", async () => {
+    await assertSucceeds(getDoc(doc(dbAs(env, "ownerA"), "lifePhaseReviews", `${TENANT_A}_2030`)));
+    await assertSucceeds(getDoc(doc(dbAs(env, "networkOwner"), "lifePhaseReviews", `${TENANT_A}_2030`)));
+    await assertFails(getDoc(doc(dbAs(env, "memberA"), "lifePhaseReviews", `${TENANT_A}_2030`)));
+    await assertFails(getDoc(doc(dbAs(env, "stranger"), "lifePhaseReviews", `${TENANT_A}_2030`)));
+  });
+
   it("denies another region, leaders, members and network viewers reading it", async () => {
     await assertFails(getDoc(review("ownerB")));
     await assertFails(getDoc(review("ownerC")));

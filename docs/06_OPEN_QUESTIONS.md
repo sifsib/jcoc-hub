@@ -36,6 +36,16 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 | U3 | The base roles `branch_admin` and `cell_leader` still exist in the rules for upstream compatibility, but JCOC can no longer be given them. Remove them from the JCOC rules entirely? | Sifiso | Safe to leave; removing makes the fork diverge further |
 | U4 | Org-level tier resolution (ADR-009) is still not built. New regions leave `tier` unset, which the app treats as fully enabled. Fine for JCOC, but a deliberate plan for billing should replace it | Sifiso | Not blocking |
 
+## From the Phase 3 build (ADR-011), 2026-10-23, for Anita to confirm
+
+| # | Question | Built as |
+|---|---|---|
+| V1 | Teen ends in the year a child turns 18; Campus Student is 18 to 20; single adult phases start at 21 | As stated |
+| V2 | When does a teen stop being a Scholar? | At the end of Grade 12, using the worked-out grade |
+| V3 | Teen Parent means a dependent child aged 14 to 17 this year | As stated |
+| V4 | Campus Student is automatic for everyone aged 18 to 20, studying or not | Automatic; admins can untick it per person |
+| V5 | Married people with no wedding date get no Young/Mature Married phase until one is entered | As stated; the review page and roster show who is affected |
+
 ## Non-blocking, needed before the relevant phase
 
 | # | Question | Phase |

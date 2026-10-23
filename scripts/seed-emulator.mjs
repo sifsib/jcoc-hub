@@ -147,8 +147,10 @@ const members = [
   // A linked couple: birthday on Saturday, anniversary on Sunday.
   { id: "m-thabo", firstName: "Thabo", lastName: "Dlamini", dob: on(1, 1986), gender: "Male", maritalStatus: "Married",
     anniversaryDate: on(2, 2014), spouseId: "m-lerato", sectorId: "sec-north", familyGroupId: "fg-north-1", phone: "27820000001",
+    householdId: "hh-dlamini", householdRole: "primary",
     email: "thabo@demo-jcoc.test", authUid: "member-thabo", portalStatus: "active" },
   { id: "m-lerato", firstName: "Lerato", lastName: "Dlamini", dob: on(40, 1988), gender: "Female", maritalStatus: "Married",
+    householdId: "hh-dlamini", householdRole: "spouse",
     anniversaryDate: on(2, 2014), spouseId: "m-thabo", sectorId: "sec-north", familyGroupId: "fg-north-1", phone: "27820000002" },
   // Birthday on Friday itself, old DD/MM/YYYY import format, South branch.
   { id: "m-anna", firstName: "Anna", lastName: "Botha", dob: (() => { const [y, m, d] = on(0, 2010).split("-"); return `${d}/${m}/${y}`; })(),
@@ -181,8 +183,29 @@ const members = [
     maritalStatus: "Single", sectorId: "sec-tshwane", phone: "27820000012",
     address: { line1: "9 Test Avenue", line2: "", suburb: "Hatfield", town: "Pretoria", postalCode: "0083" } },
 ];
+// Life phases (ADR-011): the Dlamini family has a member child who turns 13
+// this year (a pre-teen now, a teen next year) and a younger child who is not
+// a member. Kayla turns 25 next year. Phases are worked out by the
+// onMemberWrittenLifePhases function, so run the functions emulator to see them.
+const thisYear = new Date().getFullYear();
+members.push(
+  { id: "m-neo", firstName: "Neo", lastName: "Dlamini", dob: `${thisYear - 13}-08-01`, gender: "Male", maritalStatus: "Single",
+    sectorId: "sec-north", familyGroupId: "fg-north-1", phone: "", householdId: "hh-dlamini", householdRole: "child", parentId: "m-thabo" },
+  { id: "m-kayla", firstName: "Kayla", lastName: "Pillay", dob: `${thisYear - 24}-03-15`, gender: "Female", maritalStatus: "Single",
+    sectorId: "sec-south", phone: "27820000013" },
+);
+await db.doc("households/hh-dlamini").set({
+  tenantId: TENANT_ID, familyName: "Dlamini", primaryMemberId: "m-thabo", spouseMemberId: "m-lerato",
+  nonMemberChildren: [{ firstName: "Ayo", lastName: "Dlamini", dob: `${thisYear - 6}-05-20`, gender: "Female" }],
+  createdAt: ts,
+});
 for (const { id, ...m } of members) {
   await db.doc(`members/${id}`).set({ ...base, ...m, fullName: `${m.firstName} ${m.lastName}` });
+}
+// Clear any earlier life phase reviews and the approved year, so a fresh run starts clean.
+for (const t of [TENANT_ID, NORTHWEST, TSHWANE]) {
+  await db.doc(`tenants/${t}`).update({ lifePhaseYear: admin.firestore.FieldValue.delete() });
+  (await db.collection("lifePhaseReviews").where("tenantId", "==", t).get()).forEach((d) => d.ref.delete());
 }
 
 // Self-service settings are left unset, so the default fields (phone, email,

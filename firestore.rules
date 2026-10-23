@@ -270,6 +270,9 @@ service cloud.firestore {
       allow read: if isSignedIn()
                   && ((resource.data.tenantId == userTenantId() && (hasRole('owner') || hasRole('admin')))
                       || networkCanWrite(resource.data.tenantId));
+      // The review page checks whether next year's review exists yet. A
+      // missing document holds nothing, so owners and admins may ask.
+      allow read: if isSignedIn() && resource == null && (hasRole('owner') || hasRole('admin'));
       allow write: if false;
     }
 
