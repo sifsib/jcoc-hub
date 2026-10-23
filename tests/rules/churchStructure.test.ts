@@ -298,3 +298,44 @@ describe("member change history", () => {
     await assertFails(deleteDoc(doc(dbAs(env, "networkOwner"), "member_audit", "auditA")));
   });
 });
+
+describe("changes to audited member fields name who made them", () => {
+  it("denies changing a member's sector or status without stamping the change", async () => {
+    const ref = doc(dbAs(env, "ownerA"), "members", "otherMemberOfA");
+    await assertFails(updateDoc(ref, { sectorId: "sectorNorth" }));
+    await assertFails(updateDoc(ref, { status: "inactive" }));
+  });
+
+  it("denies stamping the change in someone else's name", async () => {
+    await assertFails(
+      updateDoc(doc(dbAs(env, "ownerA"), "members", "otherMemberOfA"), {
+        sectorId: "sectorNorth", updatedBy: "adminA", updatedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it("denies a stamp with a made-up time", async () => {
+    await assertFails(
+      updateDoc(doc(dbAs(env, "ownerA"), "members", "otherMemberOfA"), {
+        sectorId: "sectorNorth", updatedBy: "ownerA", updatedAt: new Date("2020-01-01"),
+      })
+    );
+  });
+
+  it("allows the change when stamped by the person making it", async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbAs(env, "ownerA"), "members", "otherMemberOfA"), {
+        sectorId: "sectorNorth", familyGroupId: "fgOne", updatedBy: "ownerA", updatedAt: serverTimestamp(),
+      })
+    );
+    await assertSucceeds(
+      updateDoc(doc(dbAs(env, "networkOwner"), "members", "memberOfB"), {
+        status: "inactive", updatedBy: "networkOwner", updatedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it("does not ask for a stamp on other fields", async () => {
+    await assertSucceeds(updateDoc(doc(dbAs(env, "ownerA"), "members", "otherMemberOfA"), { phone: "27830000000" }));
+  });
+});

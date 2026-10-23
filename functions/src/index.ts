@@ -1369,6 +1369,11 @@ export const visitorFollowupSms = onSchedule(
 export { dailySummary } from "./dailySummary";
 
 // ─────────────────────────────────────────────────────────────
+// MEMBER CHANGE HISTORY (see ./memberAudit.ts, ADR-010)
+// ─────────────────────────────────────────────────────────────
+export { onMemberUpdatedAudit } from "./memberAudit";
+
+// ─────────────────────────────────────────────────────────────
 // MEMBER COUNTER
 // Keeps tenants/{tenantId}.activeMemberCount in sync so the free-tier
 // member limit can be checked cheaply (in the app and in security rules)

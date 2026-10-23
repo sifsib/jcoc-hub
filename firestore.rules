@@ -413,6 +413,21 @@ service cloud.firestore {
     // ============================================
     // MEMBERS COLLECTION
     // ============================================
+    // Member fields the change history records. A browser write that changes
+    // any of them must stamp who made it and when, so the onMemberUpdatedAudit
+    // function can name them (ADR-010). Keep in step with
+    // lib/memberAuditFields.ts and functions/src/memberAuditFormat.ts.
+    function auditedMemberFields() {
+      return ['status', 'isMember', 'membershipType', 'churchRole', 'role',
+              'maritalStatus', 'lifePhases', 'sectorId', 'familyGroupId',
+              'branch', 'cellRegion'];
+    }
+    function stampedIfAudited() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(auditedMemberFields())
+          || (request.resource.data.get('updatedBy', '') == request.auth.uid
+              && request.resource.data.get('updatedAt', null) == request.time);
+    }
+
     match /members/{memberId} {
       // Admin access
       allow read: if isSignedIn()
@@ -442,10 +457,12 @@ service cloud.firestore {
       allow update: if isSignedIn()
                     && tenantAllowed(resource)
                     && request.resource.data.tenantId == resource.data.tenantId
-                    && canManageMembers();
+                    && canManageMembers()
+                    && stampedIfAudited();
       allow update: if isSignedIn()
                     && networkCanWrite(resource.data.tenantId)
-                    && request.resource.data.tenantId == resource.data.tenantId;
+                    && request.resource.data.tenantId == resource.data.tenantId
+                    && stampedIfAudited();
       // Follow-up team: may touch the care follow-up stamp ONLY, so completing a
       // care workflow moves the member off the Care Tier Alerts list. No other
       // member field can be changed through this rule.
