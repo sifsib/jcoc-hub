@@ -132,6 +132,40 @@ Anyone can register for an event from a public link without logging in. Registra
 ## Open items for next session
 
 1. Anita to confirm X1–X5, and items I, J and K, in `docs/06_OPEN_QUESTIONS.md`.
-2. Sifiso to decide on the inherited faults in X6 (the member RSVP counter, the member events error, and tenant Storage access), and on Mailchimp vs Brevo.
+2. Sifiso to decide on X6 (c), tenant Storage access, X7 (hardcoded "Powered by" footer), and Mailchimp vs Brevo.
 3. Possible addition: a "resend my link" for registrants who lose it (needs email or SMS). Log it as a new request if wanted.
 4. Push and deploy are Sifiso's. Nothing has been pushed.
+
+## Follow-up the same day: inherited RSVP faults (X6 a and b)
+
+Asked for by Sifiso after the phase above.
+
+**The problem.** When a member said "Going" in the member app:
+- the RSVP saved, but the event's attendee counter never moved, because members are not allowed to write to events;
+- the page logged a permission error on load, because it tried to read RSVPs that did not exist yet;
+- so it forgot the member's answer on the next visit.
+
+Both faults were in the base product.
+
+**Tests first, run failing before the fix:**
+- `tests/unit/rsvpCount.test.ts` (6 tests) failed because the module did not exist.
+- The new rules tests in `tests/rules/events.test.ts` ("members see only their own RSVPs...") failed on "a member reads another member's RSVP".
+
+**The fix:**
+- `functions/src/rsvpCount.ts` (pure) and `functions/src/rsvpCountTrigger.ts`. The new Cloud Function `onRsvpWrittenCount` recounts the event's attending RSVPs whenever one changes, and sets `rsvpCount`. This covers the member app, the staff page and the public RSVP route alike. It counts afresh rather than adding or subtracting, so a wrong number corrects itself on the next change.
+- `app/member/[slug]/events/page.tsx` loads the member's own RSVPs in one query and no longer writes to the event.
+- `firestore.rules`: members can read only their own RSVPs. This tightens access; nothing is widened.
+
+**Checks:**
+- `tsc` is clean in the root and in `functions/`.
+- Unit tests: 160 pass. Rules tests: 221 pass.
+- Clicked through as Thabo with the functions emulator running:
+  - the events page loads with no error;
+  - "Going" set the count to 1, and the function ran;
+  - "Not Going" set it back to 0;
+  - after a reload, the page still showed "Not Going".
+- `next build` was not re-run after this small change.
+
+**To make it live:** also deploy functions, with `firebase deploy --only functions:onRsvpWrittenCount` along with the rules. Until the function is deployed, member RSVPs still save, but the counter will not move.
+
+**Not verified:** the function on a real project, and the count after many simultaneous RSVPs. Each run counts afresh, so the last run should leave the right number.

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { auth, db } from "../../../../lib/firebase";
 import {
   collection, query, where, getDocs,
-  doc, getDoc, setDoc, updateDoc, increment, serverTimestamp,
+  doc, getDoc, setDoc, serverTimestamp,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -111,12 +111,11 @@ export default function MemberEventsPage() {
         setUpcoming(up);
         setPast(pa);
 
-        // Load RSVPs
+        // Load this member's own RSVPs in one query. Reading an RSVP that does
+        // not exist yet is refused by the rules, which used to break this load.
         const rsvps: Record<string, RsvpStatus | undefined> = {};
-        await Promise.all([...up, ...pa].map(async (e) => {
-          const rsvpSnap = await getDoc(doc(db, "event_rsvps", `${e.id}_${user.uid}`));
-          if (rsvpSnap.exists()) rsvps[e.id] = rsvpSnap.data()?.status as RsvpStatus;
-        }));
+        const mine = await getDocs(query(collection(db, "event_rsvps"), where("tenantId", "==", tid), where("uid", "==", user.uid)));
+        mine.forEach((d) => { rsvps[d.data().eventId] = d.data().status as RsvpStatus; });
         setRsvpMap(rsvps);
       } catch (err) {
         console.error("Failed to load events:", err);
@@ -131,20 +130,12 @@ export default function MemberEventsPage() {
     if (!uid || !tenantId) return;
     setRsvpLoading(p => ({ ...p, [event.id]: true }));
     try {
-      const prevStatus = rsvpMap[event.id];
       await setDoc(doc(db, "event_rsvps", `${event.id}_${uid}`), {
         eventId: event.id, tenantId, uid, memberId, memberName,
         status, respondedAt: serverTimestamp(),
       }, { merge: true });
-
-      // Update rsvpCount atomically
-      const wasAttending = prevStatus === "attending";
-      const nowAttending = status === "attending";
-      if (!wasAttending && nowAttending) {
-        await updateDoc(doc(db, "events", event.id), { rsvpCount: increment(1) });
-      } else if (wasAttending && !nowAttending) {
-        await updateDoc(doc(db, "events", event.id), { rsvpCount: increment(-1) });
-      }
+      // The event's attending count is kept by the onRsvpWrittenCount function;
+      // members cannot write to events.
 
       setRsvpMap(p => ({ ...p, [event.id]: status }));
     } catch (err) {

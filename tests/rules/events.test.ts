@@ -105,6 +105,40 @@ describe("event RSVPs are no longer open to anyone", () => {
   });
 });
 
+describe("members see only their own RSVPs, and cannot touch the event's count", () => {
+  // X6 (a, b): the member events page now lists the member's own RSVPs in one
+  // query, and the attending count is kept by the onRsvpWrittenCount function,
+  // so members never write to events. Members used to be able to read every
+  // RSVP in their region, other people's names included.
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "event_rsvps", "evA_memberA"), { eventId: "evA", tenantId: TENANT_A, uid: "memberA", memberName: "Test Person A", status: "attending" });
+      await setDoc(doc(db, "event_rsvps", "evA_other"), { eventId: "evA", tenantId: TENANT_A, uid: "otherMember", memberName: "Test Person X", status: "attending" });
+    });
+  });
+
+  it("lets a member list their own RSVPs", async () => {
+    await assertSucceeds(getDocs(query(collection(dbAs(env, "memberA"), "event_rsvps"), where("tenantId", "==", TENANT_A), where("uid", "==", "memberA"))));
+    await assertSucceeds(getDoc(doc(dbAs(env, "memberA"), "event_rsvps", "evA_memberA")));
+  });
+
+  it("denies a member reading another member's RSVP, or listing the region's", async () => {
+    await assertFails(getDoc(doc(dbAs(env, "memberA"), "event_rsvps", "evA_other")));
+    await assertFails(getDocs(query(collection(dbAs(env, "memberA"), "event_rsvps"), where("tenantId", "==", TENANT_A))));
+    await assertFails(getDocs(query(collection(dbAs(env, "memberA"), "event_rsvps"), where("tenantId", "==", TENANT_A), where("uid", "==", "otherMember"))));
+  });
+
+  it("denies a member changing an event, including its RSVP count", async () => {
+    await assertFails(updateDoc(doc(dbAs(env, "memberA"), "events", "evA"), { rsvpCount: 1 }));
+  });
+
+  it("still lets region staff read every RSVP in their region, and not another region's", async () => {
+    await assertSucceeds(getDocs(query(collection(dbAs(env, "ownerA"), "event_rsvps"), where("tenantId", "==", TENANT_A), where("eventId", "==", "evA"))));
+    await assertFails(getDoc(doc(dbAs(env, "ownerB"), "event_rsvps", "evA_other")));
+  });
+});
+
 describe("form submissions are checked against a real, open form", () => {
   const submission = (over: Record<string, unknown> = {}) => ({
     formId: "formA", tenantId: TENANT_A, data: { name: "Thabo" }, submittedAt: serverTimestamp(), ...over,

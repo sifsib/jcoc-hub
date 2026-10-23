@@ -1084,13 +1084,16 @@ service cloud.firestore {
                     && rsvpEventTenant(request.resource.data) == userTenantId()
                     && ((hasLinkedMemberProfile() && request.resource.data.get('uid', '') == request.auth.uid)
                         || hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
-      // Read: super admin, tenant staff, or a linked member in the same tenant
+      // Read: super admin, tenant staff, or a linked member their own RSVPs
+      // only. (Members used to read every RSVP in the region, names included.
+      // Covered by tests/rules/events.test.ts, X6.)
       allow read: if isSignedIn()
                   && (
                     isSuperAdmin()
                     || (tenantAllowed(resource)
                         && (hasRole('owner') || hasRole('admin') || hasRole('member_manager') || hasRole('viewer')))
-                    || (hasLinkedMemberProfile() && resource.data.tenantId == userTenantId())
+                    || (hasLinkedMemberProfile() && resource.data.tenantId == userTenantId()
+                        && resource.data.get('uid', '') == request.auth.uid)
                   );
       // Update: tenant staff, or a linked member editing their own RSVP
       allow update: if isSignedIn()

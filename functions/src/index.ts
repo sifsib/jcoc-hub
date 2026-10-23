@@ -1379,6 +1379,11 @@ export { onMemberUpdatedAudit } from "./memberAudit";
 export { onMemberWrittenLifePhases, onHouseholdWrittenLifePhases, lifePhaseNewYear } from "./lifePhases";
 
 // ─────────────────────────────────────────────────────────────
+// EVENT RSVP COUNT (see ./rsvpCountTrigger.ts, X6)
+// ─────────────────────────────────────────────────────────────
+export { onRsvpWrittenCount } from "./rsvpCountTrigger";
+
+// ─────────────────────────────────────────────────────────────
 // MEMBER COUNTER
 // Keeps tenants/{tenantId}.activeMemberCount in sync so the free-tier
 // member limit can be checked cheaply (in the app and in security rules)
