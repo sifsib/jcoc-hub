@@ -77,6 +77,23 @@ describe("children's check-in", () => {
     expect(suggestClass(["campus_student"], classes)).toBeNull();
   });
 
+  // Answered 2026-10-23: classes differ per region, so each region types in
+  // the ages for each class. Ages are "age this year", as for life phases.
+  it("uses the ages typed in for a class before life phases, narrowest range first", () => {
+    const byAge = [
+      { id: "tots", name: "Tots", phases: [], ageFrom: 0, ageTo: 3, archived: false },
+      { id: "juniors", name: "Juniors", phases: [], ageFrom: 4, ageTo: 8, archived: false },
+      { id: "wide", name: "Everyone", phases: [], ageFrom: 0, ageTo: 13, archived: false },
+      { id: "byphase", name: "Scholars", phases: ["scholar"], archived: false },
+      { id: "gone", name: "Old", phases: [], ageFrom: 9, ageTo: 9, archived: true },
+    ];
+    expect(suggestClass(["child", "pre_school"], byAge, 2)?.id).toBe("tots");
+    expect(suggestClass(["child", "scholar"], byAge, 6)?.id).toBe("juniors");
+    expect(suggestClass(["child", "scholar"], byAge, 9)?.id).toBe("wide");
+    expect(suggestClass(["child", "scholar"], byAge.filter((c) => c.id !== "wide"), 9)?.id).toBe("byphase");
+    expect(suggestClass(["child", "scholar"], byAge, null)?.id).toBe("byphase");
+  });
+
   it("makes 4-digit codes and compares them loosely", () => {
     expect(generateCode(() => 0)).toBe("0000");
     expect(generateCode(() => 0.99999)).toBe("9999");
@@ -90,14 +107,10 @@ describe("children's check-in", () => {
     expect(decideCheckout({ collector: "dropoff", codeOk: true, isSupervisor: false })).toEqual({ ok: true, override: false });
   });
 
-  it("lets an adult the parent named collect with the right code", () => {
-    expect(
-      decideCheckout({ collector: "named", collectorName: "gogo thandi", allowedCollectors: ["Gogo Thandi"], codeOk: true, isSupervisor: false }),
-    ).toEqual({ ok: true, override: false });
-  });
-
-  it("refuses someone who was not named, or a wrong code, without a supervisor", () => {
-    expect(decideCheckout({ collector: "named", collectorName: "Uncle Sam", allowedCollectors: ["Gogo Thandi"], codeOk: true, isSupervisor: false }).ok).toBe(false);
+  // Answered 2026-10-23: only the adult who signed the child in may collect.
+  it("refuses anyone but the adult who signed the child in, even with the code, without a supervisor", () => {
+    const named = { collector: "named", collectorName: "Gogo Thandi", allowedCollectors: ["Gogo Thandi"], codeOk: true, isSupervisor: false };
+    expect(decideCheckout(named as unknown as Parameters<typeof decideCheckout>[0]).ok).toBe(false);
     expect(decideCheckout({ collector: "other", collectorName: "Neighbour", codeOk: true, isSupervisor: false }).ok).toBe(false);
     expect(decideCheckout({ collector: "dropoff", codeOk: false, isSupervisor: false }).ok).toBe(false);
   });

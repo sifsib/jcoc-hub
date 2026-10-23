@@ -58,6 +58,10 @@ describe("validating a registration", () => {
     expect(validateRegistration({ ...base, email: "" }, paid, []).ok).toBe(true);
   });
 
+  it("offers XS to XXXL as the standard T-shirt sizes (answered 2026-10-23)", () => {
+    expect(defaultSettings().tshirtSizes).toEqual(["XS", "S", "M", "L", "XL", "XXL", "XXXL"]);
+  });
+
   it("checks optional fields only when the event switches them on", () => {
     const withFields = {
       ...paid,

@@ -1,5 +1,5 @@
 // Check a child out (ADR-008, ADR-012). The collector is the adult who
-// dropped off or an adult the parent named, with the right code. Anyone else,
+// dropped off, with the right code (answered 2026-10-23). Anyone else,
 // a lost code, or a locked code (5 wrong tries) needs a supervisor override
 // with a reason, which is written to the record and to admin_audit. The rule
 // itself is decideCheckout in lib/kidsCheckin.ts. A record can be checked out
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const ctx = await kidsContext();
   if (!ctx) return NextResponse.json({ error: "Only teachers and region admins can use check-out." }, { status: 403 });
   const body = await req.json().catch(() => ({}));
-  const collector = (["dropoff", "named", "other"].includes(body.collector) ? body.collector : "") as Collector;
+  const collector = (["dropoff", "other"].includes(body.collector) ? body.collector : "") as Collector;
   if (!collector) return NextResponse.json({ error: "Choose who is collecting." }, { status: 400 });
   const collectorName = String(body.collectorName ?? "").trim();
   const code = String(body.code ?? "").replace(/\D/g, "");
@@ -38,8 +38,7 @@ export async function POST(req: NextRequest) {
       if (code && !codeOk && !locked) tx.update(secretRef, { failedAttempts: FieldValue.increment(1) });
 
       const decision = decideCheckout({
-        collector, collectorName: collector === "dropoff" ? rec.guardian?.name : collectorName,
-        allowedCollectors: rec.allowedCollectors ?? [], codeOk,
+        collector, collectorName: collector === "dropoff" ? rec.guardian?.name : collectorName, codeOk,
         isSupervisor: isSupervisor(ctx, rec.classId), overrideReason,
       });
       if (!decision.ok) {

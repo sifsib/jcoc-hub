@@ -39,6 +39,8 @@ export async function kidsContext(): Promise<KidsContext | null> {
     phases: (d.data().phases as string[]) ?? [],
     archived: d.data().archived === true,
     capacity: d.data().capacity ?? undefined,
+    ageFrom: typeof d.data().ageFrom === "number" ? (d.data().ageFrom as number) : null,
+    ageTo: typeof d.data().ageTo === "number" ? (d.data().ageTo as number) : null,
     teacherUids: (d.data().teacherUids as string[]) ?? [],
     supervisorUids: (d.data().supervisorUids as string[]) ?? [],
   }));

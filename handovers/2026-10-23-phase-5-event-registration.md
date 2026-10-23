@@ -228,3 +228,65 @@ Deploy the Storage rules with `firebase deploy --only storage` (in addition to t
 - **Finance roles:** I did not upload an invoice from the Financials page. Finance is switched off for JCOC; the rules tests cover it.
 - **WhatsApp banners:** I did not upload a banner from the WhatsApp page; the rules tests cover it.
 - **Existing files:** I did not check on the real bucket whether anything already stored sits outside these three folders. If it does, only owners and admins can now reach it.
+
+## Follow-up the same day: Sifiso's answers on children's check-in and T-shirt sizes
+
+Answers given by Sifiso. They are recorded in `docs/06_OPEN_QUESTIONS.md`: W1, W2, W3 and K (in part).
+
+**Tests first, run failing before the change:**
+- 4 unit tests: class ages, collection, the T-shirt default and retention.
+- 1 rules test: class age fields.
+
+### 1. Who may collect a child: only the adult who signed them in
+
+- `decideCheckout` no longer has a "named adult" path. The check-in screen no longer asks for other adults, and the check-out screen offers only "the adult who dropped off" or "someone else (needs a supervisor)".
+- **Assumption, flagged to Sifiso:** the supervisor override, with a reason, is kept for emergencies.
+- Files changed:
+  - `lib/kidsCheckin.ts`;
+  - `app/api/kids/{checkin,checkout,session}/route.ts`;
+  - `app/dashboard/kids/page.tsx`.
+
+### 2. Class names and ages: per region, typed in manually
+
+- Each class now has optional `ageFrom` and `ageTo` ("age this year", whole years 0 to 17, both or neither, checked in `firestore.rules`).
+- Check-in suggests the narrowest class whose ages fit. Classes without ages fall back to life phases.
+- Files changed:
+  - `lib/kidsCheckin.ts`;
+  - `app/lib/kidsServer.ts`;
+  - `app/dashboard/kids/settings/page.tsx`.
+
+### 3. Records kept for 24 months
+
+- New `functions/src/kidsRetention.ts` (pure) and `kidsRetentionTrigger.ts`. The function `kidsRetention` runs nightly at 02:30 Johannesburg time.
+- It removes:
+  - `childCheckins` with a service date older than 24 months;
+  - `childCheckinSecrets` older than that;
+  - supervisor-override entries in `admin_audit`, which name the child.
+- One new index: `admin_audit (action, createdAt)`.
+
+### 4. T-shirt sizes
+
+New events now offer XS, S, M, L, XL, XXL and XXXL by default.
+
+### Checks
+
+- `tsc` is clean in the root and in `functions/`.
+- Unit tests: 165 pass. Rules tests: 233 pass.
+- `next build` succeeds.
+- Clicked through:
+  - **Class ages:** set ages 4 to 8 on Scholars; a backwards range is refused.
+  - **Class suggestion:** the test visitor's 5-year-old was suggested Scholars (by age) instead of Pre-School.
+  - **Check-in screen:** says only this adult can collect.
+  - **Check-out:** a "named" collector is refused; someone else needs a reason; the drop-off adult with the code succeeds.
+
+### To make it live
+
+Deploy:
+- functions, with `kidsRetention`;
+- indexes;
+- rules.
+
+### Not verified
+
+- **The nightly clean-up:** it has not been run. The emulator does not fire scheduled functions; the date logic is unit tested.
+- **The check-out dialog:** not opened in the browser; the route was exercised directly.

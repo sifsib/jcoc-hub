@@ -50,9 +50,9 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 
 | # | Question | Built as |
 |---|---|---|
-| W1 | **Who may collect a child** (safeguarding). Plan v2 says "the same parent, or another listed adult"; ADR-008 said only the adult who signed in | The dropping-off adult, or an adult the parent names at drop-off, with the 4-digit code. Anyone else, a lost code, or 5 wrong codes needs a supervisor (region owner/admin or a named class supervisor) with a reason, logged |
-| W2 | Class names and which ages go in each (open question L) | Seeded as Babies, Pre-School, Scholars, Pre-teens by life phase; admins can change them |
-| W3 | How long check-in records are kept (open question L) | Kept; nothing deleted automatically. Decide a retention period before go-live |
+| W1 | **Who may collect a child** (safeguarding). Plan v2 says "the same parent, or another listed adult"; ADR-008 said only the adult who signed in | The dropping-off adult, or an adult the parent names at drop-off, with the 4-digit code. Anyone else, a lost code, or 5 wrong codes needs a supervisor (region owner/admin or a named class supervisor) with a reason, logged **Answered 2026-10-23 (Sifiso): only the person who signs the child in.** Built: parents can no longer name other adults; anyone else needs a supervisor with a reason, logged. Keeping that supervisor path is my assumption, for emergencies; say if it should go. |
+| W2 | Class names and which ages go in each (open question L) | Seeded as Babies, Pre-School, Scholars, Pre-teens by life phase; admins can change them **Answered 2026-10-23: they differ per region; capture them manually for each class.** Built: each region sets up its own classes and types in the ages ("age this year", 0 to 17) per class; check-in suggests the narrowest class whose ages fit, and falls back to life phases when a class has no ages. |
+| W3 | How long check-in records are kept (open question L) | Kept; nothing deleted automatically. Decide a retention period before go-live **Answered 2026-10-23: 24 months.** Built: a nightly function, `kidsRetention`, removes check-in records, their code documents and supervisor-override log entries older than 24 months. |
 | W4 | Children's ministry stops at the year a child turns 13 (end of Kidz Zone) | As stated; teens are not offered for check-in |
 | W5 | A visitor who returns after more than 180 days gets a new follow-up | As stated (`FOLLOW_UP_GAP_DAYS`) |
 | W6 | The collection code is sent by SMS only when the church's BulkSMS account is set up (about 19c per message); otherwise the parent photographs the code on screen | As stated |
@@ -67,7 +67,7 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 | X4 | Registrants under 18 | Worked out from date of birth on the event date; they are asked to upload a signed indemnity. A missing indemnity is shown to verifiers but does not block approval |
 | X5 | Emails to registrants | Approval emails the ticket, and staff can email registrants by status, only when the region's Brevo account is set up (item M). Without Brevo the registrant sees the ticket on their own status page |
 | X6 | **Inherited faults found** (present in the base product too): (a) when a member RSVPs from the member app, the event's RSVP counter does not update, because members cannot write to events; (b) the member events page logs a permission error when a member has not RSVPed yet, and forgets their answer; (c) the tenant Storage rules let any signed-in user of a region, members included, read and write that region's files such as invoices | **(a) and (b) fixed 2026-10-23** at Sifiso's request: the count is kept by a new Cloud Function, `onRsvpWrittenCount`, and the member page loads its own RSVPs in one query. Also tightened: members now read only their own RSVPs (they could read everyone's in the region). **(c) fixed 2026-10-23**: region files are limited by folder to the roles that use them (logo: owner and admin change it, anyone in the region sees it; invoices: owner, admin, finance, branch admin; WhatsApp banners: owner, admin, member manager; anything else: owner and admin), in the active region only. Storage rules tests added (`tests/rules/storage.test.ts`) |
-| X7 | **Inherited: "Powered by Kereke Hub" was typed into the footer of five member app pages**, and also the join, form, RSVP and two check-in pages and the member invite email, against the white-label rule | **Fixed 2026-10-23**: one `ATTRIBUTION` string in `lib/whiteLabel.ts`, used in all eleven places. It reads "Designed by Kereke Hub", the wording in `docs/02_SCOPE.md` B9, which says the exact wording is still to be agreed with JCOC. Other "Kereke Hub" mentions across the app remain for the planned white-label work (B9) |
+| X7 | **Inherited: "Powered by Kereke Hub" was typed into the footer of five member app pages**, and also the join, form, RSVP and two check-in pages and the member invite email, against the white-label rule | **Fixed 2026-10-23**: one `ATTRIBUTION` string in `lib/whiteLabel.ts`, used in all eleven places. It reads "Designed by Kereke Hub", the wording in `docs/02_SCOPE.md` B9, which says the exact wording is still to be agreed with JCOC. Other "Kereke Hub" mentions across the app remain for the planned white-label work (B9) Wording proposed to Sifiso 2026-10-23; awaiting a choice. |
 
 ## Non-blocking, needed before the relevant phase
 
@@ -75,7 +75,7 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 |---|---|---|
 | I | Youth indemnity form template, and their most complicated past registration forms | 3 |
 | J | Banking details and payment reference format for registrants | 3 |
-| K | Standard t-shirt size list, dietary options: fixed list or free text, transport as yes/no or pickup point | 3 |
+| K | Standard t-shirt size list, dietary options: fixed list or free text, transport as yes/no or pickup point | 3 K partly answered 2026-10-23: T-shirt sizes XS, S, M, L, XL, XXL, XXXL (now the default for new events). Dietary and transport options still open. |
 | L | Children's ministry age bands and class names; current safeguarding controls beyond same-adult sign-out; retention period for check-in records | 4 |
 | M | Brevo account and DNS access for sender authentication. Note the free tier caps at 300 emails a day, and a network-wide send will exceed that | 5 |
 | N | BulkSMS account, if SMS is wanted | 5 |
@@ -100,6 +100,10 @@ Anything not in `docs/02_SCOPE.md` goes here with an estimate before it gets bui
 
 | # | Question | Answer | Date |
 |---|---|---|---|
+| W1 | Who may collect a child | Only the person who signs them in | 2026-10-23 |
+| W2 | Class names and ages | They differ per region; capture them manually for each class | 2026-10-23 |
+| W3 | How long check-in records are kept | 24 months | 2026-10-23 |
+| K (part) | T-shirt sizes | XS, S, M, L, XL, XXL, XXXL | 2026-10-23 |
 | 1 | Client organisation name | Joburg Church of Christ (JCOC), johannesburg.church | 2026-08-31 |
 | 2 | The campus transcribed as "Swanee" | Tshwane. Not Eswatini as originally assumed | 2026-08-31 |
 | 3 | Attendance capture method | They will advise. Still a Phase 0 gate, but now client-owned | 2026-08-31 |

@@ -1384,6 +1384,11 @@ export { onMemberWrittenLifePhases, onHouseholdWrittenLifePhases, lifePhaseNewYe
 export { onRsvpWrittenCount } from "./rsvpCountTrigger";
 
 // ─────────────────────────────────────────────────────────────
+// CHILDREN'S CHECK-IN RETENTION (see ./kidsRetentionTrigger.ts, 24 months)
+// ─────────────────────────────────────────────────────────────
+export { kidsRetention } from "./kidsRetentionTrigger";
+
+// ─────────────────────────────────────────────────────────────
 // MEMBER COUNTER
 // Keeps tenants/{tenantId}.activeMemberCount in sync so the free-tier
 // member limit can be checked cheaply (in the app and in security rules)

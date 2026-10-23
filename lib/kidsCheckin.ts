@@ -19,6 +19,9 @@ export interface ChildClass {
   name: string;
   /** Life phase ids (ADR-011) that belong in this class by default. */
   phases: string[];
+  /** Ages ("age this year") typed in by the region; used before phases when set. */
+  ageFrom?: number | null;
+  ageTo?: number | null;
   archived: boolean;
   capacity?: number;
   teacherUids?: string[];
@@ -29,11 +32,20 @@ export interface ChildClass {
 const BAND_ORDER = ["baby", "pre_school", "pre_teen", "teen", "scholar", "kidz_zone", "child", "campus_student"];
 
 /**
- * The active class for the child's most specific phase: a pre-teen (who is
- * also a Scholar) goes to a Pre-teens class if there is one, else Scholars.
+ * The class to suggest. Classes differ per region, so a region types in the
+ * ages for each class (answered 2026-10-23): the narrowest active class whose
+ * ages include the child's comes first. Otherwise, the active class for the
+ * child's most specific phase: a pre-teen (who is also a Scholar) goes to a
+ * Pre-teens class if there is one, else Scholars.
  */
-export function suggestClass(childPhases: string[], classes: ChildClass[]): ChildClass | null {
+export function suggestClass(childPhases: string[], classes: ChildClass[], age: number | null = null): ChildClass | null {
   const active = classes.filter((c) => !c.archived);
+  if (age !== null) {
+    const byAge = active
+      .filter((c) => typeof c.ageFrom === "number" && typeof c.ageTo === "number" && c.ageFrom <= age && age <= c.ageTo)
+      .sort((a, b) => (a.ageTo! - a.ageFrom!) - (b.ageTo! - b.ageFrom!));
+    if (byAge.length) return byAge[0];
+  }
   for (const band of BAND_ORDER) {
     if (!childPhases.includes(band)) continue;
     const match = active.find((c) => c.phases.includes(band));
@@ -52,12 +64,16 @@ export function codeMatches(input: string, code: string): boolean {
   return typed.length === 4 && typed === code;
 }
 
-export type Collector = "dropoff" | "named" | "other";
+/**
+ * Who is collecting. Only the adult who signed the child in may collect, with
+ * the code (answered 2026-10-23; parents can no longer name other adults).
+ * Anyone else needs a supervisor, with a reason.
+ */
+export type Collector = "dropoff" | "other";
 
 export interface CheckoutRequest {
   collector: Collector;
   collectorName?: string;
-  allowedCollectors?: string[];
   codeOk: boolean;
   isSupervisor: boolean;
   overrideReason?: string;
@@ -65,19 +81,15 @@ export interface CheckoutRequest {
 
 export type CheckoutDecision = { ok: true; override: boolean } | { ok: false; reason: string };
 
-const sameName = (a: string, b: string) => a.trim().toLocaleLowerCase("en-ZA") === b.trim().toLocaleLowerCase("en-ZA");
-
 export function decideCheckout(req: CheckoutRequest): CheckoutDecision {
-  const listed =
-    req.collector === "dropoff" ||
-    (req.collector === "named" && !!req.collectorName && (req.allowedCollectors ?? []).some((n) => sameName(n, req.collectorName!)));
+  const listed = req.collector === "dropoff";
   if (listed && req.codeOk) return { ok: true, override: false };
   if (!req.isSupervisor) {
     return {
       ok: false,
       reason: listed
         ? "The code does not match. A supervisor can release the child with a reason."
-        : "This person was not named at drop-off. A supervisor can release the child with a reason.",
+        : "Only the adult who signed the child in can collect. A supervisor can release the child with a reason.",
     };
   }
   if (!(req.overrideReason ?? "").trim()) return { ok: false, reason: "Give a reason for the override." };
@@ -190,13 +202,13 @@ export function buildFamilies(
       const age = ageThisYear(c.dob, year);
       if (!young(age)) continue;
       const phases = c.lifePhases?.length ? c.lifePhases : childPhases(c.dob, year, c.gradeAdjust ?? 0);
-      children.push({ key: `member:${c.id}`, kind: "member", name: nameOf(c), age, suggestedClassId: suggestClass(phases, classes)?.id ?? null, allergies: "" });
+      children.push({ key: `member:${c.id}`, kind: "member", name: nameOf(c), age, suggestedClassId: suggestClass(phases, classes, age)?.id ?? null, allergies: "" });
     }
     (households.get(hid)?.nonMemberChildren ?? []).forEach((c, i) => {
       const age = ageThisYear(c.dob, year);
       if (!young(age)) return;
       children.push({ key: `household:${hid}:${i}`, kind: "household", name: nameOf(c), age,
-        suggestedClassId: suggestClass(childPhases(c.dob, year), classes)?.id ?? null, allergies: "" });
+        suggestedClassId: suggestClass(childPhases(c.dob, year), classes, age)?.id ?? null, allergies: "" });
     });
     if (children.length === 0) continue;
     families.push({
@@ -213,7 +225,7 @@ export function buildFamilies(
       const age = ageThisYear(c.dob, year);
       if (!young(age)) continue;
       children.push({ key: `visitor:${v.id}:${c.id}`, kind: "visitor", name: nameOf(c), age,
-        suggestedClassId: suggestClass(childPhases(c.dob, year), classes)?.id ?? null, allergies: c.allergies ?? "" });
+        suggestedClassId: suggestClass(childPhases(c.dob, year), classes, age)?.id ?? null, allergies: c.allergies ?? "" });
     }
     if (children.length === 0) continue;
     families.push({ key: `visitor:${v.id}`, kind: "visitor", guardianName: nameOf(v), guardianPhone: v.phone ?? "", otherGuardians: [], otherPhones: [], children });

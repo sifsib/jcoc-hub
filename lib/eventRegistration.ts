@@ -52,7 +52,7 @@ export function defaultSettings(): RegistrationSettings {
     proofRequired: true,
     fields: { tshirt: false, transport: false, dietary: false, region: false, indemnity: false },
     // Placeholder until JCOC confirms its list (open question K).
-    tshirtSizes: ["XS", "S", "M", "L", "XL", "XXL"],
+    tshirtSizes: ["XS", "S", "M", "L", "XL", "XXL", "XXXL"],
     capacity: null,
     closesAt: "",
     eventDate: "",

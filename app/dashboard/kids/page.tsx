@@ -5,7 +5,7 @@
 // A parent is found by cell number or name; siblings check in together; a
 // visitor's child can be captured on the spot. Check-in shows a 4-digit
 // collection code (also sent by SMS when the church has BulkSMS). Check-out
-// needs the dropping-off adult or a named adult, with the code; anyone else
+// needs the adult who dropped off, with the code; anyone else
 // needs a supervisor override with a reason. Everything goes through
 // /api/kids, because teachers cannot read members or visitors themselves.
 
@@ -19,7 +19,7 @@ interface CheckinRecord {
   id: string; classId: string; className: string; status: "in" | "out";
   child: { name: string; age: number | null; kind: string };
   guardian: { name: string; phone: string };
-  allowedCollectors: string[]; careNotes: string;
+  careNotes: string;
   checkedInAt: string | null; checkedOutAt: string | null;
   collectedBy: { kind: string; name: string } | null;
   override: { reason: string; byName: string } | null;
@@ -137,7 +137,6 @@ export default function KidsCheckinPage() {
                   </p>
                   <p className="text-sm text-slate-500">
                     Dropped off by {r.guardian.name} at {time(r.checkedInAt)}
-                    {r.allowedCollectors.length > 0 && <> · may also collect: {r.allowedCollectors.join(", ")}</>}
                   </p>
                   {r.careNotes && r.status === "in" && (
                     <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-sm font-medium text-amber-900">⚠ {r.careNotes}</p>
@@ -196,7 +195,6 @@ function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
   const [picked, setPicked] = useState<Record<string, string>>({}); // child key -> class id
   const [adultName, setAdultName] = useState("");
   const [adultPhone, setAdultPhone] = useState("");
-  const [others, setOthers] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const classIds = new Set(classes.map((c) => c.id));
@@ -224,7 +222,6 @@ function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
     setError("");
     const { ok, data } = await api<{ code: string; smsSent: boolean }>("checkin", {
       familyKey: family.key, children, guardian: { name: adultName, phone: adultPhone },
-      allowedCollectors: others.split(",").map((s) => s.trim()).filter(Boolean),
     });
     setBusy(false);
     if (!ok) return setError(data.error || "Check-in failed.");
@@ -280,11 +277,7 @@ function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
               <input value={adultPhone} onChange={(e) => setAdultPhone(e.target.value)} className={`${input} mt-1`} inputMode="tel" />
             </label>
           </div>
-          <label className="text-sm text-slate-600">
-            Anyone else allowed to collect? (names, separated by commas)
-            {family.otherGuardians.length > 0 && <span className="text-slate-400"> e.g. {family.otherGuardians.join(", ")}</span>}
-            <input value={others} onChange={(e) => setOthers(e.target.value)} className={`${input} mt-1`} />
-          </label>
+          <p className="text-sm text-slate-600">Only this adult can collect, with the code. Anyone else needs a supervisor.</p>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-3">
             <button className={primary} disabled={busy || !Object.values(picked).some(Boolean)} onClick={submit}>
@@ -346,8 +339,8 @@ function CheckoutDialog({ record, isAdmin, onClose, onDone }: {
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [collector, setCollector] = useState<"dropoff" | "named" | "other">("dropoff");
-  const [name, setName] = useState(record.allowedCollectors[0] ?? "");
+  const [collector, setCollector] = useState<"dropoff" | "other">("dropoff");
+  const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [reason, setReason] = useState("");
   const [needsOverride, setNeedsOverride] = useState(false);
@@ -377,14 +370,6 @@ function CheckoutDialog({ record, isAdmin, onClose, onDone }: {
         <fieldset className="mt-4 flex flex-col gap-2 text-base text-slate-700">
           <legend className="text-sm text-slate-500">Who is collecting?</legend>
           <label className="flex items-center gap-2"><input type="radio" aria-label="The adult who dropped off" checked={collector === "dropoff"} onChange={() => setCollector("dropoff")} /> {record.guardian.name} (dropped off)</label>
-          {record.allowedCollectors.length > 0 && (
-            <label className="flex items-center gap-2"><input type="radio" aria-label="Someone the parent named" checked={collector === "named"} onChange={() => { setCollector("named"); setName(record.allowedCollectors[0]); }} /> Someone the parent named</label>
-          )}
-          {collector === "named" && (
-            <select value={name} onChange={(e) => setName(e.target.value)} className="ml-6 rounded-lg border border-slate-300 px-3 py-2" aria-label="Named adult">
-              {record.allowedCollectors.map((n) => <option key={n}>{n}</option>)}
-            </select>
-          )}
           <label className="flex items-center gap-2"><input type="radio" aria-label="Someone else, with a supervisor" checked={collector === "other"} onChange={() => { setCollector("other"); setName(""); setNeedsOverride(true); }} /> Someone else (needs a supervisor)</label>
           {collector === "other" && (
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Their full name" className={`${input} ml-6`} aria-label="Collector's name" />

@@ -112,6 +112,14 @@ describe("children's classes", () => {
     await assertFails(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c1"), cls(TENANT_A, { phases: "scholar" })));
     await assertFails(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c1"), cls(TENANT_A, { archived: true })));
     await assertFails(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c1"), cls(TENANT_A, { capacity: -1 })));
+    // Ages typed in per class: whole years 0 to 17, from no older than to.
+    await assertSucceeds(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c2"), cls(TENANT_A, { ageFrom: 0, ageTo: 3 })));
+    await assertSucceeds(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c3"), cls(TENANT_A, { ageFrom: null, ageTo: null })));
+    await assertFails(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c1"), cls(TENANT_A, { ageFrom: 5, ageTo: 3 })));
+    await assertFails(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c1"), cls(TENANT_A, { ageFrom: -1, ageTo: 3 })));
+    await assertFails(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c1"), cls(TENANT_A, { ageFrom: 0, ageTo: 30 })));
+    await assertFails(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c1"), cls(TENANT_A, { ageFrom: "0", ageTo: 3 })));
+    await assertFails(setDoc(doc(dbAs(env, "ownerA"), "childClasses", "c1"), cls(TENANT_A, { ageFrom: 2 })));
     await assertFails(updateDoc(doc(dbAs(env, "ownerA"), "childClasses", "classA"), { tenantId: TENANT_B }));
     await assertFails(deleteDoc(doc(dbAs(env, "ownerA"), "childClasses", "classA")));
   });

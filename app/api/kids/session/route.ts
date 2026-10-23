@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       const x = d.data();
       return {
         id: d.id, classId: x.classId, className: x.className, child: x.child, guardian: x.guardian,
-        allowedCollectors: x.allowedCollectors ?? [], careNotes: x.careNotes ?? "", status: x.status,
+        careNotes: x.careNotes ?? "", status: x.status,
         checkedInAt: x.checkedInAt?.toDate?.().toISOString() ?? null,
         checkedOutAt: x.checkedOutAt?.toDate?.().toISOString() ?? null,
         collectedBy: x.collectedBy ?? null, override: x.override ? { reason: x.override.reason, byName: x.override.byName } : null,

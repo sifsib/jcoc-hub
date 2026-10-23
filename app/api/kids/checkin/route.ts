@@ -2,16 +2,14 @@
 // (siblings together), each into a class the caller may work in. Makes one
 // 4-digit collection code for the group, stores only its hash, shows it once
 // on screen and sends it by SMS when the church has BulkSMS. Records who
-// dropped off, who checked in, and any adults the parent named as allowed to
-// collect. Never touches member records.
+// dropped off and who checked in; only the adult who dropped off may collect
+// (answered 2026-10-23). Never touches member records.
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { canWorkIn, hashCode, kidsContext, newCode, sendSms } from "@/lib/kidsServer";
 import { buildFamilies } from "../../../../lib/kidsCheckin";
 import { normalisePhone } from "../../../../lib/visitorRegister";
-
-const MAX_COLLECTORS = 5;
 
 export async function POST(req: NextRequest) {
   const ctx = await kidsContext();
@@ -21,8 +19,6 @@ export async function POST(req: NextRequest) {
   const picks: { key: string; classId: string }[] = Array.isArray(body.children) ? body.children : [];
   const guardianName = String(body.guardian?.name ?? "").trim();
   const guardianPhone = normalisePhone(String(body.guardian?.phone ?? ""));
-  const allowedCollectors = (Array.isArray(body.allowedCollectors) ? body.allowedCollectors : [])
-    .map((n: unknown) => String(n ?? "").trim()).filter(Boolean).slice(0, MAX_COLLECTORS);
   if (!guardianName) return NextResponse.json({ error: "Enter the name of the adult dropping off." }, { status: 400 });
   if (picks.length === 0) return NextResponse.json({ error: "Choose at least one child." }, { status: 400 });
   for (const p of picks) {
@@ -85,7 +81,7 @@ export async function POST(req: NextRequest) {
       tenantId: ctx.tenantId, classId: cls.id, className: cls.name, serviceDate: ctx.today, groupId: groupRef.id,
       child: { key: child.key, kind: child.kind, name: child.name, age: child.age },
       guardian: { name: guardianName, phone: guardianPhone },
-      allowedCollectors, careNotes: careNotes.get(child.key) ?? "",
+      careNotes: careNotes.get(child.key) ?? "",
       status: "in", checkedInAt: FieldValue.serverTimestamp(),
       checkedInBy: ctx.caller.uid, checkedInByName: ctx.caller.displayName ?? ctx.caller.email ?? "",
     });
