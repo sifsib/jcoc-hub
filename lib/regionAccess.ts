@@ -24,7 +24,8 @@ export type RegionRole =
   | "viewer"
   | "follow_up"
   | "sector_leader"
-  | "family_group_leader";
+  | "family_group_leader"
+  | "children_teacher";
 
 export interface AccessEntry {
   role: string;
@@ -65,6 +66,7 @@ export const REGION_ROLES: { key: RegionRole; label: string; help: string }[] = 
   { key: "follow_up", label: "Follow-up team", help: "Works with visitors." },
   { key: "sector_leader", label: "Sector leader", help: "Sees their own sector's members and marks attendance." },
   { key: "family_group_leader", label: "Family group leader", help: "Sees their own family group and marks attendance." },
+  { key: "children_teacher", label: "Children's teacher", help: "Checks children in and out of the classes they teach. Sees nothing else." },
 ];
 
 /** Every users field that decides what a user can reach. Mirrors accessFields() in firestore.rules. */
