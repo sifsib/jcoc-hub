@@ -369,6 +369,32 @@ service cloud.firestore {
     // ============================================
 
     // ============================================
+    // EVENT REGISTRATION (ADR-013) - start
+    // ============================================
+    // Registrations, their uploaded files and the rate-limit records are
+    // written only by the /api/events routes. Region staff who run events read
+    // their region's registrations; a verifier named on an event reads that
+    // event's only (ADR-006). Covered by tests/rules/events.test.ts.
+    function canRunEvents() {
+      return hasRole('owner') || hasRole('admin') || hasRole('member_manager');
+    }
+    function verifierOf(eventId) {
+      return request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.get('verifierUids', []);
+    }
+    match /registrations/{registrationId} {
+      allow read: if isSignedIn()
+                  && resource.data.tenantId == userTenantId()
+                  && (canRunEvents() || verifierOf(resource.data.eventId));
+      allow write: if false;
+    }
+    match /registrationRateLimits/{key} {
+      allow read, write: if false;
+    }
+    // ============================================
+    // EVENT REGISTRATION (ADR-013) - end
+    // ============================================
+
+    // ============================================
     // TENANTS COLLECTION
     // ============================================
     // Fields only the server may write: identity, billing, plan, status, slug
@@ -895,8 +921,20 @@ service cloud.firestore {
     // FORM SUBMISSIONS (public form responses)
     // ============================================
     match /form_submissions/{id} {
-      // Anyone can submit (public form - no auth required)
-      allow create: if true;
+      // Anyone can submit a public form, but only to a real, open form, with
+      // that form's own tenantId, the expected fields and a sensible size.
+      // (Was "if true": anyone could write anything. Covered by
+      // tests/rules/events.test.ts; the same hole is in upstream.)
+      function formOf(formId) {
+        return get(/databases/$(database)/documents/forms/$(formId)).data;
+      }
+      allow create: if request.resource.data.keys().hasOnly(['formId', 'tenantId', 'data', 'submittedAt'])
+                    && request.resource.data.formId is string
+                    && exists(/databases/$(database)/documents/forms/$(request.resource.data.formId))
+                    && formOf(request.resource.data.formId).active == true
+                    && request.resource.data.tenantId == formOf(request.resource.data.formId).tenantId
+                    && request.resource.data.data is map
+                    && request.resource.data.data.size() <= 60;
       // Super admin or tenant staff can read form submissions
       allow read: if isSignedIn()
                   && (isSuperAdmin() || (resource.data.tenantId == userTenantId()
@@ -1028,8 +1066,20 @@ service cloud.firestore {
     // Merged: public RSVP link + tenant staff + linked congregation members.
     // ============================================
     match /event_rsvps/{id} {
-      // Public RSVP link: anyone can submit an RSVP without being logged in
-      allow create: if true;
+      // The public RSVP link writes through /api/rsvp (Admin SDK). From the
+      // browser: a signed-in member for themselves, or region staff, and only
+      // for a real event of their own region. (Was "if true": anyone could
+      // write anything. Covered by tests/rules/events.test.ts; same hole upstream.)
+      function rsvpEventTenant(data) {
+        return get(/databases/$(database)/documents/events/$(data.eventId)).data.tenantId;
+      }
+      allow create: if isSignedIn()
+                    && request.resource.data.eventId is string
+                    && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId))
+                    && request.resource.data.tenantId == userTenantId()
+                    && rsvpEventTenant(request.resource.data) == userTenantId()
+                    && ((hasLinkedMemberProfile() && request.resource.data.get('uid', '') == request.auth.uid)
+                        || hasRole('owner') || hasRole('admin') || hasRole('member_manager'));
       // Read: super admin, tenant staff, or a linked member in the same tenant
       allow read: if isSignedIn()
                   && (

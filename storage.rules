@@ -45,6 +45,11 @@ service firebase.storage {
                     && (isSuperAdmin() || tenantId == userTenantId());
     }
 
+    // Event registration files (proof of payment, youth indemnity) live under
+    // private/registrations/{tenantId}/... and are read and written only by the
+    // /api/events routes with the Admin SDK (ADR-005, ADR-013). No browser rule
+    // matches them, so the default deny below applies.
+
     // Default deny: anything not explicitly matched above is blocked.
     match /{allPaths=**} {
       allow read, write: if false;
