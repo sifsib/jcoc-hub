@@ -5,7 +5,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, initializeFirestore, connectFirestoreEmulator, type Firestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -42,6 +42,9 @@ if (useEmulators && !g.__firebaseEmulatorsConnected) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   if (browserEmulator) connectFirestoreEmulator(db, window.location.hostname, Number(window.location.port || 80));
   else connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  // Storage the same way: through the app's own origin in the browser.
+  if (browserEmulator) connectStorageEmulator(storage, window.location.hostname, Number(window.location.port || 80));
+  else connectStorageEmulator(storage, "127.0.0.1", 9199);
   g.__firebaseEmulatorsConnected = true;
 }
 

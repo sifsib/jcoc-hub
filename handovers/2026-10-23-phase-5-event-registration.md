@@ -132,7 +132,7 @@ Anyone can register for an event from a public link without logging in. Registra
 ## Open items for next session
 
 1. Anita to confirm X1–X5, and items I, J and K, in `docs/06_OPEN_QUESTIONS.md`.
-2. Sifiso to decide on X6 (c), tenant Storage access, X7 (hardcoded "Powered by" footer), and Mailchimp vs Brevo.
+2. Sifiso to decide on Mailchimp vs Brevo, and JCOC to agree the footer wording (X7).
 3. Possible addition: a "resend my link" for registrants who lose it (needs email or SMS). Log it as a new request if wanted.
 4. Push and deploy are Sifiso's. Nothing has been pushed.
 
@@ -169,3 +169,62 @@ Both faults were in the base product.
 **To make it live:** also deploy functions, with `firebase deploy --only functions:onRsvpWrittenCount` along with the rules. Until the function is deployed, member RSVPs still save, but the counter will not move.
 
 **Not verified:** the function on a real project, and the count after many simultaneous RSVPs. Each run counts afresh, so the last run should leave the right number.
+
+## Follow-up the same day: region file access (X6 c) and the footer (X7)
+
+Asked for by Sifiso.
+
+### Region files (X6 c)
+
+**The problem.** Region files live under `tenants/{region}/`: the logo, finance invoices and WhatsApp banners. Any signed-in user of a region, members included, could read, replace or delete all of them. The Storage rules also did not check that the user still held the region they were working in.
+
+**Tests first:**
+- New `tests/rules/storage.test.ts` (12 tests). The rules tests now start the Storage emulator alongside Firestore (`tests/rules/package.json`, `setup.ts`).
+- Run before the fix, 5 failed: members and leaders reaching invoices, banners and other files, members replacing the logo, and a leader no longer holding their active region.
+
+**The fix, in `storage.rules`.** Each folder is limited to the roles whose screen uses it, in the active region only:
+
+| Folder | Who can use it |
+|---|---|
+| Logo | Owner and admin change it; anyone in the region can see it |
+| Invoices | Owner, admin, finance, branch admin |
+| WhatsApp banners | Owner, admin, member manager |
+| Anything else | Owner and admin |
+
+The registration files stay unreachable from the browser.
+
+Pages show files through saved download links that carry their own token, so the tighter read rules do not hide the logo anywhere.
+
+**Local dev only.** `lib/firebase.ts` and `next.config.ts` now send the browser's Storage traffic to the emulator through the app's own port, as Firestore already did. This is only active in emulator mode, so the Branding upload can be clicked through locally.
+
+### Footer (X7)
+
+The footer said "Powered by Kereke Hub", typed into:
+- five member app pages;
+- the join, form, RSVP and two check-in pages;
+- the member invite email.
+
+It now comes from `ATTRIBUTION` in `lib/whiteLabel.ts`, which reads "Designed by Kereke Hub" (`docs/02_SCOPE.md` B9). The exact wording is still to be agreed with JCOC; change it in that one place.
+
+There are about 47 other files that mention "Kereke Hub", for example login pages and emails. They are part of the planned white-label work (B9) and were not touched.
+
+### Checks
+
+- `tsc` is clean in the root and in `functions/`.
+- Unit tests: 160 pass. Rules tests: 233 pass, Firestore and Storage.
+- `next build` succeeds.
+- Clicked through:
+  - the owner uploaded a logo on the Branding page under the new rules, and it displayed;
+  - the member home page shows "Designed by Kereke Hub";
+  - the saved logo link opens for a member;
+  - an invoice request without permission is refused (403).
+
+### To make it live
+
+Deploy the Storage rules with `firebase deploy --only storage` (in addition to the earlier deploy steps).
+
+### Not verified
+
+- **Finance roles:** I did not upload an invoice from the Financials page. Finance is switched off for JCOC; the rules tests cover it.
+- **WhatsApp banners:** I did not upload a banner from the WhatsApp page; the rules tests cover it.
+- **Existing files:** I did not check on the real bucket whether anything already stored sits outside these three folders. If it does, only owners and admins can now reach it.

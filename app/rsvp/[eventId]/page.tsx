@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { ATTRIBUTION } from "../../../lib/whiteLabel";
 
 interface ChurchEvent {
   tenantId: string;
@@ -323,7 +324,7 @@ export default function PublicRsvpPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">Powered by KerekeHub</p>
+        <p className="text-center text-xs text-gray-400 mt-6">{ATTRIBUTION}</p>
       </div>
     </div>
   );

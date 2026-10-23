@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { auth, db } from "../../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { ATTRIBUTION } from "../../../../lib/whiteLabel";
 
 interface MemberProfile {
   fullName: string;
@@ -225,7 +226,7 @@ export default function MemberHomeSlugPage() {
         );
       })()}
 
-      <p className="text-center text-xs text-gray-300 pb-8">Powered by Kereke Hub</p>
+      <p className="text-center text-xs text-gray-300 pb-8">{ATTRIBUTION}</p>
     </div>
   );
 }

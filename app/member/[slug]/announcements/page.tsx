@@ -7,6 +7,7 @@ import {
   collection, query, where, orderBy, getDocs, doc, getDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { ATTRIBUTION } from "../../../../lib/whiteLabel";
 
 interface Announcement {
   id: string;
@@ -135,7 +136,7 @@ export default function MemberAnnouncementsPage() {
           })
         )}
 
-        <p className="text-center text-xs text-gray-300 pb-4 mt-2">Powered by Kereke Hub</p>
+        <p className="text-center text-xs text-gray-300 pb-4 mt-2">{ATTRIBUTION}</p>
       </div>
     </div>
   );

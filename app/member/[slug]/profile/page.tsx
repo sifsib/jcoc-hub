@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "../../../../lib/firebase";
 import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where, type Timestamp } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { ATTRIBUTION } from "../../../../lib/whiteLabel";
 import {
   EMPTY_ADDRESS,
   SELF_EDITABLE_FIELDS,
@@ -305,7 +306,7 @@ export default function MemberProfileSlugPage() {
           </button>
         )}
 
-        <p className="text-center text-xs text-gray-300 pb-4">Powered by Kereke Hub</p>
+        <p className="text-center text-xs text-gray-300 pb-4">{ATTRIBUTION}</p>
       </div>
     </div>
   );

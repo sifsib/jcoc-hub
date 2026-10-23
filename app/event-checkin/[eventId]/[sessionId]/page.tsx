@@ -7,6 +7,7 @@ import {
   doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { ATTRIBUTION } from "../../../../lib/whiteLabel";
 
 interface EventSession { id: string; name: string; startTime: string; endTime: string; }
 interface EventDay { id: string; date: string; sessions: EventSession[]; }
@@ -242,7 +243,7 @@ export default function EventCheckinPage() {
           </div>
         )}
 
-        <p className="text-xs text-gray-300 mt-6">Powered by Kereke Hub</p>
+        <p className="text-xs text-gray-300 mt-6">{ATTRIBUTION}</p>
       </div>
     </div>
   );

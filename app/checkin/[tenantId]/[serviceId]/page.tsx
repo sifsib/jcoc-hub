@@ -7,6 +7,7 @@ import { db } from "../../../../lib/firebase";
 import {
   doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp,
 } from "firebase/firestore";
+import { ATTRIBUTION } from "../../../../lib/whiteLabel";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -365,7 +366,7 @@ export default function CheckInPage() {
         )}
 
         <p className="text-center text-xs text-gray-400">
-          Powered by Kereke Hub
+          {ATTRIBUTION}
         </p>
       </div>
     </div>

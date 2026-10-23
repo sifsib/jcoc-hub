@@ -2,8 +2,8 @@ rules_version = '2';
 
 // Kereke Hub - Firebase Storage security rules
 // Every church file is namespaced under tenants/{tenantId}/... (logos, invoices,
-// receipts). These rules enforce that a signed-in user can only touch files that
-// belong to their OWN tenant, matching the multi-tenant isolation in firestore.rules.
+// receipts). A signed-in user can only touch files of the region they are
+// working in, and only the folders their role uses, matching firestore.rules.
 
 service firebase.storage {
   match /b/{bucket}/o {
@@ -17,12 +17,31 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
     }
 
+    // The caller's active region, only while they still hold it (mirrors
+    // regionHeld in firestore.rules): no access list (single-region user), the
+    // region is in their access list, or a network role over the region's org.
     function userTenantId() {
-      return userDoc().tenantId;
+      let u = userDoc();
+      return (u.get('tenantAccess', null) == null
+              || u.tenantId in u.tenantAccess
+              || (u.get('networkRole', '') in ['network_owner', 'network_viewer']
+                  && firestore.get(/databases/(default)/documents/tenants/$(u.tenantId)).data.get('orgId', '') == u.get('orgId', '')))
+             ? u.tenantId : '__no_region__';
     }
 
     function isSuperAdmin() {
       return userDoc().role == 'super_admin';
+    }
+
+    // Handles both a single 'role' string and a 'roles' array, as firestore.rules does.
+    function hasAnyRole(roles) {
+      let u = userDoc();
+      return u.get('role', '') in roles || u.get('roles', []).hasAny(roles);
+    }
+
+    // Signed in, working in this region now, with one of these roles.
+    function regionRole(tenantId, roles) {
+      return isSignedIn() && (isSuperAdmin() || (tenantId == userTenantId() && hasAnyRole(roles)));
     }
 
     // Uploaded files must be a reasonable size and an expected type (image or PDF).
@@ -32,17 +51,37 @@ service firebase.storage {
              && request.resource.contentType.matches('image/.*|application/pdf');
     }
 
-    // All tenant-scoped files.
-    match /tenants/{tenantId}/{allPaths=**} {
-      allow read: if isSignedIn()
-                  && (isSuperAdmin() || tenantId == userTenantId());
+    // Region files, limited by folder to the roles whose screen uses them (X6 c).
+    // Every signed-in user of a region, members included, used to be able to
+    // read, replace and delete all of these. Covered by tests/rules/storage.test.ts.
+    // Pages show files through download URLs saved at upload, which carry their
+    // own token, so tightening reads here does not hide the logo on any page.
 
-      allow create, update: if isSignedIn()
-                            && (isSuperAdmin() || tenantId == userTenantId())
-                            && isAllowedUpload();
+    // Logo (Branding page): everyone in the region may see it; owner and admin change it.
+    match /tenants/{tenantId}/logo {
+      allow read: if isSignedIn() && (isSuperAdmin() || tenantId == userTenantId());
+      allow create, update: if regionRole(tenantId, ['owner', 'admin']) && isAllowedUpload();
+      allow delete: if regionRole(tenantId, ['owner', 'admin']);
+    }
 
-      allow delete: if isSignedIn()
-                    && (isSuperAdmin() || tenantId == userTenantId());
+    // Finance invoices (Financials page).
+    match /tenants/{tenantId}/invoices/{file=**} {
+      allow read, delete: if regionRole(tenantId, ['owner', 'admin', 'finance', 'branch_admin']);
+      allow create, update: if regionRole(tenantId, ['owner', 'admin', 'finance', 'branch_admin']) && isAllowedUpload();
+    }
+
+    // WhatsApp banner images (WhatsApp settings, reached from Communications).
+    match /tenants/{tenantId}/whatsapp-banners/{file=**} {
+      allow read, delete: if regionRole(tenantId, ['owner', 'admin', 'member_manager']);
+      allow create, update: if regionRole(tenantId, ['owner', 'admin', 'member_manager']) && isAllowedUpload();
+    }
+
+    // Anything else under a region folder: owner and admin only.
+    match /tenants/{tenantId}/{folder}/{file=**} {
+      allow read, delete: if folder != 'logo' && folder != 'invoices' && folder != 'whatsapp-banners'
+                          && regionRole(tenantId, ['owner', 'admin']);
+      allow create, update: if folder != 'logo' && folder != 'invoices' && folder != 'whatsapp-banners'
+                            && regionRole(tenantId, ['owner', 'admin']) && isAllowedUpload();
     }
 
     // Event registration files (proof of payment, youth indemnity) live under

@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import DateInput from "../../../components/ui/DateInput";
 import { db } from "../../../lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { STRUCTURE_LABELS } from "../../../lib/whiteLabel";
+import { ATTRIBUTION, STRUCTURE_LABELS } from "../../../lib/whiteLabel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -715,7 +715,7 @@ export default function JoinPage() {
             {submitting ? "Submitting..." : "Submit Membership Form"}
           </button>
 
-          <p className="text-center text-xs text-gray-400 pb-6">Powered by Kereke Hub</p>
+          <p className="text-center text-xs text-gray-400 pb-6">{ATTRIBUTION}</p>
         </form>
       </div>
     </div>

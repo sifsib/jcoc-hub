@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
 import crypto from "crypto";
+import { ATTRIBUTION } from "../../../lib/whiteLabel";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hub.kerekehub.co.za";
 const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
@@ -28,7 +29,7 @@ async function sendMemberInviteEmail(
         <tr>
           <td style="background:#1A5C38;padding:32px 40px;text-align:center;">
             <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;">${churchName}</h1>
-            <p style="color:#a7cfb8;margin:6px 0 0;font-size:13px;">Powered by Kereke Hub</p>
+            <p style="color:#a7cfb8;margin:6px 0 0;font-size:13px;">${ATTRIBUTION}</p>
           </td>
         </tr>
         <tr>

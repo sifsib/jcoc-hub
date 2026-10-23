@@ -103,6 +103,10 @@ export async function createEnv(): Promise<RulesTestEnvironment> {
     firestore: {
       rules: readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8"),
     },
+    // storage.rules reads users/{uid} from Firestore, so both emulators run.
+    storage: {
+      rules: readFileSync(new URL("../../storage.rules", import.meta.url), "utf8"),
+    },
   });
 }
 

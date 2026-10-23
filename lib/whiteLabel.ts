@@ -20,3 +20,10 @@ export const STRUCTURE_LABELS: Record<"network" | "church" | "region" | "sector"
   sector: { one: "Sector", many: "Sectors" },
   familyGroup: { one: "Family group", many: "Family groups" },
 };
+
+/**
+ * Credit shown in the footer of the member app. Agreed in principle as
+ * "Designed by Kereke Hub" (docs/02_SCOPE.md B9); exact wording still to be
+ * confirmed with JCOC, so change it here only.
+ */
+export const ATTRIBUTION = "Designed by Kereke Hub";

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import DateInput from "../../../components/ui/DateInput";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { ATTRIBUTION } from "../../../lib/whiteLabel";
 
 type FieldType =
   | "short_text"
@@ -360,7 +361,7 @@ export default function PublicFormPage() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          Powered by KerekeHub
+          {ATTRIBUTION}
         </p>
       </div>
     </div>

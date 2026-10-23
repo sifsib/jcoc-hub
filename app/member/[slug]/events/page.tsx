@@ -8,6 +8,7 @@ import {
   doc, getDoc, setDoc, serverTimestamp,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { ATTRIBUTION } from "../../../../lib/whiteLabel";
 
 type EventType = "service" | "conference" | "outreach" | "youth" | "womens" | "mens" | "prayer" | "social" | "other";
 type RsvpStatus = "attending" | "not_attending";
@@ -303,7 +304,7 @@ export default function MemberEventsPage() {
           })
         )}
 
-        <p className="text-center text-xs text-gray-300 pb-4 mt-2">Powered by Kereke Hub</p>
+        <p className="text-center text-xs text-gray-300 pb-4 mt-2">{ATTRIBUTION}</p>
       </div>
     </div>
   );
