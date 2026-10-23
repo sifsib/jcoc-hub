@@ -89,7 +89,7 @@ When the `jcoc-hub` Firebase project exists, after merging:
 ## What I did NOT verify
 
 - **Not clicked:** renaming a region; restoring an archived item; changing a role with "Change role"; reactivating a deactivated user; the CSV exports (downloads); member import matching of sector and group names.
-- The attendance report counts suspended members in its totals (5 for North, where capture shows 4). That is the base report's existing behaviour and was left alone.
+- **Changed at Sifiso's request:** the attendance report now leaves suspended members out, as Attendance Capture does. Checked in the browser: North shows 4 members and 25% for one service, where it showed 5 and 20%. This also changes the report for admins and in upstream Kereke Hub (porting note).
 - **The `onMemberUpdatedAudit` function was not run** (the functions emulator was not started). Its logic is unit-tested; the trigger wrapper is not.
 - The emulator-only Firestore proxy (`next.config.ts`, `lib/firebase.ts`) was only tried in the in-app browser pane, not in a normal browser.
 - Not tested on a phone or narrow screen.

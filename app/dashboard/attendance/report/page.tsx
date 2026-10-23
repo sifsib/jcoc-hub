@@ -29,6 +29,7 @@ interface Member {
   sectorId?: string;
   familyGroupId?: string;
   ministryGroup?: string;
+  status?: string;
 }
 
 interface AttendanceRecord {
@@ -131,9 +132,10 @@ export default function AttendanceReportPage() {
   const groupName = (id: string) => structure.familyGroupById.get(id)?.name ?? "";
 
   // Everything downstream reads these sector-scoped lists, so switching
-  // sector narrows the whole report at once.
+  // sector narrows the whole report at once. Suspended members are left out,
+  // as on Attendance Capture, so they never count as absent.
   const members = useMemo(
-    () => branchFilter === "all" ? allMembers : allMembers.filter(m => m.sectorId === branchFilter),
+    () => allMembers.filter(m => m.status !== "suspended" && (branchFilter === "all" || m.sectorId === branchFilter)),
     [allMembers, branchFilter],
   );
   const cellRegions = useMemo(
