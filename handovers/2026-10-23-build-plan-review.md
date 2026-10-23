@@ -88,6 +88,8 @@ Recommendation: option 1 now. Keep the tenant lookup in one place so option 2 ca
 
 **Revised the same day:** some leaders do look after more than one region, so option 2 is added for leaders. When a leader is created they get one or more regions, a role in each, and a region switcher. The network role stays for Anita and Baba D. Recorded as "A4 decision, revised" in ADR-001 revision 2, and logged as a new request in `06` (about 3 days, Phase 2). No code written.
 
+Sifiso's answers: any leader can be given extra regions at any time; they are all region admins (he said "branch admins", read as region admins, to confirm) except Baba D; switching is enough, no combined view.
+
 ### Merge order
 
 The branches are already stacked, so merge them in this order, each one a fast-forward: p0 rules → birthday pull → member self-edit → docs.
