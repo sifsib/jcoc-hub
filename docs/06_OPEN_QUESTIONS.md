@@ -27,6 +27,15 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 | P1 | **What exactly will the promised prototype show, and when?** Sifiso committed to a working prototype "by the end of the week, latest Monday", based on one sector, with contracting to follow if they are happy. The build plan puts the network layer alone at about 3 weeks of work | Sifiso | Client trust. Set the expectation in writing before the date passes |
 | S | **Commercial terms in writing.** Quoted on the call: a once-off build fee of R3,000, a R159 monthly subscription, and R79 per month for each region and each sister church, regardless of member numbers. The transcript is garbled on the monthly figure ("1700. There' 159"). Confirm the figures, how they relate to the ~86-day scope, and the licence clause (licensed, not transferred), before contracting | Sifiso | Contract. Do not start Phase 1 without it |
 
+## From the Phase 2 build (ADR-010), 2026-10-23
+
+| # | Question | Who answers | Notes |
+|---|---|---|---|
+| U1 | Who sets Anita's and Baba D's network role on the live project? There is no screen for it; it is a `networkRole` and `orgId` on their user document, set by Kereke Hub staff | Sifiso | Needs a one-off admin script or console edit at go-live. Do not give it through the app |
+| U2 | Sector and family group leaders can read their people and mark attendance. Should they also see visitors, groups or events? Today they see neither | Anita | Rules deny by default; widening needs tests |
+| U3 | The base roles `branch_admin` and `cell_leader` still exist in the rules for upstream compatibility, but JCOC can no longer be given them. Remove them from the JCOC rules entirely? | Sifiso | Safe to leave; removing makes the fork diverge further |
+| U4 | Org-level tier resolution (ADR-009) is still not built. New regions leave `tier` unset, which the app treats as fully enabled. Fine for JCOC, but a deliberate plan for billing should replace it | Sifiso | Not blocking |
+
 ## Non-blocking, needed before the relevant phase
 
 | # | Question | Phase |

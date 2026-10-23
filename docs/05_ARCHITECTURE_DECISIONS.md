@@ -375,6 +375,12 @@ This replaces most of the old Phase 1 (21 days) but not the rollups or network b
 5. **Member change history (`member_audit`):** build it now. It is plan v2's port item, Anita is a POPIA officer, and moving members between sectors is exactly the change worth recording. About 1 day.
 6. **Prototype:** Phase 2 alone is about 16 days, so phases 1 to 3 do not fit "end of week, latest Monday". Decide what the prototype shows (P1).
 
+**Implemented 2026-10-23** on `feature/p2-church-structure`, not merged. As designed, with three refinements found while building:
+- Browser writes that change an audited member field (status, membership, roles, marital status, life phases, sector, family group, branch, cell) must stamp `updatedBy` = the user's uid and `updatedAt` = server time; the rules enforce it, so the change history can name who made each change.
+- Region admins may promote a congregation member of their region (a non-region role is below every region role).
+- Inviting an email that already has an account in the network adds the region to that account instead of refusing. That is how a leader gets a second region.
+See `handovers/2026-10-23-phase-2-church-structure.md`.
+
 ---
 
 ## Known base-repo quirks to work around, not build on
