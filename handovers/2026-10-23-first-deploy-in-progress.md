@@ -121,3 +121,15 @@ Firebase CLI login is done, as sifisosibuyane@gmail.com.
 
 4. Use **Force run** on each job; the status should show **Success**.
    - If it shows a permission error, grant **Cloud Run Invoker** to `1015797759359-compute@developer.gserviceaccount.com` in IAM.
+
+## Update 2026-10-24: functions deployed
+
+- **Deploy complete.** Seven functions are live in africa-south1 on Node 22:
+  - five were updated: member change history, both life phase functions, RSVP count and member count;
+  - two were created: `lifePhaseNewYearTask` and `kidsRetentionTask`.
+- **The old scheduled names were never created in africa-south1,** so there was nothing to delete.
+- **The jobs are private.** Unsigned GET and POST requests to both job URLs return **403**, checked by Claude with curl. So the lock works.
+- **Next:**
+  1. Create the two Cloud Scheduler jobs (table above), using the `https://africa-south1-jcoc-d6322.cloudfunctions.net/...` URLs, and Force run each one.
+  2. Push.
+  3. Part D (Vercel).
