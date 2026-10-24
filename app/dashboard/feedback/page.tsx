@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { BRAND } from "../../../lib/whiteLabel";
 
 const USAGE_OPTIONS = [
   "Every day",
@@ -72,10 +73,10 @@ export default function FeedbackPage() {
     e.preventDefault();
     setError("");
 
-    if (!q1) { setError("Please select how often you use Kereke Hub."); return; }
+    if (!q1) { setError(`Please select how often you use ${BRAND.productName}.`); return; }
     if (q2.length === 0) { setError("Please select at least one feature you've used."); return; }
     if (!q5) { setError("Please tell us how likely you are to continue."); return; }
-    if (!q6) { setError("Please tell us how you heard about Kereke Hub."); return; }
+    if (!q6) { setError(`Please tell us how you heard about ${BRAND.productName}.`); return; }
 
     setSaving(true);
     try {
@@ -145,7 +146,7 @@ export default function FeedbackPage() {
               Skip for now
             </button>
           </div>
-          <h1 className="text-2xl font-semibold text-gray-800">How is Kereke Hub working for you?</h1>
+          <h1 className="text-2xl font-semibold text-gray-800">How is {BRAND.productName} working for you?</h1>
           <p className="text-gray-500 text-sm mt-1">Takes less than 2 minutes. Your honest feedback shapes what we build next.</p>
         </div>
 
@@ -154,7 +155,7 @@ export default function FeedbackPage() {
           {/* Q1 */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <p className="text-sm font-medium text-gray-700 mb-3">
-              1. How often are you currently using Kereke Hub? <span className="text-red-500">*</span>
+              1. How often are you currently using {BRAND.productName}? <span className="text-red-500">*</span>
             </p>
             <div className="space-y-2">
               {USAGE_OPTIONS.map((opt) => (
@@ -214,7 +215,7 @@ export default function FeedbackPage() {
           {/* Q4 */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <p className="text-sm font-medium text-gray-700 mb-1">
-              4. What is one thing you wish Kereke Hub did better or differently?
+              4. What is one thing you wish {BRAND.productName} did better or differently?
               <span className="text-gray-400 font-normal ml-1">(optional)</span>
             </p>
             <p className="text-xs text-gray-400 mb-3">Honest answers help us prioritise the right things.</p>
@@ -230,7 +231,7 @@ export default function FeedbackPage() {
           {/* Q5 */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <p className="text-sm font-medium text-gray-700 mb-3">
-              5. How likely are you to continue using Kereke Hub after your trial? <span className="text-red-500">*</span>
+              5. How likely are you to continue using {BRAND.productName} after your trial? <span className="text-red-500">*</span>
             </p>
             <div className="space-y-2">
               {LIKELIHOOD_OPTIONS.map((opt) => (
@@ -252,7 +253,7 @@ export default function FeedbackPage() {
           {/* Q6 */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <p className="text-sm font-medium text-gray-700 mb-3">
-              6. How did you hear about Kereke Hub? <span className="text-red-500">*</span>
+              6. How did you hear about {BRAND.productName}? <span className="text-red-500">*</span>
             </p>
             <div className="space-y-2">
               {HOW_HEARD_OPTIONS.map((opt) => (

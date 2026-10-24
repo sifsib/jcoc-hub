@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import crypto from "crypto";
+import { PLATFORM, appUrl } from "../../../../lib/whiteLabel";
 
 const PAYFAST_URL = "https://www.payfast.co.za/eng/process";
 // Uncomment the line below and comment the one above when testing:
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
   const endDate = new Date(tenant.trialEndsAt || tenant.evaluationEndsAt || Date.now());
   const billingDay = Math.min(endDate.getDate(), 28); // PayFast max is 28
 
-  const hubUrl = process.env.NEXT_PUBLIC_HUB_URL || "https://hub.kerekehub.co.za";
+  const hubUrl = process.env.NEXT_PUBLIC_HUB_URL || appUrl();
   const merchantId = process.env.PAYFAST_MERCHANT_ID!;
   const merchantKey = process.env.PAYFAST_MERCHANT_KEY!;
   const passphrase = process.env.PAYFAST_PASSPHRASE || "";
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     email_address: tenant.ownerEmail,
     m_payment_id: uid,
     amount: recurringAmount.toFixed(2),
-    item_name: `Kereke Hub - ${tenant.name}`,
+    item_name: `${PLATFORM.name} - ${tenant.name}`,
     subscription_type: "1",
     billing_date: String(billingDay),
     recurring_amount: recurringAmount.toFixed(2),

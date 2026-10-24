@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { BRAND } from "../../../lib/whiteLabel";
 
 async function getCaller(req: NextRequest): Promise<{ uid: string; tenantId: string } | null> {
   const cookieStore = await cookies();
@@ -84,8 +85,8 @@ export async function POST(req: NextRequest) {
       <div style="background:#f4f7f5;border:1px solid #e2e8e4;border-radius:8px;padding:14px 16px;margin:14px 0;">
         ${rows.join("<br>")}
       </div>
-      <p>Please reach out to them and log your contact in Kereke Hub when done.</p>
-      <p style="color:#6b7280;font-size:13px;">Sent automatically by Kereke Hub.</p>
+      <p>Please reach out to them and log your contact in ${BRAND.productName} when done.</p>
+      <p style="color:#6b7280;font-size:13px;">Sent automatically by ${BRAND.productName}.</p>
     </div>`.trim();
 
   try {
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: { "api-key": brevoApiKey, "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({
-        sender: { name: brevoSenderName || churchName || "Kereke Hub", email: brevoSenderEmail },
+        sender: { name: brevoSenderName || churchName || BRAND.email.senderName, email: brevoSenderEmail },
         to: [{ email: assigneeEmail, name: assigneeName }],
         subject,
         htmlContent,

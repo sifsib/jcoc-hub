@@ -17,6 +17,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { BRAND, PLATFORM } from "../../../lib/whiteLabel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1115,7 +1116,7 @@ export default function CommunicationsPage() {
                         <p className="text-[13px] text-white/70 italic">
                           {waBranding?.signature || waBranding?.churchName || "Your signature"}
                         </p>
-                        <p className="text-[11px] text-white/50">Sent via Kereke Hub</p>
+                        <p className="text-[11px] text-white/50">Sent via {PLATFORM.name}</p>
                       </div>
                       <div className="border-t border-white/10 py-2 text-center text-[13px] text-[#53bdeb]">
                         Stop messages
@@ -1877,11 +1878,11 @@ export default function CommunicationsPage() {
               <div>
                 <h3 className="text-sm font-semibold text-white">Connect your church to Brevo</h3>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  When Brevo is connected, Kereke Hub automatically: adds new members to your mailing list the moment they are registered, sends them your custom welcome email using a template you designed in Brevo, and wishes members happy birthday on their special day without you lifting a finger.
+                  When Brevo is connected, {BRAND.productName} automatically: adds new members to your mailing list the moment they are registered, sends them your custom welcome email using a template you designed in Brevo, and wishes members happy birthday on their special day without you lifting a finger.
                 </p>
                 <p className="text-xs text-emerald-400 mt-2 font-medium">
                   Need help setting this up? Contact{" "}
-                  <a href="mailto:sifiso@kerekehub.co.za" className="underline hover:text-emerald-300">sifiso@kerekehub.co.za</a>
+                  <a href={`mailto:${PLATFORM.supportEmail}`} className="underline hover:text-emerald-300">{PLATFORM.supportEmail}</a>
                 </p>
               </div>
             </div>

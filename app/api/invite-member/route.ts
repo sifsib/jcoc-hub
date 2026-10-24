@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
 import crypto from "crypto";
-import { ATTRIBUTION } from "../../../lib/whiteLabel";
+import { ATTRIBUTION, BRAND, PLATFORM, appUrl } from "../../../lib/whiteLabel";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hub.kerekehub.co.za";
+const APP_URL = appUrl();
 const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
-const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "sifiso@kerekehub.co.za";
-const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || "Kereke Hub";
+const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || PLATFORM.supportEmail;
+const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || BRAND.email.senderName;
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for members
 
 async function sendMemberInviteEmail(
@@ -27,7 +27,7 @@ async function sendMemberInviteEmail(
     <tr><td align="center">
       <table width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr>
-          <td style="background:#1A5C38;padding:32px 40px;text-align:center;">
+          <td style="background:${BRAND.colours.primary};padding:32px 40px;text-align:center;">
             <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;">${churchName}</h1>
             <p style="color:#a7cfb8;margin:6px 0 0;font-size:13px;">${ATTRIBUTION}</p>
           </td>
@@ -47,7 +47,7 @@ async function sendMemberInviteEmail(
 
             <table cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
               <tr>
-                <td align="center" style="background:#1A5C38;border-radius:8px;">
+                <td align="center" style="background:${BRAND.colours.primary};border-radius:8px;">
                   <a href="${inviteUrl}" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">
                     Access My Profile
                   </a>
@@ -66,7 +66,7 @@ async function sendMemberInviteEmail(
         <tr>
           <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
             <p style="color:#9ca3af;font-size:11px;margin:0;">
-              Sent by Kereke Hub &mdash; kerekehub.co.za
+              ${ATTRIBUTION}
             </p>
           </td>
         </tr>
@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
             ok: true,
             linkedExistingAccount: true,
             message:
-              "This person already signs in to Kereke Hub as a team member. Their member profile is now linked to that login, so they can use the same email and password. No invite was sent.",
+              `This person already signs in to ${BRAND.productName} as a team member. Their member profile is now linked to that login, so they can use the same email and password. No invite was sent.`,
           });
         }
 

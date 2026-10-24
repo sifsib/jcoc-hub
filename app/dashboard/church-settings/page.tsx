@@ -6,7 +6,7 @@ import { useAppUser } from "../../../lib/useAppUser";
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from "firebase/firestore";
 import Link from "next/link";
 import InfoTooltip from "../../components/InfoTooltip";
-import { STRUCTURE_LABELS } from "../../../lib/whiteLabel";
+import { PLATFORM, STRUCTURE_LABELS, appUrl } from "../../../lib/whiteLabel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -524,7 +524,7 @@ export default function ChurchSettingsPage() {
       <div className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-2 dark:text-gray-100">WhatsApp Messaging</h2>
         <p className="text-sm text-gray-500 mb-4 dark:text-gray-400">
-          Kereke Hub now sends WhatsApp messages for you through its own number — there is no phone
+          {PLATFORM.name} now sends WhatsApp messages for you through its own number — there is no phone
           to link. Set your church banner and signature so your congregation knows the message is
           from you.
         </p>
@@ -549,12 +549,12 @@ export default function ChurchSettingsPage() {
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Standalone link</p>
               <a
-                href={`https://hub.kerekehub.co.za/join/${tenantId}`}
+                href={`${appUrl("/join/")}${tenantId}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-emerald-600 hover:underline break-all"
               >
-                {`https://hub.kerekehub.co.za/join/${tenantId}`}
+                {`${appUrl("/join/")}${tenantId}`}
               </a>
               <p className="text-xs text-gray-400 mt-1">Use this URL to share the form as a direct link, or for testing.</p>
             </div>
@@ -565,7 +565,7 @@ export default function ChurchSettingsPage() {
               <div className="relative">
                 <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
 {`<iframe
-  src="https://hub.kerekehub.co.za/join/${tenantId}"
+  src="${appUrl("/join/")}${tenantId}"
   width="100%"
   height="900"
   frameborder="0"
@@ -576,7 +576,7 @@ export default function ChurchSettingsPage() {
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(
-                      `<iframe\n  src="https://hub.kerekehub.co.za/join/${tenantId}"\n  width="100%"\n  height="900"\n  frameborder="0"\n  style="border:none; border-radius:12px;"\n  title="Church Membership Form"\n></iframe>`
+                      `<iframe\n  src="${appUrl("/join/")}${tenantId}"\n  width="100%"\n  height="900"\n  frameborder="0"\n  style="border:none; border-radius:12px;"\n  title="Church Membership Form"\n></iframe>`
                     ).then(() => {
                       setCopiedEmbed(true);
                       setTimeout(() => setCopiedEmbed(false), 2500);

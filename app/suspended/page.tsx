@@ -6,9 +6,10 @@
 // is paused. Keep this page simple and reassuring.
 
 import Link from "next/link";
+import { PLATFORM } from "../../lib/whiteLabel";
 
 export const metadata = {
-  title: "Account Suspended. Kereke Hub",
+  title: "Account suspended",
 };
 
 export default function SuspendedPage() {
@@ -35,13 +36,13 @@ export default function SuspendedPage() {
 
         <div className="flex flex-col gap-2 text-sm">
           <p className="text-gray-600">
-            To restore access, please contact Kereke Hub support.
+            To restore access, please contact {PLATFORM.supportName}.
           </p>
           <a
-            href="mailto:sifiso@kerekehub.co.za?subject=Suspended%20account%20support"
+            href={`mailto:${PLATFORM.supportEmail}?subject=Suspended%20account%20support`}
             className="font-semibold text-emerald-700 hover:text-emerald-800"
           >
-            sifiso@kerekehub.co.za
+            {PLATFORM.supportEmail}
           </a>
         </div>
 
@@ -50,10 +51,10 @@ export default function SuspendedPage() {
             Back to login
           </Link>
           <a
-            href="https://www.kerekehub.co.za"
+            href={PLATFORM.website}
             className="text-gray-500 hover:text-gray-700 font-medium pt-3"
           >
-            Visit kerekehub.co.za
+            Visit {PLATFORM.website.replace(/^https?:\/\//, "")}
           </a>
         </div>
       </div>

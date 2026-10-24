@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signOut, sendEmailVerification } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { useAppUser } from "../../lib/useAppUser";
+import { BRAND } from "../../lib/whiteLabel";
 
 export default function VerifyEmailPage() {
   const { user, appUser, loading } = useAppUser();
@@ -86,7 +87,7 @@ export default function VerifyEmailPage() {
           <div className="text-5xl mb-4">✉️</div>
           <h1 className="text-3xl font-black text-gray-900">Verify Your Email</h1>
           <p className="mt-4 text-sm text-gray-600">
-            We have sent a verification link to <strong>{user?.email}</strong>. Click the link in your email to verify your account and gain full access to KerekeHub.
+            We have sent a verification link to <strong>{user?.email}</strong>. Click the link in your email to verify your account and gain full access to {BRAND.productName}.
           </p>
         </div>
 
@@ -133,7 +134,7 @@ export default function VerifyEmailPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-400">
-          Once you verify your email, you'll have full access to your KerekeHub dashboard.
+          Once you verify your email, you'll have full access to your {BRAND.productName} dashboard.
         </p>
       </div>
     </div>

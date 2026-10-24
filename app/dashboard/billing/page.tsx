@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { PLATFORM } from "../../../lib/whiteLabel";
 
 interface TenantBilling {
   name: string;
@@ -191,7 +192,7 @@ export default function BillingPage() {
     <div className="p-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold text-white mb-1">Billing</h1>
       <p className="text-slate-400 text-sm mb-8">
-        Manage your Kereke Hub subscription for {billing.name}.
+        Manage your {PLATFORM.name} subscription for {billing.name}.
       </p>
 
       {/* Account type badge */}
@@ -273,7 +274,7 @@ export default function BillingPage() {
             {payfastLoading ? "Redirecting to PayFast..." : "Upgrade for R159/mo"}
           </button>
           <p className="text-slate-500 text-xs mt-3">
-            You will be taken to PayFast to securely enter your card details. Kereke Hub never stores payment information.
+            You will be taken to PayFast to securely enter your card details. {PLATFORM.name} never stores payment information.
           </p>
         </div>
       )}
@@ -425,7 +426,7 @@ export default function BillingPage() {
                 </button>
               )}
               <p className="text-slate-500 text-xs mt-3">
-                You will be taken to PayFast to securely enter your card details. Kereke Hub never stores payment information.
+                You will be taken to PayFast to securely enter your card details. {PLATFORM.name} never stores payment information.
               </p>
             </div>
           )}

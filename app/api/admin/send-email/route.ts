@@ -12,6 +12,7 @@ import { cookies } from "next/headers";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { sendSupportEmail, emailShell, SUPPORT_INBOX } from "@/lib/supportEmail";
 import { writeAudit } from "@/lib/audit";
+import { PLATFORM } from "../../../../lib/whiteLabel";
 
 const esc = (s: string) =>
   String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
       to: r.email,
       toName: r.name,
       replyTo: SUPPORT_INBOX,
-      replyToName: "Kereke Hub Support",
+      replyToName: PLATFORM.supportName,
       subject,
       html: emailShell(`
         <h2 style="color:#3B9A5F;margin-top:0;">Hi ${esc(r.name)},</h2>

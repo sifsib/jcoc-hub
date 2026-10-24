@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { auth, db } from "../../../../lib/firebase";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { ATTRIBUTION } from "../../../../lib/whiteLabel";
+import { ATTRIBUTION, BRAND } from "../../../../lib/whiteLabel";
 
 interface Contribution {
   id: string;
@@ -43,7 +43,7 @@ export default function MemberGivingPage() {
   const router = useRouter();
 
   const [churchName, setChurchName] = useState("");
-  const [primaryColor, setPrimaryColor] = useState("#1A5C38");
+  const [primaryColor, setPrimaryColor] = useState(BRAND.colours.primary);
   const [memberName, setMemberName] = useState("");
   const [banking, setBanking] = useState<BankingDetails>({});
   const [contributions, setContributions] = useState<Contribution[]>([]);
@@ -63,7 +63,7 @@ export default function MemberGivingPage() {
         const tenantSnap = await getDoc(doc(db, "tenants", tid));
         const td = tenantSnap.data() || {};
         setChurchName(td.name || "My Church");
-        setPrimaryColor(td.primaryColor || "#1A5C38");
+        setPrimaryColor(td.primaryColor || BRAND.colours.primary);
         setBanking(td.bankingDetails || {});
 
         if (mid) {

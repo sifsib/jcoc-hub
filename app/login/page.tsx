@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import ForgotPasswordModal from "../components/ForgotPasswordModal";
+import { BRAND } from "../../lib/whiteLabel";
+import { BrandMark } from "../components/BrandMark";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -61,7 +63,8 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md rounded-lg border p-8 shadow-sm bg-white">
-        <h1 className="text-2xl font-bold text-center">Login to Kereke Hub</h1>
+        <BrandMark className="h-20 mb-4" />
+        <h1 className="text-2xl font-bold text-center">Log in to {BRAND.productName}</h1>
 
         {error && (
           <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded border border-red-200">
@@ -77,7 +80,7 @@ export default function LoginPage() {
               placeholder="admin@yourchurch.co.za"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border p-2 rounded focus:outline-blue-500"
+              className="w-full border p-2 rounded focus:outline-emerald-500"
               disabled={loading}
             />
           </div>
@@ -90,7 +93,7 @@ export default function LoginPage() {
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full border p-2 pr-10 rounded focus:outline-blue-500"
+                className="w-full border p-2 pr-10 rounded focus:outline-emerald-500"
                 disabled={loading}
               />
               <button
@@ -118,7 +121,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShowForgot(true)}
-              className="mt-1.5 text-xs text-blue-500 hover:underline float-right"
+              className="mt-1.5 text-xs text-emerald-700 hover:underline float-right"
             >
               Forgot password?
             </button>
@@ -126,7 +129,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white p-2 rounded transition font-medium mt-2 disabled:bg-blue-300 flex items-center justify-center gap-2"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded transition font-medium mt-2 disabled:bg-emerald-300 flex items-center justify-center gap-2"
             disabled={loading}
           >
             {loading && (

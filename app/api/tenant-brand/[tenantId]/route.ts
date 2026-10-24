@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { BRAND } from "../../../../lib/whiteLabel";
 
 export async function GET(
   _req: NextRequest,
@@ -30,7 +31,7 @@ export async function GET(
     const td = snap.data()!;
 
     return NextResponse.json({
-      name: td.name || "KerekeHub",
+      name: td.name || BRAND.productName,
       primaryColor: td.primaryColor || "#2E7D4F",
       logoUrl: td.logoUrl || null,
     });

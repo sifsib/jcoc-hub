@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { auth, db } from "../../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { ATTRIBUTION } from "../../../../lib/whiteLabel";
+import { ATTRIBUTION, BRAND } from "../../../../lib/whiteLabel";
 
 interface MemberProfile {
   fullName: string;
@@ -148,7 +148,7 @@ export default function MemberHomeSlugPage() {
     );
   }
 
-  const primaryColor = tenant?.primaryColor || "#1A5C38";
+  const primaryColor = tenant?.primaryColor || BRAND.colours.primary;
 
   return (
     <div className="min-h-screen bg-gray-50">

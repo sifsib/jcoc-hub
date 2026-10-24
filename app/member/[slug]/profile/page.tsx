@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "../../../../lib/firebase";
 import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where, type Timestamp } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { ATTRIBUTION } from "../../../../lib/whiteLabel";
+import { ATTRIBUTION, BRAND } from "../../../../lib/whiteLabel";
 import {
   EMPTY_ADDRESS,
   SELF_EDITABLE_FIELDS,
@@ -47,7 +47,7 @@ export default function MemberProfileSlugPage() {
   const [tenantId, setTenantId] = useState("");
   const [memberId, setMemberId] = useState("");
   const [churchName, setChurchName] = useState("");
-  const [primaryColor, setPrimaryColor] = useState("#1A5C38");
+  const [primaryColor, setPrimaryColor] = useState(BRAND.colours.primary);
   const [fullName, setFullName] = useState("");
   const [record, setRecord] = useState<{ phone: string; email: string; address: Address }>({
     phone: "",
@@ -83,7 +83,7 @@ export default function MemberProfileSlugPage() {
         ]);
         const tenantData = tenantSnap.data() || {};
         setChurchName(tenantData.name || "My Church");
-        setPrimaryColor(tenantData.primaryColor || "#1A5C38");
+        setPrimaryColor(tenantData.primaryColor || BRAND.colours.primary);
         setEditable(resolveEditableFields(settingsSnap.exists() ? settingsSnap.data().editableFields : undefined));
 
         if (mid) {

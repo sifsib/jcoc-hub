@@ -69,6 +69,16 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 | X6 | **Inherited faults found** (present in the base product too): (a) when a member RSVPs from the member app, the event's RSVP counter does not update, because members cannot write to events; (b) the member events page logs a permission error when a member has not RSVPed yet, and forgets their answer; (c) the tenant Storage rules let any signed-in user of a region, members included, read and write that region's files such as invoices | **(a) and (b) fixed 2026-10-23** at Sifiso's request: the count is kept by a new Cloud Function, `onRsvpWrittenCount`, and the member page loads its own RSVPs in one query. Also tightened: members now read only their own RSVPs (they could read everyone's in the region). **(c) fixed 2026-10-23**: region files are limited by folder to the roles that use them (logo: owner and admin change it, anyone in the region sees it; invoices: owner, admin, finance, branch admin; WhatsApp banners: owner, admin, member manager; anything else: owner and admin), in the active region only. Storage rules tests added (`tests/rules/storage.test.ts`) |
 | X7 | **Inherited: "Powered by Kereke Hub" was typed into the footer of five member app pages**, and also the join, form, RSVP and two check-in pages and the member invite email, against the white-label rule | **Fixed 2026-10-23**: one `ATTRIBUTION` string in `lib/whiteLabel.ts`, used in all eleven places. It first read "Designed by Kereke Hub", the wording in `docs/02_SCOPE.md` B9, which says the exact wording is still to be agreed with JCOC. Other "Kereke Hub" mentions across the app remain for the planned white-label work (B9) **2026-10-23: Sifiso chose "Powered by Kereke Hub" to propose to JCOC; now set in `lib/whiteLabel.ts`. Awaiting JCOC's agreement.** |
 
+## From the white-label build (B9), 2026-10-24
+
+| # | Question | Built as |
+|---|---|---|
+| Y1 | **The church's full name.** The logo says "Johannesburg Church of Christ (ICOC)"; our notes say "Joburg Church of Christ" | The app shows "Joburg Church of Christ" under the name "JCOC Hub" (decided by Sifiso). One line in `lib/whiteLabel.ts` (`BRAND.churchName`) to change |
+| Y2 | **Brand colours.** JCOC's logo uses teal, green, light blue and yellow; no colour codes received | The app keeps its original green until codes arrive. All brand colours change in one place (`BRAND.colours` in `lib/whiteLabel.ts`) |
+| Y3 | **Original logo file.** The logo in use is a 960px copy from WhatsApp (`public/brand/logo.jpg`) | Fine on screens. Ask JCOC for the original, ideally a PNG with a transparent background, or SVG |
+| Y4 | **Public sign-up.** Anyone who finds `/signup` on JCOC's site can create a new, separate church on JCOC's Firebase project | The welcome page no longer links to it. Closing `/signup` for this deployment is about an hour; Sifiso to decide |
+| Y5 | **The base product's own emails in Cloud Functions** (welcome, billing reminders, inactivity, member welcome) still name Kereke Hub | Not deployed for JCOC. If any is wanted, it must read the brand first (Cloud Functions cannot import `lib/whiteLabel.ts` directly). About half a day |
+
 ## Non-blocking, needed before the relevant phase
 
 | # | Question | Phase |
@@ -80,7 +90,7 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 | M | Brevo account and DNS access for sender authentication. Note the free tier caps at 300 emails a day, and a network-wide send will exceed that | 5 |
 | N | BulkSMS account, if SMS is wanted | 5 |
 | O | POPIA information officer details, existing privacy notice, current consent wording, retention policy | 5 |
-| P | JCOC branding: logo, colours, how the name should appear to members. Note regions may want to inherit rather than brand separately | 5 |
+| P | JCOC branding: logo, colours, how the name should appear to members. Note regions may want to inherit rather than brand separately. **Partly answered 2026-10-24: name "JCOC Hub", logo received; colours and the original logo file still to come (Y2, Y3)** | 5 |
 | Q | Definitions for the monthly report: baptisms, restorations, transfers, move-ins and move-outs. Baba D to walk Sifiso through them one-to-one | Later (see new requests) |
 | R | Support model. Erick asked what happens when Sifiso is unavailable; Sifiso said a team of three handles support once the system is live. Write the support arrangement and response times into the agreement | Before contracting |
 | T | Pricing for sister churches outside South Africa (Mozambique, Zimbabwe, Angola were mentioned). Sifiso said "same ballpark" pending a check of each country's data protection law | Later |
@@ -101,6 +111,7 @@ Anything not in `docs/02_SCOPE.md` goes here with an estimate before it gets bui
 | # | Question | Answer | Date |
 |---|---|---|---|
 | – | Firebase project for JCOC | Project "JCOC", ID `jcoc-d6322` (not `jcoc-hub`, which older handovers and the plan use). `.firebaserc` now points at it | 2026-10-23 |
+| B9 (part) | App name and logo | Name "JCOC Hub"; support stays "Kereke Hub support"; logo received (WhatsApp copy) | 2026-10-24 |
 | W1 | Who may collect a child | Only the person who signs them in | 2026-10-23 |
 | W2 | Class names and ages | They differ per region; capture them manually for each class | 2026-10-23 |
 | W3 | How long check-in records are kept | 24 months | 2026-10-23 |

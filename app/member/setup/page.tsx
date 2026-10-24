@@ -2,8 +2,9 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { BRAND, appUrl, appUrlText } from "../../../lib/whiteLabel";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hub.kerekehub.co.za";
+const APP_URL = appUrl();
 
 function MemberSetupContent() {
   const searchParams = useSearchParams();
@@ -41,7 +42,7 @@ function MemberSetupContent() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
       <div className="w-full max-w-md text-center">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Kereke Hub</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{BRAND.productName}</h1>
           <p className="text-sm text-gray-500 mt-1">Member Portal</p>
         </div>
 
@@ -53,7 +54,7 @@ function MemberSetupContent() {
             </p>
             <p className="text-gray-400 text-sm mt-2">
               After setting your password, come back and sign in at{" "}
-              <strong>hub.kerekehub.co.za/member/login</strong>
+              <strong>{appUrlText("/member/login")}</strong>
             </p>
           </div>
         )}

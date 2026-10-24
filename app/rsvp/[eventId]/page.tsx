@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { ATTRIBUTION } from "../../../lib/whiteLabel";
+import { ATTRIBUTION, BRAND } from "../../../lib/whiteLabel";
 
 interface ChurchEvent {
   tenantId: string;
@@ -82,7 +82,7 @@ export default function PublicRsvpPage() {
             const res = await fetch(`/api/tenant-brand/${eventData.tenantId}`);
             if (res.ok) {
               const t = await res.json();
-              setTenant({ name: t.name || "KerekeHub", primaryColor: t.primaryColor });
+              setTenant({ name: t.name || BRAND.productName, primaryColor: t.primaryColor });
             }
           } catch (brandErr) {
             console.error("Could not load church branding:", brandErr);

@@ -1,3 +1,4 @@
+import { PLATFORM } from "../../lib/whiteLabel";
 // Platform-level support email helper.
 //
 // Sends transactional emails via Kereke Hub's OWN Brevo account (not a tenant's),
@@ -5,7 +6,7 @@
 // Brevo credentials from environment variables set on Vercel:
 //   BREVO_API_KEY       - Kereke Hub Brevo API key
 //   BREVO_SENDER_EMAIL  - verified sender, e.g. sifiso@kerekehub.co.za
-//   BREVO_SENDER_NAME   - display name, e.g. "Kereke Hub Support"
+//   BREVO_SENDER_NAME   - display name, e.g. PLATFORM.supportName
 
 const SUPPORT_INBOX = "sifisosibuyane@gmail.com";
 
@@ -28,7 +29,7 @@ export async function sendSupportEmail({
 }: SendArgs): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.BREVO_SENDER_EMAIL;
-  const senderName = process.env.BREVO_SENDER_NAME || "Kereke Hub Support";
+  const senderName = process.env.BREVO_SENDER_NAME || PLATFORM.supportName;
 
   if (!apiKey || !senderEmail) {
     return { ok: false, error: "Support email is not configured (missing BREVO_API_KEY or BREVO_SENDER_EMAIL)." };
@@ -66,7 +67,7 @@ export function emailShell(inner: string): string {
     <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #0F172A; color: #F8FAFC; padding: 32px; border-radius: 8px;">
       ${inner}
       <hr style="border-color: #334155; margin: 24px 0;" />
-      <p style="color: #64748B; font-size: 12px; margin: 0;">Kereke Hub. Church Administration Made Simple. kerekehub.co.za</p>
+      <p style="color: #64748B; font-size: 12px; margin: 0;">${PLATFORM.name}. ${PLATFORM.website}</p>
     </div>
   `;
 }

@@ -10,6 +10,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { sendSupportEmail, emailShell, SUPPORT_INBOX } from "@/lib/supportEmail";
 import { writeAudit } from "@/lib/audit";
+import { PLATFORM } from "../../../../lib/whiteLabel";
 
 const esc = (s: string) =>
   String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
     to,
     toName: ticket.name || to,
     replyTo: SUPPORT_INBOX,
-    replyToName: "Kereke Hub Support",
+    replyToName: PLATFORM.supportName,
     subject: `Re: ${ticket.subject || "your request"} [${refLabel}]`,
     html: emailShell(`
       <h2 style="color:#3B9A5F;margin-top:0;">Hi ${esc(ticket.name || "there")},</h2>

@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { PLATFORM, appUrl } from "../../../../lib/whiteLabel";
 
 async function getUid(): Promise<string | null> {
   const cookieStore = await cookies();
@@ -78,7 +79,7 @@ function generateInvoiceHTML(data: {
     }
 
     .header {
-      background: #1A5C38;
+      background: ${PLATFORM.colour};
       padding: 36px 40px;
       display: flex;
       justify-content: space-between;
@@ -241,7 +242,7 @@ function generateInvoiceHTML(data: {
     .totals-row.total .value {
       font-size: 20px;
       font-weight: 800;
-      color: #1A5C38;
+      color: ${PLATFORM.colour};
     }
 
     .footer {
@@ -254,7 +255,7 @@ function generateInvoiceHTML(data: {
     }
 
     .footer a {
-      color: #1A5C38;
+      color: ${PLATFORM.colour};
       text-decoration: none;
     }
 
@@ -262,7 +263,7 @@ function generateInvoiceHTML(data: {
       display: block;
       width: fit-content;
       margin: 24px auto 0;
-      background: #1A5C38;
+      background: ${PLATFORM.colour};
       color: #fff;
       border: none;
       padding: 12px 32px;
@@ -284,9 +285,9 @@ function generateInvoiceHTML(data: {
   <div class="invoice-wrap">
     <div class="header">
       <div class="header-left">
-        <img src="https://hub.kerekehub.co.za/kereke-logo.jpg" alt="Kereke Hub" style="height:48px; width:auto; display:block; margin-bottom:12px; border-radius:6px;" />
+        <img src="${appUrl(PLATFORM.logo)}" alt="${PLATFORM.name}" style="height:48px; width:auto; display:block; margin-bottom:12px; border-radius:6px;" />
         <h1>INVOICE</h1>
-        <p>KEREKEHUB (PTY) LTD</p>
+        <p>${PLATFORM.legalName}</p>
       </div>
       <div class="header-right">
         <div class="inv-number">${data.invoiceNumber}</div>
@@ -299,13 +300,13 @@ function generateInvoiceHTML(data: {
       <div class="parties">
         <div class="party">
           <div class="party-label">From</div>
-          <div class="party-name">KEREKEHUB (PTY) LTD</div>
+          <div class="party-name">${PLATFORM.legalName}</div>
           <div class="party-detail">
             Reg. No. 2026/413234/07<br/>
             Tembisa, 1632<br/>
             Gauteng, South Africa<br/>
             +27 78 044 3373<br/>
-            sifiso@kerekehub.co.za
+            ${PLATFORM.supportEmail}
           </div>
         </div>
         <div class="party">
@@ -331,7 +332,7 @@ function generateInvoiceHTML(data: {
           <tbody>
             <tr>
               <td class="desc">
-                <strong>Kereke Hub Platform Subscription</strong>
+                <strong>${PLATFORM.name} Platform Subscription</strong>
                 <span>Monthly SaaS platform access</span>
               </td>
               <td>${data.monthLabel}</td>
@@ -358,10 +359,10 @@ function generateInvoiceHTML(data: {
     </div>
 
     <div class="footer">
-      <strong>KEREKEHUB (PTY) LTD</strong> &nbsp;|&nbsp; Reg. No. 2026/413234/07 &nbsp;|&nbsp;
-      Tembisa, 1632, Gauteng, South Africa &nbsp;|&nbsp;
-      <a href="mailto:sifiso@kerekehub.co.za">sifiso@kerekehub.co.za</a> &nbsp;|&nbsp;
-      <a href="https://kerekehub.co.za">kerekehub.co.za</a><br/>
+      <strong>${PLATFORM.legalName}</strong> &nbsp;|&nbsp; Reg. No. ${PLATFORM.registrationNumber} &nbsp;|&nbsp;
+      ${PLATFORM.address} &nbsp;|&nbsp;
+      <a href="mailto:${PLATFORM.supportEmail}">${PLATFORM.supportEmail}</a> &nbsp;|&nbsp;
+      <a href="${PLATFORM.website}">${PLATFORM.website.replace("https://", "")}</a><br/>
       This invoice is proof of payment for the period stated above. For queries, contact us at the details above.
     </div>
   </div>

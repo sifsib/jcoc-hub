@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { PLATFORM } from "../../../lib/whiteLabel";
 
 const SESSION_DURATION_MS = 60 * 60 * 24 * 14 * 1000; // 14 days
 
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(
             {
               error:
-                "This church account is currently suspended. Please contact Kereke Hub support to restore access.",
+                `This church account is currently suspended. Please contact ${PLATFORM.supportName} to restore access.`,
               suspended: true,
             },
             { status: 403 }

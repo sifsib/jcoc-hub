@@ -8,7 +8,7 @@ const CACHE_NAME = 'kereke-hub-v2';
 const CACHE_ASSETS = [
   '/',
   '/offline.html',
-  '/manifest.json'
+  '/manifest.webmanifest'
 ];
 
 // API URLs we never want to cache

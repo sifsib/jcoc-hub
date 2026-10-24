@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
+import { appUrlText } from "../../lib/whiteLabel";
 
 function AcceptInviteContent() {
   const searchParams = useSearchParams();
@@ -66,7 +67,7 @@ function AcceptInviteContent() {
         </button>
         <p className="text-xs text-gray-400 mt-4">
           Already have a password? Log in at{" "}
-          <a href="/login" className="text-emerald-600 hover:underline">hub.kerekehub.co.za/login</a>
+          <a href="/login" className="text-emerald-600 hover:underline">{appUrlText("/login")}</a>
         </p>
       </div>
     </div>

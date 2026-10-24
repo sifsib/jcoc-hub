@@ -8,7 +8,7 @@ import {
   doc, getDoc, setDoc, serverTimestamp,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { ATTRIBUTION } from "../../../../lib/whiteLabel";
+import { ATTRIBUTION, BRAND } from "../../../../lib/whiteLabel";
 
 type EventType = "service" | "conference" | "outreach" | "youth" | "womens" | "mens" | "prayer" | "social" | "other";
 type RsvpStatus = "attending" | "not_attending";
@@ -70,7 +70,7 @@ export default function MemberEventsPage() {
   const [memberId, setMemberId] = useState("");
   const [memberName, setMemberName] = useState("");
   const [churchName, setChurchName] = useState("");
-  const [primaryColor, setPrimaryColor] = useState("#1A5C38");
+  const [primaryColor, setPrimaryColor] = useState(BRAND.colours.primary);
 
   const [upcoming, setUpcoming] = useState<ChurchEvent[]>([]);
   const [past, setPast] = useState<ChurchEvent[]>([]);
@@ -95,7 +95,7 @@ export default function MemberEventsPage() {
         const tenantSnap = await getDoc(doc(db, "tenants", tid));
         const td = tenantSnap.data() || {};
         setChurchName(td.name || "My Church");
-        setPrimaryColor(td.primaryColor || "#1A5C38");
+        setPrimaryColor(td.primaryColor || BRAND.colours.primary);
 
         if (mid) {
           const memberSnap = await getDoc(doc(db, "members", mid));

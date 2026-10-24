@@ -5,6 +5,7 @@ import Link from "next/link";
 import { auth, storage } from "../../../lib/firebase";
 import { useAppUser } from "../../../lib/useAppUser";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { PLATFORM } from "../../../lib/whiteLabel";
 
 // Every church sends through the shared Kereke Hub WhatsApp number, so the
 // banner and signature are the only things telling a congregant who is writing
@@ -164,7 +165,7 @@ export default function WhatsAppPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-100">WhatsApp Identity</h1>
         <p className="text-slate-400 text-sm mt-1">
-          Your church shares the Kereke Hub WhatsApp number with other churches. Your banner and
+          Your church shares the {PLATFORM.name} WhatsApp number with other churches. Your banner and
           signature are what identify you to your congregation on every message.
         </p>
       </div>
@@ -180,7 +181,7 @@ export default function WhatsAppPage() {
           </p>
           <p className="text-xs text-slate-400">
             {ready
-              ? "No QR code or phone linking is needed — Kereke Hub manages the number for you."
+              ? `No QR code or phone linking is needed — ${PLATFORM.name} manages the number for you.`
               : "Add your church name below before sending your first broadcast."}
           </p>
         </div>
@@ -347,7 +348,7 @@ export default function WhatsAppPage() {
               <p className="text-[13px] text-white/70 italic leading-relaxed">
                 {signature.trim() || churchName.trim() || "Your signature"}
               </p>
-              <p className="text-[11px] text-white/50">Sent via Kereke Hub</p>
+              <p className="text-[11px] text-white/50">Sent via {PLATFORM.name}</p>
             </div>
             <div className="border-t border-white/10 py-2 text-center text-[13px] text-[#53bdeb]">
               Stop messages

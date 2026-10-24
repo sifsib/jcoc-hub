@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { sendSupportEmail, emailShell, SUPPORT_INBOX } from "@/lib/supportEmail";
+import { PLATFORM } from "../../../../lib/whiteLabel";
 
 const esc = (s: string) =>
   String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
   // 4. Notify Sifiso (reply-to points at the submitter so a Gmail reply reaches them)
   const notify = await sendSupportEmail({
     to: SUPPORT_INBOX,
-    toName: "Kereke Hub Support",
+    toName: PLATFORM.supportName,
     replyTo: email || undefined,
     replyToName: name,
     subject: `[${priorityLabel}] New Ticket ${ticketRef}: ${subject}`,

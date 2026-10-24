@@ -7,6 +7,7 @@
 // Direct URL: hub.kerekehub.co.za/dashboard/admin/feedback
 
 import { useState, useEffect } from "react";
+import { PLATFORM } from "../../../../lib/whiteLabel";
 
 type FeedbackEntry = {
   id: string;
@@ -53,7 +54,7 @@ export default function AdminFeedbackPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-red-50 border border-red-100 rounded-xl p-6 text-center max-w-sm">
           <p className="text-red-700 font-medium text-sm">{error}</p>
-          <p className="text-red-400 text-xs mt-1">This page is only accessible to Kereke Hub admin accounts.</p>
+          <p className="text-red-400 text-xs mt-1">This page is only accessible to {PLATFORM.name} admin accounts.</p>
         </div>
       </div>
     );

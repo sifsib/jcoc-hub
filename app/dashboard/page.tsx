@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { db } from "../../lib/firebase";
 import { useAppUser } from "../../lib/useAppUser";
 import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { BRAND } from "../../lib/whiteLabel";
 
 interface OverdueStep {
   id: string;
@@ -187,7 +188,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">
           Welcome, {appUser?.displayName?.split(" ")[0] || appUser?.name?.split(" ")[0] || "Admin"}
         </h1>
-        <p className="text-sm text-gray-500 mt-0.5">{appUser?.churchName || "KerekeHub"}</p>
+        <p className="text-sm text-gray-500 mt-0.5">{appUser?.churchName || BRAND.productName}</p>
       </div>
 
       {/* Missing DRI warning — shown on every dashboard load, does not block workflows */}

@@ -36,7 +36,7 @@ export function getServiceConfig() {
 
   if (!baseUrl) {
     throw new ApiError(
-      "WHATSAPP_SERVICE_URL is not set. Point it at the WhatsApp service, e.g. https://kereke-hub.onrender.com",
+      "WHATSAPP_SERVICE_URL is not set. Point it at the WhatsApp service, for example https://your-whatsapp-service.onrender.com",
       500
     );
   }

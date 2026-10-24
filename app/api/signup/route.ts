@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
+import { BRAND, PLATFORM, appUrl } from "../../../lib/whiteLabel";
 
 const INTERNAL_EMAIL = "info@kfwc.org.za";
 
@@ -71,12 +72,12 @@ async function notifyAdminOfSignup(
       "api-key": apiKey,
     },
     body: JSON.stringify({
-      sender: { name: "Kereke Hub", email: "sifiso@kerekehub.co.za" },
-      to: [{ email: "sifiso@kerekehub.co.za" }],
+      sender: { name: PLATFORM.name, email: PLATFORM.supportEmail },
+      to: [{ email: PLATFORM.supportEmail }],
       subject: `New church signup: ${churchName}`,
       htmlContent: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
-          <div style="background:#1A5C38;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="background:${BRAND.colours.primary};padding:20px 28px;border-radius:8px 8px 0 0;">
             <h2 style="color:#fff;margin:0;font-size:18px;">New Church Signup</h2>
           </div>
           <div style="background:#f8fafc;padding:24px 28px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;color:#1e293b;">
@@ -88,7 +89,7 @@ async function notifyAdminOfSignup(
               <tr><td style="padding:6px 0;color:#64748b;">Account Type</td><td style="padding:6px 0;">${accountType.charAt(0).toUpperCase() + accountType.slice(1)}</td></tr>
             </table>
             <div style="margin-top:20px;">
-              <a href="https://hub.kerekehub.co.za/dashboard/admin-settings" style="display:inline-block;background:#1A5C38;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:13px;font-weight:600;">
+              <a href="${appUrl("/dashboard/admin-settings")}" style="display:inline-block;background:${BRAND.colours.primary};color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:13px;font-weight:600;">
                 View on Admin Panel
               </a>
             </div>

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { appUrl } from "../../../lib/whiteLabel";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hub.kerekehub.co.za";
+const APP_URL = appUrl();
 
 // GET /api/member-setup?token=xxx
 // Validates the member invite token, generates a Firebase password-reset link

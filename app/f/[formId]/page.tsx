@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { db } from "../../../lib/firebase";
 import DateInput from "../../../components/ui/DateInput";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { ATTRIBUTION } from "../../../lib/whiteLabel";
+import { ATTRIBUTION, BRAND } from "../../../lib/whiteLabel";
 
 type FieldType =
   | "short_text"
@@ -85,7 +85,7 @@ export default function PublicFormPage() {
             if (res.ok) {
               const t = await res.json();
               setTenant({
-                name: t.name || "KerekeHub",
+                name: t.name || BRAND.productName,
                 primaryColor: t.primaryColor || "#059669",
               });
             }

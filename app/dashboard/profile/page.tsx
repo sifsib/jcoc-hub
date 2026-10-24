@@ -5,6 +5,7 @@ import { auth, db } from "../../../lib/firebase";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import InfoTooltip from "../../components/InfoTooltip";
+import { BRAND, PLATFORM, appUrl, appUrlText } from "../../../lib/whiteLabel";
 
 interface ProfileData {
   name: string;
@@ -199,7 +200,7 @@ export default function ProfilePage() {
   };
 
   const copyPortalLink = () => {
-    const link = `https://hub.kerekehub.co.za/member/${slug}/home`;
+    const link = appUrl(`/member/${slug}/home`);
     navigator.clipboard.writeText(link).then(() => {
       setSlugCopied(true);
       setTimeout(() => setSlugCopied(false), 2000);
@@ -701,14 +702,14 @@ export default function ProfilePage() {
           <div>
             <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Tracking Settings</h2>
             <p className="text-xs text-gray-400 mt-1">
-              Set a start date to prevent markers from accidentally recording attendance before your church began using Kereke Hub. Dates before this will be blocked on the attendance page.
+              Set a start date to prevent markers from accidentally recording attendance before your church began using {BRAND.productName}. Dates before this will be blocked on the attendance page.
             </p>
           </div>
 
           <div>
             <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 mb-1.5">
               Tracking Start Date
-              <InfoTooltip text="The date from which the hub starts counting your church's data and analytics." why="Set this to when you actually began using Kereke Hub. Records before this date are ignored so your growth charts and reports are not skewed by an empty setup period." />
+              <InfoTooltip text="The date from which the hub starts counting your church's data and analytics." why={`Set this to when you actually began using ${BRAND.productName}. Records before this date are ignored so your growth charts and reports are not skewed by an empty setup period.`} />
             </label>
             <div className="flex gap-3 items-center">
               <input
@@ -793,7 +794,7 @@ export default function ProfilePage() {
               <div>
                 <p className="text-xs font-semibold text-emerald-700 mb-0.5">Your member portal link</p>
                 <p className="text-sm text-emerald-900 font-mono">
-                  hub.kerekehub.co.za/member/<strong>{slug}</strong>/home
+                  {appUrlText("/member/")}<strong>{slug}</strong>/home
                 </p>
               </div>
               <button
@@ -910,7 +911,7 @@ export default function ProfilePage() {
           <div>
             <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Online Giving Setup</h2>
             <p className="text-xs text-gray-400 mt-1">
-              Your PayFast merchant credentials. Card payments from donors go directly into your PayFast account and settle to your church bank account. Kereke Hub never holds your funds.
+              Your PayFast merchant credentials. Card payments from donors go directly into your PayFast account and settle to your church bank account. {PLATFORM.name} never holds your funds.
             </p>
           </div>
 
@@ -977,7 +978,7 @@ export default function ProfilePage() {
             <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-600">
               Your giving page link:{" "}
               <span className="font-mono font-semibold text-emerald-700">
-                kerekehub.co.za/give/{profile?.tenantId}
+                {appUrlText("/give/")}{profile?.tenantId}
               </span>
               {" "}&mdash; share this on your website or WhatsApp group.
             </div>

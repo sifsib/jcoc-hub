@@ -23,6 +23,7 @@ import {
   writeBatch,
   Timestamp,
 } from "firebase/firestore";
+import { BRAND } from "../../../../lib/whiteLabel";
 
 type TriggerType = "visitor_added" | "member_added" | "care_tier" | "birthday" | "manual";
 type ActionType = "task" | "whatsapp" | "email" | "note";
@@ -527,7 +528,7 @@ export default function WorkflowBuilderPage() {
     // never deleted, otherwise visitors, care alerts and new members would have
     // nothing to attach to.
     if ((workflow as any)?.isSystem) {
-      alert("This is a standard Kereke Hub workflow, so it cannot be deleted. Untick \"Workflow is active\" if you do not want it running.");
+      alert(`This is a standard ${BRAND.productName} workflow, so it cannot be deleted. Untick "Workflow is active" if you do not want it running.`);
       return;
     }
     if (!confirm(`Delete "${workflow?.name}"? This cannot be undone.`)) return;

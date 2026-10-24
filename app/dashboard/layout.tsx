@@ -9,6 +9,7 @@ import PendingApprovalBadge from "../components/PendingApprovalBadge";
 import MemberUsageMeter from "../components/MemberUsageMeter";
 import { isPaidTier, PAID_NAV_HREFS } from "../../lib/tier";
 import RegionSwitcher, { type SwitcherRegion } from "./RegionSwitcher";
+import { BRAND } from "../../lib/whiteLabel";
 
 export default async function DashboardLayout({
   children,
@@ -71,7 +72,7 @@ export default async function DashboardLayout({
     redirect("/suspended");
   }
 
-  const churchName = tenantData?.name || "KerekeHub";
+  const churchName = tenantData?.name || BRAND.productName;
   const primaryColor = tenantData?.primaryColor || "#059669";
   const tenantSlug = tenantData?.slug || "";
   const userMemberId = userDocData?.memberId || "";
