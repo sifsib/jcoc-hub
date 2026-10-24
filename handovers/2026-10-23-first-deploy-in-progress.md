@@ -133,3 +133,11 @@ Firebase CLI login is done, as sifisosibuyane@gmail.com.
   1. Create the two Cloud Scheduler jobs (table above), using the `https://africa-south1-jcoc-d6322.cloudfunctions.net/...` URLs, and Force run each one.
   2. Push.
   3. Part D (Vercel).
+
+## Update 2026-10-24: timers live
+
+Both Cloud Scheduler jobs were created in europe-west1 and Force run by Sifiso. Both show **Success**:
+- `life-phase-new-year`: `0 1 * * *`, Africa/Johannesburg;
+- `kids-retention`: `30 2 * * *`, Africa/Johannesburg.
+
+Both use POST with an OIDC token (default compute service account), 2 retries and a 10-minute attempt deadline. The firebase side of Phase 1 is done. Next: push, then Part D (Vercel).
