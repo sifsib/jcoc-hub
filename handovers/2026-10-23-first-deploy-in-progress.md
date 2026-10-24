@@ -70,3 +70,54 @@ Firebase CLI login is done, as sifisosibuyane@gmail.com.
   1. Re-run the seven-function deploy.
   2. Delete the stray us-central1 copy: `npx firebase-tools@14 functions:delete kidsRetention --region us-central1 --project jcoc-d6322`
   3. Before 30 October: move the functions to a newer Node version and update `firebase-functions`.
+
+## Update 2026-10-24, later: Node 22, and nightly jobs kept in Johannesburg
+
+**First functions deploy in africa-south1:**
+- The five database-triggered functions were created there: member change history, both life phase functions, RSVP count and member count.
+- The two `onSchedule` jobs failed: Cloud Scheduler is not offered in africa-south1.
+- The us-central1 `kidsRetention` was deleted.
+
+**Sifiso chose to keep all processing in Johannesburg:**
+- `lifePhaseNewYear` and `kidsRetention` are now **private HTTPS functions**, `lifePhaseNewYearTask` and `kidsRetentionTask`, in africa-south1 (`functions/src/scheduledTask.ts`).
+- A Cloud Scheduler job in **europe-west1** calls each one on time. The call carries no member data.
+- "Private" means Google refuses any call that is not signed by an allowed service account; the Scheduler jobs sign with the default compute service account (OIDC).
+- The emulator does not enforce "private". Check it on the live project: an unsigned request must get 403.
+
+**Node and SDK:** functions are now on **Node 22** and **firebase-functions 7.4**. Node 20 is decommissioned on 2026-10-30.
+
+**Checked on the emulator:**
+- **The clean-up job** removed only records older than 24 months: one check-in, one code and one override entry dated 2023. Today's record stayed.
+- **The life phase job** checked 3 regions.
+- **A GET request** was refused (405).
+- **Every function** loaded in africa-south1.
+- **Database triggers still fire** after the upgrade; life phases were written on seed.
+
+**Not verified:** the live Scheduler jobs, and the live 403 for unsigned calls.
+
+**Later:** the base product's other scheduled functions (billing reminders, birthday emails and SMS, daily summary, visitor follow-up SMS, inactivity check) are still `onSchedule`. They are not deployed for JCOC. If any is wanted later, convert it with `privateTask` the same way.
+
+### Steps for Sifiso
+
+1. Deploy the seven functions (new names for the two jobs):
+   ```
+   npx firebase-tools@14 deploy --only functions:onMemberUpdatedAudit,functions:onMemberWrittenLifePhases,functions:onHouseholdWrittenLifePhases,functions:lifePhaseNewYearTask,functions:onRsvpWrittenCount,functions:kidsRetentionTask,functions:onMemberCountWrite --project jcoc-d6322
+   ```
+   If it offers to delete `lifePhaseNewYear` or `kidsRetention` (the old names), answer yes. Note the two "Function URL" lines it prints.
+2. Open each Function URL in a browser. It must say **Forbidden** (403). That proves strangers cannot start the jobs.
+3. Create two jobs in the Cloud Scheduler console at https://console.cloud.google.com/cloudscheduler?project=jcoc-d6322:
+
+   | Field | Life phase job | Clean-up job |
+   |---|---|---|
+   | Name | `life-phase-new-year` | `kids-retention` |
+   | Region | `europe-west1` | `europe-west1` |
+   | Frequency | `0 1 * * *` | `30 2 * * *` |
+   | Time zone | Africa/Johannesburg | Africa/Johannesburg |
+   | Target type | HTTP | HTTP |
+   | URL | `lifePhaseNewYearTask` URL | `kidsRetentionTask` URL |
+   | HTTP method | POST | POST |
+   | Auth header | Add OIDC token | Add OIDC token |
+   | Service account | Default compute service account | Default compute service account |
+
+4. Use **Force run** on each job; the status should show **Success**.
+   - If it shows a permission error, grant **Cloud Run Invoker** to `1015797759359-compute@developer.gserviceaccount.com` in IAM.

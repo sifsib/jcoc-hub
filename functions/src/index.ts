@@ -1383,7 +1383,7 @@ export { onMemberUpdatedAudit } from "./memberAudit";
 // ─────────────────────────────────────────────────────────────
 // LIFE PHASES (see ./lifePhases.ts, ADR-011)
 // ─────────────────────────────────────────────────────────────
-export { onMemberWrittenLifePhases, onHouseholdWrittenLifePhases, lifePhaseNewYear } from "./lifePhases";
+export { onMemberWrittenLifePhases, onHouseholdWrittenLifePhases, lifePhaseNewYearTask } from "./lifePhases";
 
 // ─────────────────────────────────────────────────────────────
 // EVENT RSVP COUNT (see ./rsvpCountTrigger.ts, X6)
@@ -1393,7 +1393,7 @@ export { onRsvpWrittenCount } from "./rsvpCountTrigger";
 // ─────────────────────────────────────────────────────────────
 // CHILDREN'S CHECK-IN RETENTION (see ./kidsRetentionTrigger.ts, 24 months)
 // ─────────────────────────────────────────────────────────────
-export { kidsRetention } from "./kidsRetentionTrigger";
+export { kidsRetentionTask } from "./kidsRetentionTrigger";
 
 // ─────────────────────────────────────────────────────────────
 // MEMBER COUNTER

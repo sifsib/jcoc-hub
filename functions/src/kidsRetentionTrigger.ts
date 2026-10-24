@@ -1,11 +1,11 @@
-// Removes children's check-in records older than 24 months, every night
-// (answered 2026-10-23). Covers the check-in records, their collection-code
+// Removes children's check-in records older than 24 months, every night at
+// 02:30 Johannesburg time, called by a Cloud Scheduler job (see
+// scheduledTask.ts) (answered 2026-10-23). Covers the check-in records, their collection-code
 // documents and the audit entries for supervisor overrides, which name the
 // child. Rules are in kidsRetention.ts.
-import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFirestore, type Query } from "firebase-admin/firestore";
-import { logger } from "firebase-functions";
 import { retentionCutoff } from "./kidsRetention";
+import { privateTask } from "./scheduledTask";
 
 const BATCH = 400;
 
@@ -23,21 +23,14 @@ async function deleteAll(query: Query): Promise<number> {
   }
 }
 
-export const kidsRetention = onSchedule(
-  { schedule: "30 2 * * *", timeZone: "Africa/Johannesburg" },
-  async () => {
-    const db = getFirestore();
-    const cutoff = retentionCutoff(new Date().toISOString().slice(0, 10));
-    const cutoffTime = new Date(`${cutoff}T00:00:00Z`);
-    try {
-      const checkins = await deleteAll(db.collection("childCheckins").where("serviceDate", "<", cutoff));
-      const codes = await deleteAll(db.collection("childCheckinSecrets").where("createdAt", "<", cutoffTime));
-      const overrides = await deleteAll(
-        db.collection("admin_audit").where("action", "==", "child_checkout_override").where("createdAt", "<", cutoffTime.toISOString()),
-      );
-      logger.info(`[kidsRetention] before ${cutoff}: removed ${checkins} check-ins, ${codes} codes, ${overrides} override entries`);
-    } catch (err) {
-      logger.error("[kidsRetention]", err);
-    }
-  },
-);
+export const kidsRetentionTask = privateTask("kidsRetention", async () => {
+  const db = getFirestore();
+  const cutoff = retentionCutoff(new Date().toISOString().slice(0, 10));
+  const cutoffTime = new Date(`${cutoff}T00:00:00Z`);
+  const checkins = await deleteAll(db.collection("childCheckins").where("serviceDate", "<", cutoff));
+  const codes = await deleteAll(db.collection("childCheckinSecrets").where("createdAt", "<", cutoffTime));
+  const overrides = await deleteAll(
+    db.collection("admin_audit").where("action", "==", "child_checkout_override").where("createdAt", "<", cutoffTime.toISOString()),
+  );
+  return `before ${cutoff}: removed ${checkins} check-ins, ${codes} codes, ${overrides} override entries`;
+});

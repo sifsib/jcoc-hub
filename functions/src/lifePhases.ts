@@ -8,7 +8,8 @@
 // write only what changed. The phases written are not inputs, so the write
 // does not trigger another recalculation.
 //
-// lifePhaseNewYear: daily. When a region's calendar year has moved past its
+// lifePhaseNewYearTask: daily, at 01:00 Johannesburg time, called by a Cloud
+// Scheduler job (see scheduledTask.ts). When a region's calendar year has moved past its
 // approved phase year, prepare the 1 January review (who changes, from what
 // to what) and leave it for an admin to approve. Nothing changes until then
 // (ADR-003): saves keep using the approved year, pinned on the tenant as
@@ -18,7 +19,7 @@
 // in the app (app/api/life-phases/review).
 // ─────────────────────────────────────────────────────────────
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import { onSchedule } from "firebase-functions/v2/scheduler";
+import { privateTask } from "./scheduledTask";
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import {
@@ -132,11 +133,10 @@ export async function prepareReview(db: Firestore, tenantId: string, year: numbe
   return changes.length;
 }
 
-export const lifePhaseNewYear = onSchedule(
-  { schedule: "0 1 * * *", timeZone: DEFAULT_TIMEZONE },
-  async () => {
+export const lifePhaseNewYearTask = privateTask("lifePhaseNewYear", async () => {
     const db = getFirestore();
     const tenants = await db.collection("tenants").get();
+    let prepared = 0;
     for (const t of tenants.docs) {
       const data = t.data();
       if (data.archived || data.status === "suspended") continue;
@@ -149,10 +149,13 @@ export const lifePhaseNewYear = onSchedule(
         if (typeof data.lifePhaseYear !== "number") await t.ref.update({ lifePhaseYear: approved });
         if (approved >= year) continue;
         const n = await prepareReview(db, t.id, year);
-        if (n >= 0) logger.info(`[lifePhaseNewYear] ${t.id}: ${year} review prepared, ${n} change(s)`);
+        if (n >= 0) {
+          prepared++;
+          logger.info(`[lifePhaseNewYear] ${t.id}: ${year} review prepared, ${n} change(s)`);
+        }
       } catch (err) {
         logger.error(`[lifePhaseNewYear] ${t.id}`, err);
       }
     }
-  },
-);
+    return `checked ${tenants.size} region(s), prepared ${prepared} review(s)`;
+});
