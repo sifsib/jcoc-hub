@@ -141,3 +141,19 @@ Both Cloud Scheduler jobs were created in europe-west1 and Force run by Sifiso. 
 - `kids-retention`: `30 2 * * *`, Africa/Johannesburg.
 
 Both use POST with an OIDC token (default compute service account), 2 retries and a 10-minute attempt deadline. The firebase side of Phase 1 is done. Next: push, then Part D (Vercel).
+
+## Update 2026-10-24: app live
+
+**The app is live at https://jcoc.kerekehub.co.za.**
+- Hosted on Vercel Pro, production branch `feature/p5-event-registration`, served from Cape Town (cpt1).
+- The Let's Encrypt certificate was issued (checked; it renews itself).
+- DNS: a CNAME for `jcoc`, added in DirectAdmin.
+- Firebase authorised domains: `jcoc.kerekehub.co.za` and `jcoc-hub.vercel.app`.
+
+**Gotcha:** the first signup failed with "invalid_grant: account not found". The `FB_ADMIN_*` values in Vercel came from another project's service account key. A fresh key from `jcoc-d6322` fixed it; Vercel needs a redeploy after any environment variable change.
+
+**Next:**
+1. Invite the test users.
+2. Run `scripts/setup-network.mjs` (dry run, then `--apply`).
+3. Add invented members.
+4. Run the test checklist.
