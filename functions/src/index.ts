@@ -1,5 +1,6 @@
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
+import { setGlobalOptions } from "firebase-functions/v2";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import * as nodemailer from "nodemailer";
@@ -14,6 +15,12 @@ import * as crypto from "crypto";
 // ─────────────────────────────────────────────────────────────
 const SYSTEM_GMAIL_USER = defineSecret("SYSTEM_GMAIL_USER");
 const SYSTEM_GMAIL_APP_PASSWORD = defineSecret("SYSTEM_GMAIL_APP_PASSWORD");
+
+// Every function runs in Johannesburg, next to the africa-south1 Firestore
+// database, so members' personal information is processed in South Africa
+// (POPIA) rather than in the default us-central1. Set before any function is
+// defined, including those re-exported from other files below.
+setGlobalOptions({ region: "africa-south1" });
 
 initializeApp();
 const db = getFirestore();

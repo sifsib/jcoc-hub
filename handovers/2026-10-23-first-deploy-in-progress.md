@@ -56,3 +56,17 @@ Firebase CLI login is done, as sifisosibuyane@gmail.com.
 - Whether Auth (Email/Password) and Firestore are set up on `jcoc-d6322`.
 - Firestore's location.
 - Nothing has been deployed successfully to `jcoc-d6322` yet.
+
+## Update 2026-10-24
+
+- **Rules, Storage rules and indexes deployed** to `jcoc-d6322` ("Deploy complete!"). Storage was set up in the console, and the cross-service rules role was granted.
+- **Firestore is in africa-south1.** The deploy errors showed the Firestore triggers there.
+- **First functions deploy:**
+  - Placeholder secrets were stored: `SYSTEM_GMAIL_USER`, `SYSTEM_GMAIL_APP_PASSWORD`, `WHATSAPP_SERVICE_URL` and `WHATSAPP_SERVICE_KEY` all hold `not-set`.
+  - Only `kidsRetention` was created, and it went to **us-central1**. Five failed on the first-use Eventarc delay, and `lifePhaseNewYear` failed with a build error.
+  - The container image clean-up was set to 1 day.
+- **Sifiso agreed to move the functions to Johannesburg.** `functions/src/index.ts` now sets `setGlobalOptions({ region: "africa-south1" })`, so members' data is processed in South Africa, next to the database. In the emulator, all 20 functions loaded in africa-south1.
+- **Next:**
+  1. Re-run the seven-function deploy.
+  2. Delete the stray us-central1 copy: `npx firebase-tools@14 functions:delete kidsRetention --region us-central1 --project jcoc-d6322`
+  3. Before 30 October: move the functions to a newer Node version and update `firebase-functions`.
