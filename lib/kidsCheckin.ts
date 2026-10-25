@@ -175,7 +175,8 @@ const nameOf = (m: { fullName?: string; firstName?: string; lastName?: string })
 /**
  * Everyone who can be checked in, grouped by family: member households (member
  * children and the household's non-member children) and visitor families.
- * Families with no child young enough are left out. Allergies are filled in
+ * Member families with no child young enough are left out; visitor families
+ * are always listed, so a child can be added to them. Allergies are filled in
  * by the server for members, from memberCareNotes.
  */
 export function buildFamilies(
@@ -227,7 +228,8 @@ export function buildFamilies(
       children.push({ key: `visitor:${v.id}:${c.id}`, kind: "visitor", name: nameOf(c), age,
         suggestedClassId: suggestClass(childPhases(c.dob, year), classes, age)?.id ?? null, allergies: c.allergies ?? "" });
     }
-    if (children.length === 0) continue;
+    // Visitors are listed even with no child recorded yet, so the child can be
+    // added from check-in (a visitor captured on First-Time Guests has none).
     families.push({ key: `visitor:${v.id}`, kind: "visitor", guardianName: nameOf(v), guardianPhone: v.phone ?? "", otherGuardians: [], otherPhones: [], children });
   }
   return families.sort((a, b) => a.guardianName.localeCompare(b.guardianName, "en-ZA"));

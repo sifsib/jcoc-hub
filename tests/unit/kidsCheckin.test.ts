@@ -1,5 +1,6 @@
 // Visitor register and children's check-in (ADR-012), written before the logic.
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   normalisePhone,
@@ -170,22 +171,46 @@ describe("families for check-in", () => {
 
   it("lists member families with member and non-member children, and visitor families", () => {
     const fams = buildFamilies(members, households, visitors, 2026, classes);
-    expect(fams.map((f) => f.guardianName)).toEqual(["Lerato Dlamini", "Sam Visitor"]);
-    const dl = fams[0];
+    expect(fams.map((f) => f.guardianName)).toEqual(["Childless Visitor", "Lerato Dlamini", "Sam Visitor"]);
+    const dl = fams.find((f) => f.guardianName === "Lerato Dlamini")!;
     expect(dl.otherGuardians).toEqual(["Thabo Dlamini"]);
     expect(dl.otherPhones).toEqual(["27820000001"]);
     expect(dl.children).toEqual([
       { key: "member:neo", kind: "member", name: "Neo Dlamini", age: 9, suggestedClassId: "sch", allergies: "" },
       { key: "household:h1:0", kind: "household", name: "Ayo Dlamini", age: 5, suggestedClassId: "pre", allergies: "" },
     ]);
-    expect(fams[1].children[0]).toEqual({ key: "visitor:v1:c1", kind: "visitor", name: "Lebo Visitor", age: 5, suggestedClassId: "pre", allergies: "peanuts" });
+    expect(fams.find((f) => f.guardianName === "Sam Visitor")!.children[0]).toEqual({ key: "visitor:v1:c1", kind: "visitor", name: "Lebo Visitor", age: 5, suggestedClassId: "pre", allergies: "peanuts" });
   });
 
-  it("leaves out suspended children, families without children, and children too old for children's ministry", () => {
+  it("leaves out suspended children, member families without children, and children too old for children's ministry", () => {
     const older = [...members, { id: "teen", fullName: "Big Teen", dob: "2008-01-01", householdId: "h1", householdRole: "child", status: "active" }];
     const fams = buildFamilies(older, households, visitors, 2026, classes);
     expect(fams.flatMap((f) => f.children.map((c) => c.name))).not.toContain("Old Child");
     expect(fams.flatMap((f) => f.children.map((c) => c.name))).not.toContain("Big Teen");
-    expect(fams.map((f) => f.guardianName)).not.toContain("Childless Visitor");
+    expect(fams.map((f) => f.guardianName)).not.toContain("No Kids");
+  });
+
+  // Found in testing 2026-10-25: a visitor captured on First-Time Guests has
+  // no children yet, so check-in could not find them at all. Visitors are now
+  // always found, so the child can be added from there.
+  it("always lists a visitor family, with no children when none is recorded or of check-in age", () => {
+    const teenOnly = [{ id: "v3", fullName: "Teen Parent Visitor", phone: "27830000003",
+      children: [{ id: "c3", firstName: "Older", lastName: "Kid", dob: "2011-01-01" }] }];
+    const fams = buildFamilies([], new Map(), [...visitors, ...teenOnly], 2026, classes);
+    expect(fams.find((f) => f.guardianName === "Childless Visitor")).toMatchObject({ kind: "visitor", key: "visitor:v2", guardianPhone: "27830000002", children: [] });
+    expect(fams.find((f) => f.guardianName === "Teen Parent Visitor")?.children).toEqual([]);
+  });
+
+  it("offers to add a child when a visitor family has none (check-in screen)", () => {
+    const page = readFileSync(new URL("../../app/dashboard/kids/page.tsx", import.meta.url), "utf8");
+    expect(page).toMatch(/No children recorded yet/);
+    expect(page).toMatch(/Add a child/);
+    expect(page).toMatch(/prefill/);
+  });
+
+  it("shows the class a child was just checked into, so they appear in the list", () => {
+    const page = readFileSync(new URL("../../app/dashboard/kids/page.tsx", import.meta.url), "utf8");
+    expect(page).toMatch(/checked in\{lastCode\.classNames/);
+    expect(page).toMatch(/setClassId\(next\)/);
   });
 });

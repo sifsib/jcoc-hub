@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const families = buildFamilies(
     members.docs.map((d) => ({ ...d.data(), id: d.id })),
     new Map(households.docs.map((d) => [d.id, d.data()])),
-    visitors.docs.filter((d) => Array.isArray(d.data().children) && d.data().children.length).map((d) => ({ ...d.data(), id: d.id })),
+    visitors.docs.map((d) => ({ ...d.data(), id: d.id })),
     ctx.year,
     ctx.classes,
   )

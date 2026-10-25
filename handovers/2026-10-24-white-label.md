@@ -108,3 +108,21 @@ Everything a JCOC user sees now comes from `lib/whiteLabel.ts`. Two parts:
 **Not verified.**
 - The import on the live site.
 - Birthdays & Anniversaries showing the imported anniversaries: the logic is unchanged, and it reads `anniversaryDate`.
+
+## Follow-up 2026-10-25: visitor's child not appearing at check-in (Z6)
+
+**Reported by Sifiso's testing.** Two causes:
+1. **The search.** `/api/kids/families` and `buildFamilies` left out visitors with no child of check-in age, and a visitor captured on First-Time Guests starts with none. The search found nothing and gave no hint why.
+2. **The list.** After a check-in, the list stayed on the class that was selected (the first, Babies), so a child checked into another class seemed not to appear.
+
+**Fixed, tests first.** `tests/unit/kidsCheckin.test.ts` has 3 new tests and 1 changed; they failed first.
+- **Visitors are always listed.** A family with no children shows "No children recorded yet" and an **Add a child** button. It opens the new-child form, prefilled with the parent's name and cell number; `/api/kids/visitor-child` matches the existing visitor by phone, so no duplicate is created.
+- **The list follows the check-in.** The screen switches to the child's class ("All classes" for admins when siblings went to different classes), and the confirmation names the class.
+
+**Checked on the emulators.**
+- **New visitor:** captured on First-Time Guests, found at check-in with no children, the child added through the prefilled form, then checked in. The child joined the same visitor.
+- **Seeded visitor's child:** checked in from the Babies view; the screen moved to Pre-School and listed him.
+
+**Checks.** `tsc` is clean. Unit tests: 194 pass. Rules tests: 233 pass. `next build` succeeds.
+
+**Not changed.** On First-Time Guests, visitors marked "Just visiting" have no Log Contact button, so their children can only be added from check-in (or the archive list). Worth a button there later.

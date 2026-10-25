@@ -45,7 +45,9 @@ export default function KidsCheckinPage() {
   const [records, setRecords] = useState<CheckinRecord[]>([]);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"list" | "checkin" | "newVisitor">("list");
-  const [lastCode, setLastCode] = useState<{ code: string; names: string; smsSent: boolean } | null>(null);
+  // A visitor found at check-in with no child recorded: their details fill the new-child form.
+  const [prefill, setPrefill] = useState<{ parentFirst: string; parentLast: string; phone: string } | null>(null);
+  const [lastCode, setLastCode] = useState<{ code: string; names: string; smsSent: boolean; classNames: string } | null>(null);
   const [checkingOut, setCheckingOut] = useState<CheckinRecord | null>(null);
 
   const workable = useMemo(() => classes.filter((c) => c.canWork), [classes]);
@@ -110,7 +112,7 @@ export default function KidsCheckinPage() {
 
       {lastCode && (
         <div className="mt-4 rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-5 text-center">
-          <p className="text-sm text-emerald-800">{lastCode.names} checked in. Collection code:</p>
+          <p className="text-sm text-emerald-800">{lastCode.names} checked in{lastCode.classNames ? ` to ${lastCode.classNames}` : ""}. Collection code:</p>
           <p className="mt-1 text-5xl font-black tracking-[0.3em] text-emerald-900">{lastCode.code}</p>
           <p className="mt-2 text-sm text-emerald-800">
             {lastCode.smsSent ? "Also sent to the parent by SMS." : "Not sent by SMS: ask the parent to take a photo of this code."}
@@ -123,7 +125,7 @@ export default function KidsCheckinPage() {
         <>
           <div className="mt-4 flex flex-wrap gap-3">
             <button className={primary} disabled={!classId || classId === "all"} onClick={() => { setMode("checkin"); setLastCode(null); }}>Check a child in</button>
-            <button className={quiet} disabled={!classId || classId === "all"} onClick={() => { setMode("newVisitor"); setLastCode(null); }}>New visitor child</button>
+            <button className={quiet} disabled={!classId || classId === "all"} onClick={() => { setPrefill(null); setMode("newVisitor"); setLastCode(null); }}>New visitor child</button>
             <span className="ml-auto self-center text-sm text-slate-500">{inCount} in class now</span>
           </div>
           <ul className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">
@@ -160,12 +162,28 @@ export default function KidsCheckinPage() {
           classes={workable}
           defaultClassId={classId}
           onCancel={() => setMode("list")}
-          onDone={(code, names, smsSent) => { setLastCode({ code, names, smsSent }); setMode("list"); loadSession(); }}
+          onDone={(code, names, smsSent, classIds) => {
+            const classNames = classIds.map((id) => classes.find((c) => c.id === id)?.name).filter(Boolean).join(" and ");
+            setLastCode({ code, names, smsSent, classNames });
+            // Show the class the child went into, so they appear in the list
+            // straight away (found in testing: the list stayed on another class).
+            const next = classIds.length === 1 ? classIds[0] : isAdmin ? "all" : classIds[0];
+            setMode("list");
+            // Changing class reloads the list by itself; otherwise reload now.
+            if (next && next !== classId) setClassId(next);
+            else loadSession();
+          }}
+          onAddChild={(f) => {
+            const [parentFirst, ...rest] = f.guardianName.trim().split(/\s+/);
+            setPrefill({ parentFirst: parentFirst ?? "", parentLast: rest.join(" "), phone: f.guardianPhone });
+            setMode("newVisitor");
+          }}
         />
       )}
 
       {mode === "newVisitor" && (
         <NewVisitorChild
+          prefill={prefill}
           onCancel={() => setMode("list")}
           onCreated={() => setMode("checkin")}
         />
@@ -183,11 +201,12 @@ export default function KidsCheckinPage() {
   );
 }
 
-function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
+function CheckinPanel({ classes, defaultClassId, onCancel, onDone, onAddChild }: {
   classes: ClassOption[];
   defaultClassId: string;
   onCancel: () => void;
-  onDone: (code: string, names: string, smsSent: boolean) => void;
+  onDone: (code: string, names: string, smsSent: boolean, classIds: string[]) => void;
+  onAddChild: (family: Family) => void;
 }) {
   const [query, setQuery] = useState("");
   const [families, setFamilies] = useState<Family[]>([]);
@@ -226,7 +245,7 @@ function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
     setBusy(false);
     if (!ok) return setError(data.error || "Check-in failed.");
     const names = family.children.filter((c) => picked[c.key]).map((c) => c.name.split(" ")[0]).join(" and ");
-    onDone(data.code, names, data.smsSent);
+    onDone(data.code, names, data.smsSent, [...new Set(children.map((c) => c.classId))]);
   }
 
   return (
@@ -244,7 +263,7 @@ function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
               <li key={f.key}>
                 <button className="w-full py-3 text-left" onClick={() => choose(f)}>
                   <p className="text-lg font-semibold text-slate-800">{f.guardianName}{f.kind === "visitor" && <span className="ml-2 rounded bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700">Visitor</span>}</p>
-                  <p className="text-sm text-slate-500">{f.children.map((c) => `${c.name}${c.age !== null ? ` (${c.age})` : ""}`).join(", ")}</p>
+                  <p className="text-sm text-slate-500">{f.children.length ? f.children.map((c) => `${c.name}${c.age !== null ? ` (${c.age})` : ""}`).join(", ") : "No children recorded yet"}</p>
                 </button>
               </li>
             ))}
@@ -254,6 +273,12 @@ function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
       ) : (
         <div className="flex flex-col gap-4">
           <p className="text-lg font-semibold text-slate-800">{family.guardianName}&apos;s children</p>
+          {family.children.length === 0 && (
+            <div className="rounded-lg bg-sky-50 p-4 text-sm text-sky-900">
+              <p>No children recorded yet for this visitor (or none young enough for children&apos;s ministry).</p>
+              <button className={`${primary} mt-3`} onClick={() => onAddChild(family)}>Add a child</button>
+            </div>
+          )}
           {family.children.map((c) => (
             <div key={c.key} className="flex flex-wrap items-center gap-3">
               <label className="flex flex-1 items-center gap-3 text-base text-slate-800">
@@ -291,8 +316,16 @@ function CheckinPanel({ classes, defaultClassId, onCancel, onDone }: {
   );
 }
 
-function NewVisitorChild({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {
-  const [f, setF] = useState({ parentFirst: "", parentLast: "", phone: "", email: "", childFirst: "", childLast: "", age: "", allergies: "" });
+function NewVisitorChild({ prefill, onCancel, onCreated }: {
+  prefill: { parentFirst: string; parentLast: string; phone: string } | null;
+  onCancel: () => void;
+  onCreated: () => void;
+}) {
+  // The parent's cell number matches the existing visitor, so the child joins them.
+  const [f, setF] = useState({
+    parentFirst: prefill?.parentFirst ?? "", parentLast: prefill?.parentLast ?? "", phone: prefill?.phone ?? "",
+    email: "", childFirst: "", childLast: "", age: "", allergies: "",
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
