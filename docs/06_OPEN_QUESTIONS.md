@@ -79,6 +79,18 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 | Y4 | **Public sign-up.** Anyone who finds `/signup` on JCOC's site can create a new, separate church on JCOC's Firebase project | The welcome page no longer links to it. Closing `/signup` for this deployment is about an hour; Sifiso to decide |
 | Y5 | **The base product's own emails in Cloud Functions** (welcome, billing reminders, inactivity, member welcome) still name Kereke Hub | Not deployed for JCOC. If any is wanted, it must read the brand first (Cloud Functions cannot import `lib/whiteLabel.ts` directly). About half a day |
 
+## Found while testing the member import, 2026-10-25
+
+Tested on the emulators with `docs/testing/JCOC-Hub-Test-Members.xlsx` (18 invented households, 33 members). Placement by name, spouse and child links, non-member spouses and children, parents and in-laws, date and phone formats, life phases and the duplicate warning all worked.
+
+| # | Finding | Effect | Fix and estimate |
+|---|---|---|---|
+| Z1 | The import ignores the wedding date (Anniversary Date column) | Married people get no Young Married or Mature Married phase, and do not show under anniversaries | Read an "Anniversary Date" column for the main person and spouse. About an hour, with a test |
+| Z2 | Only the main person on a row is put in the sector and family group | Spouses and children are unplaced, so sector and family group leaders do not see them | Place the spouse and children with the main person. About an hour |
+| Z3 | A spouse is only created when the status is exactly "Married" | "Married (Customary)" and similar lose the spouse, although life phases treat them as married | Use the same marital rule as life phases. Under an hour |
+| Z4 | The Import screen shows instructions written for another church, naming its Firebase project ("kfwc-members-zone") with a script to run against it | Another client's project name is shown to JCOC admins; confusing and not ours to show | Remove the panel. Minutes. Also a fix for the base product |
+| Z5 | People in different rows cannot be linked (for example a grown child with her own household) | Links across households must be made by hand | Needs a design decision; not estimated |
+
 ## Non-blocking, needed before the relevant phase
 
 | # | Question | Phase |
