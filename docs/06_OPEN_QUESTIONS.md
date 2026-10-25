@@ -85,10 +85,10 @@ Tested on the emulators with `docs/testing/JCOC-Hub-Test-Members.xlsx` (18 inven
 
 | # | Finding | Effect | Fix and estimate |
 |---|---|---|---|
-| Z1 | The import ignores the wedding date (Anniversary Date column) | Married people get no Young Married or Mature Married phase, and do not show under anniversaries | Read an "Anniversary Date" column for the main person and spouse. About an hour, with a test |
-| Z2 | Only the main person on a row is put in the sector and family group | Spouses and children are unplaced, so sector and family group leaders do not see them | Place the spouse and children with the main person. About an hour |
-| Z3 | A spouse is only created when the status is exactly "Married" | "Married (Customary)" and similar lose the spouse, although life phases treat them as married | Use the same marital rule as life phases. Under an hour |
-| Z4 | The Import screen shows instructions written for another church, naming its Firebase project ("kfwc-members-zone") with a script to run against it | Another client's project name is shown to JCOC admins; confusing and not ours to show | Remove the panel. Minutes. Also a fix for the base product |
+| Z1 | The import ignores the wedding date (Anniversary Date column) | Married people get no Young Married or Mature Married phase, and do not show under anniversaries | **Fixed 2026-10-25**: reads "Anniversary Date" (or "Wedding Date") for the main person and spouse |
+| Z2 | Only the main person on a row is put in the sector and family group | Spouses and children are unplaced, so sector and family group leaders do not see them | **Fixed 2026-10-25**: the whole household is placed together |
+| Z3 | A spouse is only created when the status is exactly "Married" | "Married (Customary)" and similar lose the spouse, although life phases treat them as married | **Fixed 2026-10-25**: the import uses the life phase marital rule (`maritalCategory`) |
+| Z4 | The Import screen shows instructions written for another church, naming its Firebase project ("kfwc-members-zone") with a script to run against it | Another client's project name is shown to JCOC admins; confusing and not ours to show | **Fixed 2026-10-25**: replaced with a list of the columns the import understands. Also a fix for the base product. (The sign-up route still names that church's email addresses for free internal accounts; it goes when sign-up is closed, Y4) |
 | Z5 | People in different rows cannot be linked (for example a grown child with her own household) | Links across households must be made by hand | Needs a design decision; not estimated |
 
 ## Non-blocking, needed before the relevant phase

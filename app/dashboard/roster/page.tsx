@@ -17,6 +17,7 @@ import InfoTooltip from "../../components/InfoTooltip";
 import { useChurchStructure } from "../../../lib/useChurchStructure";
 import { familyGroupsIn, pickerOptions, placementLabel, type FamilyGroup, type Sector } from "../../../lib/churchStructure";
 import { STRUCTURE_LABELS } from "../../../lib/whiteLabel";
+import { anniversaryFromRow, isMarriedStatus, normalizeDob } from "../../../lib/memberImport";
 import { LIFE_PHASES, MARRIAGE_TYPES, phaseLabel } from "../../../lib/lifePhases";
 import LifePhasePanel from "./LifePhasePanel";
 import CareNotesPanel from "./CareNotesPanel";
@@ -187,26 +188,6 @@ const emptyParent = (): ParentInput => ({ name: "", surname: "", dob: "" });
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Convert Excel serial date numbers (e.g. 39710) to YYYY-MM-DD strings
-function normalizeDob(val: any): string {
-  if (!val && val !== 0) return "";
-  if (val instanceof Date) return val.toISOString().slice(0, 10);
-  const str = String(val).trim();
-  if (/^\d+$/.test(str)) {
-    const n = parseInt(str, 10);
-    // Excel serial range sanity check (1 Jan 1900 = 1, 1 Jan 2100 = ~73050)
-    if (n > 1000 && n < 80000) {
-      const d = new Date((n - 25569) * 86400000);
-      return d.toISOString().slice(0, 10);
-    }
-  }
-  // Text dates: accept YYYY/MM/DD and DD/MM/YYYY (with / or - separators) -> ISO YYYY-MM-DD
-  let m = str.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/); // YYYY/MM/DD
-  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  m = str.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/); // DD/MM/YYYY
-  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-  return str;
-}
-
 function isUnder16(dob?: string): boolean {
   if (!dob) return false;
   const birth = new Date(dob);
@@ -1630,7 +1611,16 @@ export default function ManageMembershipPage() {
         const fullName = s(row["Full Name"] || row.fullName || `${firstName} ${lastName}`);
         if (!fullName) continue;
 
-        const isMarried = s(row["Marital Status"] || row.maritalStatus).toLowerCase() === "married";
+        // Same marital rule as life phases, so customary and traditional
+        // marriages keep the spouse (Z3), and the wedding date is kept (Z1).
+        const maritalStatus = s(row["Marital Status"] || row.maritalStatus);
+        const isMarried = isMarriedStatus(maritalStatus);
+        const anniversaryDate = anniversaryFromRow(row, maritalStatus);
+        // The whole household goes into the main person's sector and family group (Z2).
+        const placement = placementFromImport(
+          s(row[STRUCTURE_LABELS.sector.one] || row["Sector"] || row["Branch"] || row.branch),
+          s(row[STRUCTURE_LABELS.familyGroup.one] || row["Family Group"] || row["Cell Group"] || row["Cell Region"] || row.cellRegion),
+        );
         const spouseIsMember = yn(row["Is Spouse a Member"] || row["Is Spouse a member"]) === "Yes";
 
         // ── Build children arrays ──────────────────────────────────────────────
@@ -1691,12 +1681,10 @@ export default function ManageMembershipPage() {
           phone: s(row["Phone"] || row.phone || row["Contact Number"]) ? fmtPhone(s(row["Phone"] || row.phone || row["Contact Number"]), importCountryCode) : "",
           dob: normalizeDob(row["Date of Birth"] || row.dob || row["Date of birth"]),
           gender: s(row["Gender"] || row.gender),
-          maritalStatus: s(row["Marital Status"] || row.maritalStatus),
+          maritalStatus,
+          anniversaryDate,
           membershipType: s(row["Membership Type"] || row.membershipType),
-          ...placementFromImport(
-            s(row[STRUCTURE_LABELS.sector.one] || row["Sector"] || row["Branch"] || row.branch),
-            s(row[STRUCTURE_LABELS.familyGroup.one] || row["Family Group"] || row["Cell Group"] || row["Cell Region"] || row.cellRegion),
-          ),
+          ...placement,
           ministryGroup: s(row["Ministry Group"] || row.ministryGroup) || assignMinistryGroup(normalizeDob(row["Date of Birth"] || row.dob || row["Date of birth"]), s(row["Gender"] || row.gender), s(row["Marital Status"] || row.maritalStatus)),
           churchRole: s(row["Church Role"] || row.churchRole),
           address: {
@@ -1733,7 +1721,9 @@ export default function ManageMembershipPage() {
               phone: s(row["Spouse Phone"] || row["Contact Number.1"]) ? fmtPhone(s(row["Spouse Phone"] || row["Contact Number.1"]), importCountryCode) : "",
               dob: normalizeDob(row["Spouse DOB"]),
               gender: s(row["Spouse Gender"]),
-              maritalStatus: "Married",
+              maritalStatus: maritalStatus || "Married",
+              anniversaryDate,
+              ...placement,
               ministryGroup: assignMinistryGroup(normalizeDob(row["Spouse DOB"]), s(row["Spouse Gender"]), "Married"),
               membershipType: s(row["Spouse Membership Type"]),
               address: {
@@ -1765,6 +1755,7 @@ export default function ManageMembershipPage() {
             email: "", phone: "",
             dob: child.dob, gender: child.gender,
             maritalStatus: "Single",
+            ...placement,
             ministryGroup: assignMinistryGroup(child.dob, child.gender, "Single"),
             role: "Member",
             address: {
@@ -2499,46 +2490,19 @@ export default function ManageMembershipPage() {
           <p className="text-sm text-gray-500">Upload a CSV or XLSX file from your website or any source. Common column names are mapped automatically.</p>
         </div>
 
-        {/* Export guide */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex flex-col gap-3">
-          <p className="text-sm font-bold text-amber-800">How to export your members from the kfwc-members-zone Firebase project</p>
-          <ol className="text-xs text-amber-700 space-y-1.5 list-decimal list-inside">
-            <li>Download your service account key: Firebase console → <strong>kfwc-members-zone</strong> → Project Settings → Service accounts → Generate new private key</li>
-            <li>Save the file as <code className="bg-white px-1 rounded">serviceAccountKey.json</code> in your project folder</li>
-            <li>Run the script below — it reads <code>membership_forms</code> and writes <code>members-export.xlsx</code></li>
-          </ol>
-          <pre className="bg-white border border-amber-100 rounded-lg p-3 text-xs text-gray-700 overflow-x-auto whitespace-pre">{`// export-members.mjs  (run with: node export-members.mjs)
-import admin from 'firebase-admin';
-import { utils, write } from 'xlsx';
-import { writeFileSync } from 'fs';
-import sa from './serviceAccountKey.json' assert { type: 'json' };
-
-admin.initializeApp({ credential: admin.credential.cert(sa) });
-const snap = await admin.firestore().collection('membership_forms').get();
-
-const rows = snap.docs.map(d => {
-  const data = d.data();
-  const pd   = data.personalDetails || {};
-  return {
-    firstName:      pd.name            || '',
-    lastName:       pd.surname         || '',
-    email:          pd.email           || '',
-    phone:          pd.contactNumber   || '',
-    dob:            pd.dob             || '',
-    gender:         pd.gender          || '',
-    maritalStatus:  data.maritalStatus || '',
-    membershipType: data.membershipType|| '',
-    bornAgain:      data.faithStatus?.bornAgain      || '',
-    waterBaptized:  data.faithStatus?.waterBaptized  || '',
-    ministries:     (data.ministries || []).join(', '),
-  };
-});
-
-const wb = utils.book_new();
-utils.book_append_sheet(wb, utils.json_to_sheet(rows), 'Members');
-writeFileSync('members-export.xlsx', write(wb, { type: 'buffer', bookType: 'xlsx' }));
-console.log(\`Exported \${rows.length} records → members-export.xlsx\`);`}</pre>
-          <p className="text-xs text-amber-600">You need Node 18+ and: <code className="bg-white px-1 rounded">npm install firebase-admin xlsx</code></p>
+        {/* Columns the import reads */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex flex-col gap-2">
+          <p className="text-sm font-bold text-emerald-900">Columns the import understands</p>
+          <p className="text-xs text-emerald-800">One row per household. Column names must match; extra columns are ignored.</p>
+          <ul className="text-xs text-emerald-800 space-y-1 list-disc list-inside">
+            <li><strong>The person:</strong> First Name, Last Name, Gender, Date of Birth, Phone, Email, Marital Status, Anniversary Date, Membership Type</li>
+            <li><strong>Placement:</strong> {STRUCTURE_LABELS.sector.one}, {STRUCTURE_LABELS.familyGroup.one} (names must match Church Structure; the whole household is placed together)</li>
+            <li><strong>Address:</strong> Address Line 1, Address Line 2, Suburb, Town, Postal Code</li>
+            <li><strong>Spouse:</strong> Is Spouse a Member (Yes or No), Spouse First Name, Spouse Last Name, Spouse DOB, Spouse Gender, Spouse Phone, Spouse Email</li>
+            <li><strong>Children (up to 5):</strong> Child 1 First Name, Child 1 Last Name, Child 1 DOB, Child 1 Gender, Is Child 1 a Member, and the same for Child 2 to 5</li>
+            <li><strong>Family:</strong> Mother Name, Mother Surname, Father Name, Father Surname, and the same for Mother-in-Law and Father-in-Law</li>
+          </ul>
+          <p className="text-xs text-emerald-800">Dates can be YYYY-MM-DD or DD/MM/YYYY.</p>
         </div>
 
         {/* File upload */}

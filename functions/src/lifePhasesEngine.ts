@@ -115,6 +115,11 @@ function marital(status: string | undefined): Marital {
   return "other";
 }
 
+/** The marital category used by the rules; shared with the member import. */
+export function maritalCategory(status: string | undefined): Marital {
+  return marital(status);
+}
+
 export interface AdultFacts {
   dob?: string;
   maritalStatus?: string;

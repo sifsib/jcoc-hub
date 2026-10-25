@@ -77,3 +77,34 @@ Everything a JCOC user sees now comes from `lib/whiteLabel.ts`. Two parts:
 2. Confirm the church's full name (Y1), and get the original logo file (Y3).
 3. Decide whether to close `/signup` on JCOC's deployment (Y4).
 4. Push, then check the live site.
+
+## Follow-up 2026-10-25: member import test file and fixes (Z1-Z4)
+
+**The test file.**
+- `docs/testing/JCOC-Hub-Test-Members.xlsx` has 18 invented households, covering each life stage and the edge cases, with an Expected results sheet.
+- It is built from the structure in Sifiso's screenshot: Sector 2 Test and Test sector, with their family groups.
+
+**First import (on the emulators).** 33 records came in. Four gaps showed up:
+- **Z1:** the wedding date was dropped.
+- **Z2:** spouses and children were left unplaced.
+- **Z3:** only an exact "Married" created the spouse.
+- **Z4:** the Import screen showed another church's Firebase export instructions.
+
+**Fixed, tests first.**
+- `tests/unit/memberImport.test.ts`: 8 tests. The 3 that check the import code failed before the fix.
+- The pure helpers are in `lib/memberImport.ts`. The import now reads "Anniversary Date", places the whole household, and uses the life phase marital rule.
+- The foreign panel is replaced by a column guide.
+
+**Second import (on the emulators).**
+- **Records:** 34 came in (Palesa, the customary spouse, is now created).
+- **Placement:** every spouse and child is in the household's sector and family group.
+- **Life phases:** married couples have their anniversary and Young Married or Mature Married.
+- **Duplicates:** re-importing the file flags all 18 households.
+
+**Checks.** `tsc` is clean in the root and in `functions/`. Unit tests: 191 pass. Rules tests: 233 pass. `next build` succeeds.
+
+**Gotcha.** `npm run seed:emulator` sometimes fails on its first run straight after the functions emulator starts. Run it again.
+
+**Not verified.**
+- The import on the live site.
+- Birthdays & Anniversaries showing the imported anniversaries: the logic is unchanged, and it reads `anniversaryDate`.
