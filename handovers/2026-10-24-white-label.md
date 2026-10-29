@@ -126,3 +126,14 @@ Everything a JCOC user sees now comes from `lib/whiteLabel.ts`. Two parts:
 **Checks.** `tsc` is clean. Unit tests: 194 pass. Rules tests: 233 pass. `next build` succeeds.
 
 **Not changed.** On First-Time Guests, visitors marked "Just visiting" have no Log Contact button, so their children can only be added from check-in (or the archive list). Worth a button there later.
+
+## 2026-10-29: test round 1 passed
+
+Sifiso reported that his team's test round 1 was successful across the guide (`docs/testing/JCOC-Hub-Test-Guide.docx`), after the import fixes (Z1-Z4) and the check-in fix (Z6) were pushed. The individual tick sheets were not seen by Claude.
+
+**Next, as agreed before testing:**
+- the church's full name "Johannesburg Church of Christ";
+- brand colours green, blue and white;
+- close public sign-up;
+- a way for Kereke Hub to create JCOC's top admins (network owners), who then create other users;
+- merge `feature/p5-event-registration` into `main` now that browser testing has passed (plan v2, Phase 0).
