@@ -29,8 +29,13 @@ export const BRAND = {
   productName: "JCOC Hub",
   /** Under the icon on a phone's home screen; keep it short. */
   shortName: "JCOC Hub",
-  churchName: "Joburg Church of Christ",
-  description: "Church management for Joburg Church of Christ.",
+  churchName: "Johannesburg Church of Christ",
+  description: "Church management for Johannesburg Church of Christ.",
+  /**
+   * Whether anyone may register a new church at /signup. Off for JCOC
+   * (2026-10-29): regions are set up by the network, people join by invitation.
+   */
+  publicSignup: false,
   /** Default address; NEXT_PUBLIC_APP_URL overrides it per deployment. */
   appUrl: "https://jcoc.kerekehub.co.za",
   /**
@@ -39,26 +44,41 @@ export const BRAND = {
    * swap in JCOC's original file when they send it.
    */
   logo: { src: "/brand/logo.jpg" as string | null, alt: "JCOC Hub" },
+  /**
+   * JCOC's colours: green, blue and white, taken from the logo (Sifiso,
+   * 2026-10-29). White text stays readable on the 600 and 700 shades and on
+   * primary (tests/unit/whiteLabel.test.ts checks the contrast).
+   */
   colours: {
     /** Solid brand colour: phone theme colour, emails, fallback for a region's own colour. */
-    primary: "#1A5C38",
-    /**
-     * Shades used across the app. Every emerald-* class maps to these
-     * (app/globals.css), so changing them recolours the whole app. Until
-     * JCOC confirms colours these are the original emerald shades.
-     */
+    primary: "#226619",
+    /** Green. Every emerald-* class maps to these (app/globals.css). */
     palette: {
-      "50": "#ecfdf5",
-      "100": "#d1fae5",
-      "200": "#a7f3d0",
-      "300": "#6ee7b7",
-      "400": "#34d399",
-      "500": "#10b981",
-      "600": "#059669",
-      "700": "#047857",
-      "800": "#065f46",
-      "900": "#064e3b",
-      "950": "#022c22",
+      "50": "#f0f8ee",
+      "100": "#dcefd6",
+      "200": "#b9dfae",
+      "300": "#8ec97f",
+      "400": "#5fae4f",
+      "500": "#3c962d",
+      "600": "#2a7d1f",
+      "700": "#226619",
+      "800": "#1d5216",
+      "900": "#194314",
+      "950": "#0b2509",
+    },
+    /** Blue. Every blue-* class (mostly links) maps to these. */
+    secondary: {
+      "50": "#eef5fd",
+      "100": "#d9e8fb",
+      "200": "#b6d2f6",
+      "300": "#8db7ef",
+      "400": "#6ca0e6",
+      "500": "#4a86d9",
+      "600": "#326cc0",
+      "700": "#29579c",
+      "800": "#24497f",
+      "900": "#213e68",
+      "950": "#162843",
     },
   },
   email: {
@@ -105,5 +125,6 @@ export function appUrlText(path = ""): string {
 export function brandCssVars(): Record<string, string> {
   const vars: Record<string, string> = { "--brand-primary": BRAND.colours.primary };
   for (const [step, hex] of Object.entries(BRAND.colours.palette)) vars[`--brand-${step}`] = hex;
+  for (const [step, hex] of Object.entries(BRAND.colours.secondary)) vars[`--brand-blue-${step}`] = hex;
   return vars;
 }

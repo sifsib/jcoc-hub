@@ -12,7 +12,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Brand colours. Every emerald-* class in the app uses JCOC's palette, set as
+/* Brand colours. Every emerald-* (green) and blue-* class in the app uses JCOC's palette, set as
    --brand-* on <html> from lib/whiteLabel.ts (app/layout.tsx). Change the
    colours there, not here. */
 @theme inline {
@@ -27,6 +27,17 @@
   --color-emerald-800: var(--brand-800);
   --color-emerald-900: var(--brand-900);
   --color-emerald-950: var(--brand-950);
+  --color-blue-50: var(--brand-blue-50);
+  --color-blue-100: var(--brand-blue-100);
+  --color-blue-200: var(--brand-blue-200);
+  --color-blue-300: var(--brand-blue-300);
+  --color-blue-400: var(--brand-blue-400);
+  --color-blue-500: var(--brand-blue-500);
+  --color-blue-600: var(--brand-blue-600);
+  --color-blue-700: var(--brand-blue-700);
+  --color-blue-800: var(--brand-blue-800);
+  --color-blue-900: var(--brand-blue-900);
+  --color-blue-950: var(--brand-blue-950);
 }
 
 @media (prefers-color-scheme: dark) {

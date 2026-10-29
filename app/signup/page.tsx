@@ -5,8 +5,30 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../lib/firebase";
+import { BRAND } from "../../lib/whiteLabel";
 
+// Public sign-up can be switched off per deployment (BRAND.publicSignup); the
+// server refuses too (app/api/signup/route.ts).
 export default function SignupPage() {
+  if (!BRAND.publicSignup) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-xl border bg-white p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-bold text-gray-900">Sign-up is closed</h1>
+          <p className="mt-3 text-gray-600">
+            {BRAND.productName} accounts are created by invitation. Ask your church administrator to invite you.
+          </p>
+          <Link href="/login" className="mt-6 inline-block rounded-lg bg-emerald-600 px-6 py-2.5 font-semibold text-white hover:bg-emerald-700">
+            Go to log in
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return <SignupForm />;
+}
+
+function SignupForm() {
   const router = useRouter();
   const [form, setForm] = useState({
     churchName: "",

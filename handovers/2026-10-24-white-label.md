@@ -137,3 +137,69 @@ Sifiso reported that his team's test round 1 was successful across the guide (`d
 - close public sign-up;
 - a way for Kereke Hub to create JCOC's top admins (network owners), who then create other users;
 - merge `feature/p5-event-registration` into `main` now that browser testing has passed (plan v2, Phase 0).
+
+## 2026-10-29: name, colours, sign-up closed, network owner page
+
+Asked for by Sifiso after test round 1 passed. Tests were written first: 12 new unit tests (whiteLabel, networkOwners and sign-up), run failing before the change.
+
+### 1. Name
+
+`BRAND.churchName` is "Johannesburg Church of Christ". The setup script example uses it too.
+
+### 2. Colours: green, blue and white
+
+| Setting | Value | Used for |
+|---|---|---|
+| `BRAND.colours.palette` | green, from the logo | every `emerald-*` class |
+| `BRAND.colours.secondary` | blue | every `blue-*` class (mostly links) |
+| `primary` | `#226619` | theme colour and emails |
+
+A test keeps white text readable (at least 4.5:1) on primary and on the 600 and 700 shades.
+
+**Note:** a region's own colour on the Branding page still overrides the member app header. Soweto's may have been set during testing.
+
+### 3. Public sign-up closed
+
+`BRAND.publicSignup` is false:
+- `/signup` says sign-up is closed and links to log in;
+- `/api/signup` returns 403 before doing anything;
+- the other church's free "internal" accounts were removed from the route.
+
+### 4. Network owner page
+
+**Where:** `/dashboard/platform/network-owners`. It is not in the menu on purpose.
+
+**Who can open it:** only accounts whose id is in the server setting `PLATFORM_ADMIN_UIDS`. This is an allow list, not a role stored in JCOC's data (plan v2, Phase 0). Network owners and everyone else get a 403.
+
+**What it does:**
+- lists each network and who holds a network role;
+- adds a network owner or viewer:
+  - an existing login in the network is upgraded;
+  - a new person gets a login, working in a chosen region, and an invite link;
+- removes a network role (the person keeps their region role).
+
+The rules are in `lib/networkOwners.ts`. Every change is written to `admin_audit`. Network owners then add everyone else from Team Members, which they already could (ADR-010).
+
+### Checks
+
+- `tsc` is clean in the root and in `functions/`. Unit tests: 204 pass. Rules tests: 233 pass. `next build` succeeds.
+- **Clicked through on the emulators** (the demo owner is the local platform admin):
+  - Sign-up is closed on the page, and the route returns 403.
+  - The green and blue apply (emerald-600 is rgb(42,125,31); blue-600 is rgb(50,108,192)).
+  - The page lists the network.
+  - A new network owner got an invite link.
+  - An existing leader was upgraded; asking again changed nothing.
+  - The "super_admin" role and a region outside the network were refused.
+  - A role was removed, and removing it again was refused.
+  - A network owner (not a platform admin) got 403 on the page and the route.
+
+### To make it live
+
+1. Find your account id in Firebase, under Authentication, then Users, in the "User UID" column.
+2. In Vercel, add the environment variable `PLATFORM_ADMIN_UIDS` with that id.
+3. Push, then redeploy.
+
+### Not verified
+
+- A new network owner accepting the invite and logging in. That uses the existing accept-invite flow, unchanged.
+- The colours on every screen. Spot checks only; report anything that looks off.

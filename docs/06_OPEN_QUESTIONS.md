@@ -73,10 +73,10 @@ Live document. Answer items in place, move them to Answered with a date, and do 
 
 | # | Question | Built as |
 |---|---|---|
-| Y1 | **The church's full name.** The logo says "Johannesburg Church of Christ (ICOC)"; our notes say "Joburg Church of Christ" | The app shows "Joburg Church of Christ" under the name "JCOC Hub" (decided by Sifiso). One line in `lib/whiteLabel.ts` (`BRAND.churchName`) to change |
-| Y2 | **Brand colours.** JCOC's logo uses teal, green, light blue and yellow; no colour codes received | The app keeps its original green until codes arrive. All brand colours change in one place (`BRAND.colours` in `lib/whiteLabel.ts`) |
+| Y1 | **The church's full name.** The logo says "Johannesburg Church of Christ (ICOC)"; our notes say "Joburg Church of Christ" | The app shows "Joburg Church of Christ" under the name "JCOC Hub" (decided by Sifiso). One line in `lib/whiteLabel.ts` (`BRAND.churchName`) to change **Answered 2026-10-29: "Johannesburg Church of Christ".** Set in `BRAND.churchName`. |
+| Y2 | **Brand colours.** JCOC's logo uses teal, green, light blue and yellow; no colour codes received | The app keeps its original green until codes arrive. All brand colours change in one place (`BRAND.colours` in `lib/whiteLabel.ts`) **Answered 2026-10-29: green, blue and white.** Shades taken from the logo in `BRAND.colours` (green for emerald-*, blue for blue-*), with white-text contrast checked by a test. |
 | Y3 | **Original logo file.** The logo in use is a 960px copy from WhatsApp (`public/brand/logo.jpg`) | Fine on screens. Ask JCOC for the original, ideally a PNG with a transparent background, or SVG |
-| Y4 | **Public sign-up.** Anyone who finds `/signup` on JCOC's site can create a new, separate church on JCOC's Firebase project | The welcome page no longer links to it. Closing `/signup` for this deployment is about an hour; Sifiso to decide |
+| Y4 | **Public sign-up.** Anyone who finds `/signup` on JCOC's site can create a new, separate church on JCOC's Firebase project | The welcome page no longer links to it. Closing `/signup` for this deployment is about an hour; Sifiso to decide **Closed 2026-10-29.** `BRAND.publicSignup` is false: `/signup` says sign-up is closed and `/api/signup` refuses with 403. The other church's free internal accounts were removed from the route. |
 | Y5 | **The base product's own emails in Cloud Functions** (welcome, billing reminders, inactivity, member welcome) still name Kereke Hub | Not deployed for JCOC. If any is wanted, it must read the brand first (Cloud Functions cannot import `lib/whiteLabel.ts` directly). About half a day |
 
 ## Found while testing the member import, 2026-10-25
@@ -125,6 +125,8 @@ Anything not in `docs/02_SCOPE.md` goes here with an estimate before it gets bui
 |---|---|---|---|
 | – | Firebase project for JCOC | Project "JCOC", ID `jcoc-d6322` (not `jcoc-hub`, which older handovers and the plan use). `.firebaserc` now points at it | 2026-10-23 |
 | B9 (part) | App name and logo | Name "JCOC Hub"; support stays "Kereke Hub support"; logo received (WhatsApp copy) | 2026-10-24 |
+| Y1, Y2, Y4 | Church name, colours, public sign-up | "Johannesburg Church of Christ"; green, blue and white; sign-up closed | 2026-10-29 |
+| U1 (follow-up) | How Kereke Hub makes network owners | A page for platform admins (`/dashboard/platform/network-owners`), platform admins being a server allow list (`PLATFORM_ADMIN_UIDS`), not a role in JCOC's data | 2026-10-29 |
 | W1 | Who may collect a child | Only the person who signs them in | 2026-10-23 |
 | W2 | Class names and ages | They differ per region; capture them manually for each class | 2026-10-23 |
 | W3 | How long check-in records are kept | 24 months | 2026-10-23 |

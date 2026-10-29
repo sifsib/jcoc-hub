@@ -1,14 +1,14 @@
 {
   "orgId": "jcoc",
-  "orgName": "Joburg Church of Christ",
+  "orgName": "Johannesburg Church of Christ",
   "churches": [
-    { "name": "Joburg Church of Christ" },
+    { "name": "Johannesburg Church of Christ" },
     { "name": "Tshwane" }
   ],
   "regions": [
-    { "name": "Soweto", "church": "Joburg Church of Christ", "tenantId": "PASTE-THE-SIGN-UP-REGION-ID-HERE" },
-    { "name": "Northwest", "church": "Joburg Church of Christ" },
-    { "name": "Central East", "church": "Joburg Church of Christ" },
+    { "name": "Soweto", "church": "Johannesburg Church of Christ", "tenantId": "PASTE-THE-SIGN-UP-REGION-ID-HERE" },
+    { "name": "Northwest", "church": "Johannesburg Church of Christ" },
+    { "name": "Central East", "church": "Johannesburg Church of Christ" },
     { "name": "Tshwane", "church": "Tshwane", "timezone": "Africa/Johannesburg" }
   ],
   "networkPeople": [

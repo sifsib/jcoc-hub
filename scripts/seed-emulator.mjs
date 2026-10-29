@@ -17,6 +17,9 @@
 //   Children's teacher:   teacher@demo-jcoc.test        / emulator-only-pass-7   (Soweto, Pre-School and Scholars)
 //   Payment verifier:     verifier@demo-jcoc.test       / emulator-only-pass-8   (Soweto, Youth Camp payments only)
 //
+// The demo owner is also the platform admin here (PLATFORM_ADMIN_UIDS in
+// scripts/dev-emulator.mjs): http://localhost:3000/dashboard/platform/network-owners
+//
 // Public registration for the demo Youth Camp: http://localhost:3000/register/ev-youth-camp
 //
 // Birthdays and anniversaries are generated relative to today, so the

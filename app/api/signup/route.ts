@@ -7,7 +7,9 @@
 // Account types (member-based model):
 //   BETA_ACCESS_CODE env var   → beta (free for 6 months, then R159/mo, unlimited)
 //   no code / wrong code       → standard (free under 50 members, R159/mo above)
-//   email === INTERNAL_EMAIL   → internal (free forever, unlimited)
+//
+// Switched off when BRAND.publicSignup is false (JCOC, 2026-10-29): the route
+// refuses every request before doing anything.
 //
 // Brevo integration:
 //   BREVO_API_KEY env var      → Brevo API key (from Brevo dashboard > SMTP & API > API Keys)
@@ -18,8 +20,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "../../lib/firebase-admin";
 import { BRAND, PLATFORM, appUrl } from "../../../lib/whiteLabel";
-
-const INTERNAL_EMAIL = "info@kfwc.org.za";
 
 function addMonths(date: Date, n: number): Date {
   const d = new Date(date);
@@ -44,8 +44,6 @@ function normalizePhone(raw: string): string {
 }
 
 function resolveAccountType(email: string, code: string): "internal" | "beta" | "standard" {
-  if (email === INTERNAL_EMAIL) return "internal";
-  if (email === "kfwc@kfwc.org.za") return "internal"; // Lifetime free access
   if (code.trim().toUpperCase() === "KEREKEBETA2026") return "beta";
   const betaCode = process.env.BETA_ACCESS_CODE?.trim().toUpperCase();
   if (betaCode && code.trim().toUpperCase() === betaCode) return "beta";
@@ -205,6 +203,9 @@ function buildBillingFields(
 }
 
 export async function POST(req: NextRequest) {
+  if (!BRAND.publicSignup) {
+    return NextResponse.json({ error: "Sign-up is closed. Ask your church administrator for an invitation." }, { status: 403 });
+  }
   try {
     const { churchName, adminName, email, phone = "", password, accessCode = "", congregants = "" } = await req.json();
 

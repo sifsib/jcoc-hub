@@ -33,6 +33,8 @@ const env = {
   FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
   FIREBASE_STORAGE_EMULATOR_HOST: "127.0.0.1:9199",
   NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+  // Platform admin allow list (lib/networkOwners.ts): the seeded demo owner.
+  PLATFORM_ADMIN_UIDS: "owner-demo",
 };
 
 // Run Next with the same Node binary as this script, so it works even when
